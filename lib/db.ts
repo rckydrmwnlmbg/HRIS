@@ -1,11 +1,13 @@
 const isLocal = process.env.DB_SERVER === 'localhost' || process.env.DB_SERVER === '.\\SQLEXPRESS';
 let sql: any;
 if (process.env.NODE_ENV === 'development') {
-  // Only required during local development (npm run dev) for Windows Auth
-  sql = require('mssql/msnodesqlv8');
+  try {
+    sql = require('mssql/msnodesqlv8');
+  } catch {
+    sql = require('mssql');
+  }
 } else {
-  // In production (npm run build), Turbopack removes the development branch.
-  // We use pure tedious driver which avoids all native module standalone bugs.
+  // In production / Vercel, we use pure tedious driver which avoids all native module compilation issues.
   sql = require('mssql');
 }
 

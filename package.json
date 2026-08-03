@@ -14,7 +14,6 @@
     "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.25.0",
-    "msnodesqlv8": "^5.2.3",
     "mssql": "^12.7.0",
     "next": "16.2.10",
     "nextjs-toploader": "^3.9.17",
@@ -23,6 +22,9 @@
     "recharts": "^3.10.1",
     "sharp": "^0.35.3",
     "xlsx": "^0.18.5"
+  },
+  "optionalDependencies": {
+    "msnodesqlv8": "^5.2.3"
   },
   "devDependencies": {
     "@types/mssql": "^12.3.0",
