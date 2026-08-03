@@ -1,0 +1,69 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.filterPanel {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 16px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: 4px;
+  animation: slideIn 0.2s ease;
+}
+
+.avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+
+.glassDropdown {
+  position: absolute;
+  right: 30px;
+  top: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: var(--radius-md);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  z-index: 50;
+  min-width: 120px;
+  padding: 6px;
+  animation: fadeIn 0.15s ease-out;
+}
+
+[data-theme="dark"] .glassDropdown {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+.glassDropdown button {
+  transition: all 0.2s ease;
+  border-radius: 4px;
+}
+
+.glassDropdown button:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  transform: translateX(2px);
+}
+
+[data-theme="dark"] .glassDropdown button:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}

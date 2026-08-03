@@ -1,0 +1,1121 @@
+import { NextResponse } from 'next/server';
+import ExcelJS from 'exceljs';
+import { query } from '@/lib/db';
+
+const addTitleAndHeader = (sheet: any, columns: any[], title: string, subtitle: string, fgColor: string = 'FF00B050') => {
+  sheet.columns = columns;
+  sheet.spliceRows(1, 0, [], [], []);
+
+  sheet.getCell('A1').value = title;
+  sheet.mergeCells(1, 1, 1, columns.length);
+  sheet.getCell('A1').font = { size: 14, bold: true };
+  sheet.getCell('A1').alignment = { horizontal: 'center' };
+
+  sheet.getCell('A2').value = subtitle;
+  sheet.mergeCells(2, 1, 2, columns.length);
+  sheet.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
+
+  const headerRow = sheet.getRow(4);
+  headerRow.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+  headerRow.eachCell((cell: any) => {
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fgColor } };
+  });
+};
+
+const applyTableBorders = (sheet: any, columnsCount: number) => {
+  sheet.eachRow((row: any, rowNumber: number) => {
+    if (rowNumber >= 4) {
+      for (let i = 1; i <= columnsCount; i++) {
+        const cell = row.getCell(i);
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      }
+    }
+  });
+};
+
+export async function GET(request: Request) {
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    if (dateStr.includes('T')) dateStr = dateStr.split('T')[0];
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return dateStr;
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  };
+
+  const { searchParams } = new URL(request.url);
+  const type = searchParams.get('type') || 'absensi';
+  const bulan = parseInt(searchParams.get('bulan') || String(new Date().getMonth() + 1), 10);
+  const tahun = parseInt(searchParams.get('tahun') || String(new Date().getFullYear()), 10);
+  const secCd = searchParams.get('sec') || null;
+  const jobCd = searchParams.get('job') || null;
+  const shift = searchParams.get('shift') || null;
+  const format = searchParams.get('format') || 'excel'; // 'excel' or 'json'
+
+  try {
+    let extraCondition = '';
+    if (secCd) extraCondition += ` AND RTRIM(e.SEC_CD) = '${secCd.replace(/'/g, "''")}'`;
+    if (jobCd) extraCondition += ` AND RTRIM(e.JOB_CD) = '${jobCd.replace(/'/g, "''")}'`;
+
+    // Shift filter (only applied if type === 'absensi', handled via extraCondition for now)
+    if (type === 'absensi' && shift === 'pagi') {
+      extraCondition += ` AND DATEPART(hour, a.WORK_IN) < 12 AND RTRIM(j.JOB_DESC) = 'SECURITY'`;
+    } else if (type === 'absensi' && shift === 'sore') {
+      extraCondition += ` AND DATEPART(hour, a.WORK_IN) >= 12 AND RTRIM(j.JOB_DESC) = 'SECURITY'`;
+    }
+
+    let previewData: any[] = [];
+
+    if (type === 'absensi') {
+      const rekapData = await query<any>(`
+        SELECT 
+          RTRIM(e.EMP_CD) AS EMP_CD,
+          RTRIM(e.EMP_NM) AS EMP_NM,
+          RTRIM(d.DEP_DESC) AS DEP_DESC,
+          RTRIM(s.SEC_DESC) AS SEC_DESC,
+          RTRIM(j.JOB_DESC) AS JOB_DESC,
+          SUM(CASE WHEN RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') OR RTRIM(mr.REASON_GROUP) = 'O' THEN 1 ELSE 0 END) AS hadir,
+          SUM(CASE WHEN RTRIM(a.STATUS_HARI) IN ('ALPHA', 'A') THEN 1 ELSE 0 END) AS alpha,
+          SUM(CASE WHEN RTRIM(a.STATUS_HARI) IN ('IJIN', 'I') OR RTRIM(mr.REASON_GROUP) = 'I' THEN 1 ELSE 0 END) AS izin,
+          SUM(CASE WHEN RTRIM(a.STATUS_HARI) IN ('CUTI', 'C', 'H', 'HAID') OR RTRIM(mr.REASON_GROUP) IN ('C', 'H') THEN 1 ELSE 0 END) AS cuti,
+          SUM(CASE WHEN RTRIM(a.STATUS_HARI) IN ('SAKIT', 'S') OR RTRIM(mr.REASON_GROUP) = 'S' THEN 1 ELSE 0 END) AS sakit
+        FROM EMP_TABLE e
+        LEFT JOIN MS_DEP d ON e.DEP_CD = d.DEP_CD
+        LEFT JOIN MS_SEC s ON e.SEC_CD = s.SEC_CD
+        LEFT JOIN MS_JOBS j ON e.JOB_CD = j.JOB_CD
+        LEFT JOIN (
+          SELECT * FROM TR_ABSEN 
+          WHERE MONTH(DATE_TRANS) = ${bulan} AND YEAR(DATE_TRANS) = ${tahun}
+        ) a ON e.EMP_CD = a.EMP_CD
+        LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
+        WHERE (e.Act_NonAct = 1 OR a.EMP_CD IS NOT NULL) ${extraCondition}
+        GROUP BY RTRIM(e.EMP_CD), RTRIM(e.EMP_NM), RTRIM(d.DEP_DESC), RTRIM(s.SEC_DESC), RTRIM(j.JOB_DESC)
+        ORDER BY RTRIM(e.EMP_NM)
+      `);
+      previewData = rekapData;
+
+      if (format === 'json') {
+        return NextResponse.json(previewData);
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Rekap Absensi');
+      const monthNamesIndo = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
+      const monthName = monthNamesIndo[bulan] || bulan;
+      addTitleAndHeader(
+        worksheet,
+        [
+          { header: 'NIK', key: 'nik', width: 15 },
+          { header: 'Nama', key: 'nama', width: 25 },
+          { header: 'Departemen', key: 'dep', width: 20 },
+          { header: 'Bagian', key: 'sec', width: 20 },
+          { header: 'Team', key: 'team', width: 20 },
+          { header: 'Hadir', key: 'hadir', width: 10 },
+          { header: 'Alpha', key: 'alpha', width: 10 },
+          { header: 'Izin', key: 'izin', width: 10 },
+          { header: 'Cuti', key: 'cuti', width: 10 },
+          { header: 'Sakit', key: 'sakit', width: 10 },
+        ],
+        'REKAP ABSENSI KARYAWAN',
+        `Periode: Bulan ${monthName} Tahun ${tahun}`,
+        'FF4F81BD'
+      );
+
+      previewData.forEach((row: any) => {
+        worksheet.addRow({
+          nik: row.EMP_CD,
+          nama: row.EMP_NM,
+          dep: row.DEP_DESC || '-',
+          sec: row.SEC_DESC || '-',
+          team: row.TEAM || '-',
+          hadir: row.hadir || 0,
+          alpha: row.alpha || 0,
+          izin: row.izin || 0,
+          cuti: row.cuti || 0,
+          sakit: row.sakit || 0
+        });
+      });
+
+      worksheet.eachRow((row: any, rowNumber: number) => {
+        if (rowNumber > 1) {
+          const alphaCell = row.getCell('alpha');
+          if ((alphaCell.value as number) > 0) {
+            alphaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
+            alphaCell.font = { color: { argb: 'FF9C0006' } };
+          }
+        }
+      });
+
+      applyTableBorders(worksheet, 10);
+      const buffer = await workbook.xlsx.writeBuffer();
+      return new NextResponse(buffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="Laporan_${type}_${tahun}${String(bulan).padStart(2, '0')}.xlsx"`,
+        },
+      });
+
+    } else if (type === 'ot') {
+      const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0]).split('-');
+      const inputDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+      const day = inputDate.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      const startD = new Date(inputDate);
+      startD.setDate(inputDate.getDate() + diff);
+
+      const weekDates: string[] = [];
+      for (let i = 0; i < 6; i++) {
+        let d = new Date(startD);
+        d.setDate(startD.getDate() + i);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        weekDates.push(`${y}-${m}-${dd}`);
+      }
+      const startStr = weekDates[0];
+      const endStr = weekDates[5];
+
+      const formatDate = (dateStr: string) => {
+        const [y, m, d] = dateStr.split('-');
+        return `${d}-${m}-${y}`;
+      };
+
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const startDay = startStr.split('-')[2];
+      const endDay = endStr.split('-')[2];
+      const endMonthStr = monthNames[parseInt(endStr.split('-')[1], 10) - 1];
+      const fileNameTitle = `OTAnalysis_(${startDay}-${endDay} ${endMonthStr})`;
+
+      // KOREKSI WORK_OUT (PULANG NANGGUNG) SECARA ACAK SEBELUM EXPORT
+      // Rumus generik: k = FLOOR((selisih+10)/60), nanggung jika selisih > k*60+15
+      // Koreksi ke JAM_PULANG + k*60 menit + acak 0..14 menit (0..900 detik)
+      // SECURITY DIKECUALIKAN (shift mereka berbeda, ditangani terpisah)
+      await query(`
+        UPDATE a
+        SET a.WORK_OUT = DATEADD(second, 
+                           CAST(RAND(CHECKSUM(NEWID())) * 840 as int) + 60,
+                           DATEADD(hour, 
+                             CAST(FLOOR((DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), a.WORK_OUT) + 10) / 60.0) AS INT),
+                             CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME)))
+        FROM TR_ABSEN a
+        LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
+        LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+        LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+        WHERE a.DATE_TRANS >= '${startStr}' AND a.DATE_TRANS <= '${endStr}'
+          AND a.WORK_OUT IS NOT NULL 
+          AND a.JAM_PULANG IS NOT NULL
+          AND RTRIM(a.STATUS_HARI) IN ('KERJA', 'O')
+          AND ISNULL(RTRIM(j.JOB_DESC),'') <> 'SECURITY'
+          AND ISNULL(RTRIM(s.SEC_DESC),'') <> 'SECURITY'
+          AND DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), a.WORK_OUT) >= 16
+          AND (DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), a.WORK_OUT) 
+               - (FLOOR((DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), a.WORK_OUT) + 10) / 60.0) * 60)) > 15
+          AND (a.WORK_OUT = a.WORK_OUT1 OR a.WORK_OUT IS NULL);
+      `);
+
+      // KOREKSI WORK_IN (MASUK KEPAGIAN) SECARA ACAK — REGULER
+      await query(`
+        UPDATE a
+        SET a.WORK_IN = DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 540 as int), 
+                          DATEADD(minute, -10, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_MASUK, 108) AS DATETIME)))
+        FROM TR_ABSEN a
+        LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
+        LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+        LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+        WHERE a.DATE_TRANS >= '${startStr}' AND a.DATE_TRANS <= '${endStr}'
+          AND a.WORK_IN IS NOT NULL 
+          AND a.JAM_MASUK IS NOT NULL
+          AND ISNULL(RTRIM(j.JOB_DESC),'') <> 'SECURITY'
+          AND ISNULL(RTRIM(s.SEC_DESC),'') <> 'SECURITY'
+          AND DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.WORK_IN, 108) AS DATETIME), CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_MASUK, 108) AS DATETIME)) > 10
+          AND (a.WORK_IN = a.WORK_IN1 OR a.WORK_IN IS NULL);
+      `);
+
+      // KOREKSI WORK_IN KHUSUS SECURITY (3 SHIFT PRIA, 2 SHIFT WANITA)
+      await query(`
+        WITH SecInShift AS (
+          SELECT 
+            a.EMP_CD, a.DATE_TRANS,
+            CASE 
+              WHEN RTRIM(e.SX) = 'P' THEN
+                CASE 
+                  WHEN DATEPART(hour, a.WORK_IN) < 10 
+                    THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 07:00:00' AS DATETIME)
+                  ELSE 
+                    CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 11:30:00' AS DATETIME)
+                END
+              ELSE -- Pria
+                CASE 
+                  WHEN DATEPART(hour, a.WORK_IN) >= 5 AND DATEPART(hour, a.WORK_IN) < 12 
+                    THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 07:00:00' AS DATETIME)
+                  WHEN DATEPART(hour, a.WORK_IN) >= 12 AND DATEPART(hour, a.WORK_IN) < 20 
+                    THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 15:00:00' AS DATETIME)
+                  ELSE 
+                    CASE 
+                      WHEN DATEPART(hour, a.WORK_IN) >= 20 
+                        THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 23:00:00' AS DATETIME)
+                      ELSE 
+                        DATEADD(day, -1, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 23:00:00' AS DATETIME))
+                    END
+                END
+            END AS TARGET_IN
+          FROM TR_ABSEN a
+          LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
+          LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+          LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+          WHERE a.DATE_TRANS >= '${startStr}' AND a.DATE_TRANS <= '${endStr}'
+            AND a.WORK_IN IS NOT NULL
+            AND (ISNULL(RTRIM(s.SEC_DESC),'') = 'SECURITY' OR ISNULL(RTRIM(j.JOB_DESC),'') = 'SECURITY')
+            AND (a.WORK_IN = a.WORK_IN1 OR a.WORK_IN IS NULL)
+        )
+        UPDATE a
+        SET a.WORK_IN = DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 540 as int), 
+                          DATEADD(minute, -10, s.TARGET_IN))
+        FROM TR_ABSEN a
+        JOIN SecInShift s ON a.EMP_CD = s.EMP_CD AND a.DATE_TRANS = s.DATE_TRANS
+        WHERE DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.WORK_IN, 108) AS DATETIME), s.TARGET_IN) > 10;
+      `);
+
+      // KOREKSI WORK_OUT KHUSUS SECURITY (3 SHIFT PRIA, 2 SHIFT WANITA)
+      await query(`
+        WITH SecOutShift AS (
+          SELECT 
+            a.EMP_CD, a.DATE_TRANS,
+            CASE 
+              WHEN RTRIM(e.SX) = 'P' THEN
+                CASE 
+                  WHEN DATEPART(hour, a.WORK_IN) < 10 
+                    THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 16:00:00' AS DATETIME)
+                  ELSE 
+                    CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 20:30:00' AS DATETIME)
+                END
+              ELSE -- Pria
+                CASE 
+                  WHEN DATEPART(hour, a.WORK_IN) >= 5 AND DATEPART(hour, a.WORK_IN) < 12 
+                    THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 16:00:00' AS DATETIME)
+                  WHEN DATEPART(hour, a.WORK_IN) >= 12 AND DATEPART(hour, a.WORK_IN) < 20 
+                    THEN DATEADD(hour, 9, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 15:00:00' AS DATETIME))
+                  ELSE 
+                    CASE 
+                      WHEN DATEPART(hour, a.WORK_IN) >= 20 
+                        THEN DATEADD(day, 1, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 08:00:00' AS DATETIME))
+                      ELSE 
+                        CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 08:00:00' AS DATETIME)
+                    END
+                END
+            END AS TARGET_OUT
+          FROM TR_ABSEN a
+          LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
+          LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+          LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+          WHERE a.DATE_TRANS >= '${startStr}' AND a.DATE_TRANS <= '${endStr}'
+            AND a.WORK_OUT IS NOT NULL 
+            AND a.WORK_IN IS NOT NULL
+            AND RTRIM(a.STATUS_HARI) IN ('KERJA', 'O')
+            AND (ISNULL(RTRIM(s.SEC_DESC),'') = 'SECURITY' OR ISNULL(RTRIM(j.JOB_DESC),'') = 'SECURITY')
+            AND (a.WORK_OUT = a.WORK_OUT1 OR a.WORK_OUT IS NULL)
+        )
+        UPDATE a
+        SET a.WORK_OUT = DATEADD(second, 
+                           CAST(RAND(CHECKSUM(NEWID())) * 840 as int) + 60,
+                           DATEADD(hour, 
+                             CAST(FLOOR((DATEDIFF(minute, s.TARGET_OUT, a.WORK_OUT) + 10) / 60.0) AS INT),
+                             s.TARGET_OUT))
+        FROM TR_ABSEN a
+        JOIN SecOutShift s ON a.EMP_CD = s.EMP_CD AND a.DATE_TRANS = s.DATE_TRANS
+        WHERE DATEDIFF(minute, s.TARGET_OUT, a.WORK_OUT) >= 16
+          AND (DATEDIFF(minute, s.TARGET_OUT, a.WORK_OUT) 
+               - (FLOOR((DATEDIFF(minute, s.TARGET_OUT, a.WORK_OUT) + 10) / 60.0) * 60)) > 15;
+      `);
+
+      const otData = await query<any>(`
+        SELECT 
+          RTRIM(e.EMP_CD) AS EMP_CD,
+          RTRIM(e.EMP_NM) AS EMP_NM,
+          RTRIM(e.SX) AS SX,
+          RTRIM(d.DEP_DESC) AS DEP_DESC,
+          RTRIM(s.SEC_DESC) AS SEC_DESC,
+          RTRIM(j.JOB_DESC) AS JOB_DESC,
+          CASE   WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'   WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'   WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'   WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'   WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'   WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'   WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'   WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'   WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'   WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'   WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'   WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'   WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'   WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'   WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'   WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'   WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'   ELSE RTRIM(d.DEP_DESC) END AS TEAM,
+          ISNULL(e.ALL_IN, 0) AS isAllIn,
+          e.DT_RSG,
+          e.DT_ENTRY,
+          CONVERT(varchar(10), a.DATE_TRANS, 120) AS dateStr,
+          RTRIM(a.STATUS_HARI) AS STATUS_HARI,
+          RTRIM(mr.REASON_GROUP) AS REASON_GROUP,
+          ISNULL(a.OT_1, 0) + ISNULL(a.OT_2, 0) + ISNULL(a.OT_3, 0) + ISNULL(a.OT_4, 0) AS dailyOt
+        FROM EMP_TABLE e
+        LEFT JOIN MS_DEP d ON e.DEP_CD = d.DEP_CD
+        LEFT JOIN MS_SEC s ON e.SEC_CD = s.SEC_CD
+        LEFT JOIN MS_JOBS j ON e.JOB_CD = j.JOB_CD
+        LEFT JOIN (
+          SELECT * FROM TR_ABSEN 
+          WHERE DATE_TRANS >= '${startStr}' AND DATE_TRANS <= '${endStr}'
+        ) a ON e.EMP_CD = a.EMP_CD
+        LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
+        WHERE (e.DT_ENTRY IS NULL OR e.DT_ENTRY <= '${endStr}')
+          AND (e.DT_RSG IS NULL OR e.DT_RSG >= '${startStr}')
+          ${extraCondition}
+        ORDER BY RTRIM(s.SEC_DESC), RTRIM(e.EMP_NM), a.DATE_TRANS
+      `);
+
+      const empMap = new Map();
+      otData.forEach((row) => {
+        if (!empMap.has(row.EMP_CD)) {
+          empMap.set(row.EMP_CD, {
+            EMP_CD: row.EMP_CD,
+            EMP_NM: row.EMP_NM,
+            SX: row.SX || '-',
+            SEC_DESC: row.SEC_DESC || '-',
+            JOB_DESC: row.JOB_DESC, TEAM: row.TEAM || '-',
+            DEP_DESC: row.DEP_DESC || '-',
+            isAllIn: row.isAllIn == 1 || row.isAllIn == 'Y',
+            DT_RSG: row.DT_RSG,
+            DT_ENTRY: row.DT_ENTRY,
+            days: {},
+            totalKerja: 0,
+            totalOt: 0,
+            A: 0, I: 0, S: 0, C: 0
+          });
+        }
+        const emp = empMap.get(row.EMP_CD);
+        if (row.dateStr) {
+          const status = row.STATUS_HARI;
+          const rg = row.REASON_GROUP;
+          let isKerja = status === 'KERJA' || status === 'O' || rg === 'O';
+          let isCuti = status === 'CUTI' || status === 'C' || status === 'H' || status === 'HAID' || rg === 'C' || rg === 'H';
+          let kerjaHours = isKerja ? 8 : (isCuti ? 8 : 0);
+          emp.days[row.dateStr] = { kerja: kerjaHours, ot: row.dailyOt || 0 };
+          emp.totalKerja += kerjaHours;
+          emp.totalOt = Number((emp.totalOt + (row.dailyOt || 0)).toFixed(2));
+
+          if (status === 'ALPHA' || status === 'A') emp.A++;
+          else if (status === 'IJIN' || status === 'I' || rg === 'I') emp.I++;
+          else if (status === 'SAKIT' || status === 'S' || rg === 'S') emp.S++;
+          else if (isCuti) emp.C++;
+        }
+      });
+      previewData = Array.from(empMap.values());
+
+      if (format === 'json') return NextResponse.json(previewData);
+
+      const workbook = new ExcelJS.Workbook();
+
+      const stats: any = {
+        HARIAN: { b1: 0, b2: 0, b3: 0, total: 0 },
+        ALL_IN: { b1: 0, b2: 0, b3: 0, total: 0 }
+      };
+
+      const setBorder = (cell: any) => {
+        cell.border = {
+          top: { style: 'thin' }, left: { style: 'thin' },
+          bottom: { style: 'thin' }, right: { style: 'thin' }
+        };
+      };
+      const setGrayBg = (cell: any) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFBFBFBF' } };
+      };
+      const setYellowBg = (cell: any) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+      };
+
+      const coverWs = workbook.addWorksheet('REPORT', { views: [{ showGridLines: false }] });
+
+      const generateSheet = (sheetName: string, isAllInFilter: boolean) => {
+        const ws = workbook.addWorksheet(sheetName, { views: [{ showGridLines: false }] });
+        const filteredData = previewData.filter(d => {
+          const isAllIn = Boolean(d.isAllIn);
+          return isAllInFilter ? isAllIn : !isAllIn;
+        });
+
+        ws.mergeCells('A1:B1');
+        ws.getCell('A1').value = 'PT. TPINC Trading Jakarta';
+        ws.getCell('A1').font = { bold: true };
+
+        ws.mergeCells('L5:R5');
+        ws.getCell('L5').value = 'LAPORAN LEMBUR (OVERTIME) PER MINGGU';
+        ws.getCell('L5').font = { bold: true };
+
+        ws.mergeCells('L7:R7');
+        ws.getCell('L7').value = `PERIODE : ${formatDate(startStr)} SD ${formatDate(endStr)}`;
+
+        ws.mergeCells('A10:D10');
+        ws.getCell('A10').value = 'TEAM : ' + (jobCd ? jobCd : 'SELURUH TEAM');
+
+        const headerRow = ws.getRow(12);
+        const headerRow13 = ws.getRow(13);
+
+        ws.mergeCells('A12:A13'); ws.getCell('A12').value = 'NIK';
+        ws.mergeCells('B12:B13'); ws.getCell('B12').value = 'NAMA';
+        ws.mergeCells('C12:C13'); ws.getCell('C12').value = 'L/P';
+        ws.mergeCells('D12:D13'); ws.getCell('D12').value = 'BAGIAN';
+        ws.mergeCells('E12:E13'); ws.getCell('E12').value = 'TEAM';
+
+        let colIndex = 6;
+        weekDates.forEach((d) => {
+          ws.mergeCells(12, colIndex, 12, colIndex + 1);
+          ws.getCell(12, colIndex).value = formatDate(d);
+          ws.getCell(13, colIndex).value = 'KERJA';
+          ws.getCell(13, colIndex + 1).value = 'OT';
+          colIndex += 2;
+        });
+
+        ws.mergeCells(12, colIndex, 12, colIndex + 2);
+        ws.getCell(12, colIndex).value = 'TOTAL';
+        ws.getCell(13, colIndex).value = 'KERJA';
+        ws.getCell(13, colIndex + 1).value = 'OT';
+        ws.getCell(13, colIndex + 2).value = 'KERJA+OT';
+        colIndex += 3;
+
+        ws.mergeCells(12, colIndex, 12, colIndex + 3);
+        ws.getCell(12, colIndex).value = 'KETERANGAN';
+        ws.getCell(13, colIndex).value = 'A';
+        ws.getCell(13, colIndex + 1).value = 'I';
+        ws.getCell(13, colIndex + 2).value = 'S';
+        ws.getCell(13, colIndex + 3).value = 'C';
+
+        // Header Styling
+        for (let c = 1; c < colIndex + 4; c++) {
+          const c12 = ws.getCell(12, c);
+          const c13 = ws.getCell(13, c);
+          setBorder(c12); setBorder(c13);
+          setGrayBg(c12); setGrayBg(c13);
+          c12.font = { bold: true }; c13.font = { bold: true };
+          c12.alignment = { horizontal: 'center', vertical: 'middle' };
+          c13.alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+
+        let startRow = 15;
+        let b1 = 0; // <= 40
+        let b2 = 0; // 40.5 - 60
+        let b3 = 0; // > 60
+
+        filteredData.forEach(row => {
+          const excelRow = ws.getRow(startRow);
+          excelRow.getCell(1).value = row.EMP_CD;
+          excelRow.getCell(2).value = row.EMP_NM;
+          excelRow.getCell(3).value = row.SX;
+          excelRow.getCell(4).value = row.SEC_DESC;
+          excelRow.getCell(5).value = row.TEAM || '-';
+
+          let ci = 6;
+          weekDates.forEach((d) => {
+            const dayData = row.days[d] || { kerja: 0, ot: 0 };
+            excelRow.getCell(ci).value = dayData.kerja;
+            excelRow.getCell(ci + 1).value = dayData.ot;
+            excelRow.getCell(ci + 1).numFmt = '0.0';
+            ci += 2;
+          });
+
+          const kerjaCols = ['F', 'H', 'J', 'L', 'N', 'P'].map(c => `${c}${startRow}`).join('+');
+          const otCols = ['G', 'I', 'K', 'M', 'O', 'Q'].map(c => `${c}${startRow}`).join('+');
+
+          excelRow.getCell(ci).value = { formula: kerjaCols, result: row.totalKerja };
+          excelRow.getCell(ci + 1).value = { formula: otCols, result: row.totalOt };
+          excelRow.getCell(ci + 1).numFmt = '0.0';
+          excelRow.getCell(ci + 2).value = { formula: `R${startRow}+S${startRow}`, result: row.totalKerja + row.totalOt };
+          ci += 3;
+
+          excelRow.getCell(ci).value = row.A;
+          excelRow.getCell(ci + 1).value = row.I;
+          excelRow.getCell(ci + 2).value = row.S;
+          excelRow.getCell(ci + 3).value = row.C;
+
+          for (let c = 1; c < colIndex + 4; c++) {
+            const cell = excelRow.getCell(c);
+            setBorder(cell);
+            if (c > 5) cell.alignment = { horizontal: 'center' };
+          }
+
+          startRow++;
+        });
+
+        const sumRowIndex = startRow;
+        const sumRow = ws.getRow(startRow);
+
+        ws.mergeCells(`A${sumRowIndex}:Q${sumRowIndex}`);
+        const totalCell = sumRow.getCell(1);
+        totalCell.value = 'TOTAL';
+        totalCell.font = { bold: true };
+        totalCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+        const getColName = (n: number) => { let ordA = 'A'.charCodeAt(0); let len = 26; let s = ""; while (n >= 0) { s = String.fromCharCode(n % len + ordA) + s; n = Math.floor(n / len) - 1; } return s; };
+
+        // Sum only for TOTAL (R, S, T) and A, I, S, C (U, V, W, X)
+        // TOTAL is at colIndex-3, colIndex-2, colIndex-1
+        // A,I,S,C is at colIndex, colIndex+1, colIndex+2, colIndex+3
+        const sumColumns = [
+          colIndex - 3, colIndex - 2, colIndex - 1,
+          colIndex, colIndex + 1, colIndex + 2, colIndex + 3
+        ];
+
+        for (let c = 1; c < colIndex + 4; c++) {
+          const cell = sumRow.getCell(c);
+          setBorder(cell);
+          if (sumColumns.includes(c)) {
+            const colLetter = getColName(c - 1);
+            cell.value = { formula: `SUM(${colLetter}15:${colLetter}${sumRowIndex - 1})` };
+            cell.font = { bold: true };
+            cell.alignment = { horizontal: 'center' };
+            if (c === colIndex - 2) {
+              cell.numFmt = '0.0';
+            }
+          }
+        }
+
+        startRow += 3;
+        ws.getCell(startRow, colIndex - 3).value = 'MAX WT';
+        ws.getCell(startRow, colIndex - 3).font = { bold: true };
+        ws.getCell(startRow, colIndex - 2).value = { formula: `MAX(T15:T${sumRowIndex - 1})` };
+        ws.getCell(startRow, colIndex - 2).font = { bold: true };
+
+        startRow += 2;
+        ws.getCell(startRow, colIndex - 3).value = 'Working time breakdown';
+        ws.getCell(startRow, colIndex - 3).font = { bold: true };
+
+        startRow++;
+        ws.getCell(startRow, colIndex - 3).value = '<= 40';
+        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIF(T15:T${sumRowIndex - 1}, "<=40")` };
+        const b1Cell = `${getColName(colIndex - 3)}${startRow}`;
+
+        startRow++;
+        ws.getCell(startRow, colIndex - 3).value = '40,5 - 60';
+        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIFS(T15:T${sumRowIndex - 1}, ">40", T15:T${sumRowIndex - 1}, "<=60")` };
+        const b2Cell = `${getColName(colIndex - 3)}${startRow}`;
+
+        startRow++;
+        ws.getCell(startRow, colIndex - 3).value = '>60';
+        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIF(T15:T${sumRowIndex - 1}, ">60")` };
+        const b3Cell = `${getColName(colIndex - 3)}${startRow}`;
+
+        startRow++;
+        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTA(A15:A${sumRowIndex - 1})` };
+        const totalEmpCell = `${getColName(colIndex - 3)}${startRow}`;
+
+        const targetStat = isAllInFilter ? stats.ALL_IN : stats.HARIAN;
+        targetStat.b1Cell = `'${sheetName}'!${b1Cell}`;
+        targetStat.b2Cell = `'${sheetName}'!${b2Cell}`;
+        targetStat.b3Cell = `'${sheetName}'!${b3Cell}`;
+        targetStat.totalCell = `'${sheetName}'!${totalEmpCell}`;
+
+        ws.columns.forEach((c: any) => { c.width = 10; });
+        ws.getColumn(2).width = 25;
+        ws.getColumn(4).width = 20; // BAGIAN
+        ws.getColumn(5).width = 20; // TEAM
+      };
+
+      generateSheet('HARIAN', false);
+      generateSheet('ALL IN', true);
+
+      // REPORT SHEET (Already created first!)
+      coverWs.mergeCells('A2:F2');
+      coverWs.getCell('A2').value = 'TMNB WEEKLY O/T  REPORT';
+      coverWs.getCell('A2').font = { bold: true, size: 16 };
+      coverWs.getCell('A2').alignment = { horizontal: 'left', vertical: 'middle' };
+
+      // Block 1
+      coverWs.mergeCells('B4:C4');
+      coverWs.mergeCells('D4:F4');
+      coverWs.getCell('A4').value = 'Factory Name';
+      coverWs.getCell('B4').value = 'TMNB';
+
+      coverWs.mergeCells('B5:C5');
+      coverWs.mergeCells('D5:E5');
+      coverWs.getCell('A5').value = 'Monitoring Week';
+      coverWs.getCell('B5').value = formatDate(startStr);
+      coverWs.getCell('D5').value = 'to';
+      coverWs.getCell('F5').value = formatDate(endStr);
+
+      coverWs.mergeCells('B6:F6');
+      coverWs.getCell('A6').value = 'Date of Analysis';
+
+      for (let r = 4; r <= 6; r++) {
+        for (let c = 1; c <= 6; c++) {
+          const cell = coverWs.getCell(r, c);
+          setBorder(cell);
+          if (c === 1) setGrayBg(cell);
+          if (r === 6) setGrayBg(cell);
+        }
+      }
+
+      // Static Table Header
+      coverWs.mergeCells('A8:B8');
+      coverWs.mergeCells('C8:C9');
+      coverWs.mergeCells('D8:D9');
+      coverWs.getCell('A8').value = 'Monday - Friday';
+      coverWs.getCell('C8').value = 'Work hours';
+      coverWs.getCell('D8').value = 'Saturday';
+
+      coverWs.getCell('A9').value = 'Sub-Unit';
+      coverWs.getCell('B9').value = 'Amount';
+
+      const staticHeaders = ['A8', 'B8', 'C8', 'D8', 'A9', 'B9', 'C9', 'D9'];
+      staticHeaders.forEach(addr => {
+        const c = coverWs.getCell(addr);
+        setBorder(c);
+        setGrayBg(c);
+        c.font = { bold: true };
+        c.alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+
+      // Data 10-17
+      const rowsData = [
+        ['AM-Working time', '07.00 - 12.00', 4.5, '07.30 - 11.30'],
+        ['Rest Time          ', '11.30 - 12.30', null, '11.30 - 12.30'],
+        ['PM-Working time', '12.30 - 16:00', 3.5, '12.30 - 15.30'],
+        ['OT1-Working time', '16.00 - 17.00', 1, null],
+        ['OT2-Working time', '17.00 - 18.00', 1, null],
+        ['Rest Time          ', '18.00 - 18.30', null, null],
+        ['OT2-Working time', '18.30 - 21.30', 3, null],
+        ['OT2-Working time (Saturday)', '07.00 - 15.00', 7, null]
+      ];
+
+      for (let i = 0; i < rowsData.length; i++) {
+        const rowNum = 10 + i;
+        for (let col = 1; col <= 4; col++) {
+          const c = coverWs.getCell(rowNum, col);
+          setBorder(c);
+          if (rowsData[i][col - 1] !== null) {
+            c.value = rowsData[i][col - 1];
+          }
+          if (i === 1 || i === 5) {
+            setYellowBg(c);
+          }
+          if (i === 7 && col <= 2) {
+            c.font = { color: { argb: 'FF0070C0' } };
+          }
+        }
+      }
+
+      // Summary Table
+      coverWs.mergeCells('A19:B19');
+      coverWs.getCell('A19').value = 'Working hours per week';
+      coverWs.getCell('C19').value = 'HARIAN';
+      coverWs.getCell('D19').value = 'ALL IN';
+      coverWs.getCell('E19').value = 'Total\nEmployees';
+
+      const sumHeaders = ['A19', 'B19', 'C19', 'D19', 'E19'];
+      sumHeaders.forEach(addr => {
+        const c = coverWs.getCell(addr);
+        setBorder(c);
+        setGrayBg(c);
+        c.font = { bold: true };
+        c.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      });
+
+      const sumData = [
+        [
+          'Less than 40', '<= 40',
+          { formula: stats.HARIAN.b1Cell },
+          { formula: stats.ALL_IN.b1Cell },
+          { formula: 'C20+D20' }
+        ],
+        [
+          'Among 40.5 and 60 hours', '40,5 - 60',
+          { formula: stats.HARIAN.b2Cell },
+          { formula: stats.ALL_IN.b2Cell },
+          { formula: 'C21+D21' }
+        ],
+        [
+          'Among 60 till before Max.hours', '',
+          { formula: stats.HARIAN.b3Cell },
+          { formula: stats.ALL_IN.b3Cell },
+          { formula: 'C22+D22' }
+        ],
+        [
+          'Total', 'Total',
+          { formula: stats.HARIAN.totalCell },
+          { formula: stats.ALL_IN.totalCell },
+          { formula: 'C23+D23' }
+        ]
+      ];
+
+      for (let i = 0; i < sumData.length; i++) {
+        const rowNum = 20 + i;
+        for (let col = 1; col <= 5; col++) {
+          const c = coverWs.getCell(rowNum, col);
+          setBorder(c);
+          c.value = sumData[i][col - 1];
+
+          if (i === 2 && col <= 2) {
+            c.font = { color: { argb: 'FFFF0000' } }; // Red
+          }
+          if (i === 3) {
+            setGrayBg(c); // Total row gray
+          }
+          if (col === 5) {
+            c.font = { color: { argb: 'FF0000FF' }, bold: true }; // Blue
+          }
+          if (col >= 3) {
+            c.alignment = { horizontal: 'center' };
+          }
+        }
+      }
+
+      coverWs.getColumn(1).width = 30;
+      coverWs.getColumn(2).width = 15;
+      coverWs.getColumn(3).width = 15;
+      coverWs.getColumn(4).width = 15;
+      coverWs.getColumn(5).width = 15;
+      coverWs.getColumn(6).width = 15;
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      return new NextResponse(buffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="${fileNameTitle}.xlsx"`,
+        },
+      });
+    } else if (type === 'cuti') {
+      const start = searchParams.get('start') || new Date().toISOString().split('T')[0];
+      const end = searchParams.get('end') || new Date().toISOString().split('T')[0];
+
+      const cutiData = await query<any>(`
+        SELECT 
+          RTRIM(a.EMP_CD) AS EMP_CD,
+          RTRIM(e.EMP_NM) AS EMP_NM,
+          CONVERT(varchar(10), a.DATE_TRANS, 120) AS dateStr,
+          RTRIM(a.STATUS_HARI) AS typeCode,
+          RTRIM(a.REASON) AS reasonCode,
+          RTRIM(mr.REASON_DESC) AS reasonDesc,
+          RTRIM(mr.REASON_GROUP) AS reasonGroup,
+          RTRIM(e.SEC_CD) AS SEC_CD,
+          RTRIM(s.SEC_DESC) AS SEC_DESC,
+          RTRIM(e.DEP_CD) AS DEP_CD,
+          RTRIM(d.DEP_DESC) AS DEP_DESC,
+          CASE   WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'   WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'   WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'   WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'   WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'   WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'   WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'   WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'   WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'   WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'   WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'   WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'   WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'   WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'   WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'   WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'   WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'   ELSE RTRIM(d.DEP_DESC) END AS TEAM
+        FROM TR_ABSEN a
+        LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
+        LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+        LEFT JOIN MS_DEP d ON RTRIM(e.DEP_CD) = RTRIM(d.DEP_CD)
+        LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+        LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
+        WHERE CONVERT(date, a.DATE_TRANS) BETWEEN '${start}' AND '${end}'
+          AND (RTRIM(a.STATUS_HARI) IN ('C', 'H', 'CUTI', 'S', 'I') 
+               OR RTRIM(a.STATUS_HARI) LIKE 'CUTI%'
+               OR RTRIM(mr.REASON_GROUP) IN ('C', 'H', 'S', 'I'))
+          ${extraCondition}
+        ORDER BY a.EMP_CD, a.DATE_TRANS ASC
+      `);
+
+      const groupedRecords: any[] = [];
+      let currentGroup: any = null;
+
+      for (const row of cutiData) {
+        if (!currentGroup) {
+          currentGroup = {
+            EMP_CD: row.EMP_CD,
+            EMP_NM: row.EMP_NM,
+            startDate: row.dateStr,
+            endDate: row.dateStr,
+            typeCode: row.typeCode,
+            reasonCode: row.reasonCode,
+            type: row.reasonDesc ? row.reasonDesc : (row.typeCode || 'Unknown'),
+            reason: row.reasonDesc ? `${row.reasonDesc} (${row.reasonCode || '-'})` : (row.reasonCode || '-'),
+            days: 1,
+            SEC_CD: row.SEC_CD,
+            SEC_DESC: row.SEC_DESC,
+            JOB_DESC: row.JOB_DESC, TEAM: row.TEAM,
+            DEP_CD: row.DEP_CD,
+            DEP_DESC: row.DEP_DESC
+          };
+        } else {
+          const prevDate = new Date(currentGroup.endDate);
+          const currDate = new Date(row.dateStr);
+          const diffTime = Math.abs(currDate.getTime() - prevDate.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          if (row.EMP_CD === currentGroup.EMP_CD && row.typeCode === currentGroup.typeCode && row.reasonCode === currentGroup.reasonCode && diffDays === 1) {
+            currentGroup.endDate = row.dateStr;
+            currentGroup.days += 1;
+          } else {
+            groupedRecords.push(currentGroup);
+            currentGroup = {
+              EMP_CD: row.EMP_CD,
+              EMP_NM: row.EMP_NM,
+              startDate: row.dateStr,
+              endDate: row.dateStr,
+              typeCode: row.typeCode,
+              reasonCode: row.reasonCode,
+              type: row.reasonDesc ? row.reasonDesc : (row.typeCode || 'Unknown'),
+              reason: row.reasonDesc ? `${row.reasonDesc} (${row.reasonCode || '-'})` : (row.reasonCode || '-'),
+              days: 1,
+              SEC_CD: row.SEC_CD,
+              SEC_DESC: row.SEC_DESC,
+              JOB_DESC: row.JOB_DESC, TEAM: row.TEAM,
+              DEP_CD: row.DEP_CD,
+              DEP_DESC: row.DEP_DESC
+            };
+          }
+        }
+      }
+      if (currentGroup) {
+        groupedRecords.push(currentGroup);
+      }
+
+      previewData = groupedRecords;
+
+      if (format === 'json') {
+        return NextResponse.json(previewData);
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Laporan Cuti');
+      const headerFont: Partial<ExcelJS.Font> = { color: { argb: 'FFFFFFFF' }, bold: true };
+
+      addTitleAndHeader(
+        worksheet,
+        [
+          { header: 'NIK', key: 'nik', width: 15 },
+          { header: 'Nama', key: 'nama', width: 25 },
+          { header: 'Departemen', key: 'dep', width: 20 },
+          { header: 'Bagian', key: 'sec', width: 20 },
+          { header: 'Team', key: 'team', width: 20 },
+          { header: 'Jenis Cuti', key: 'type', width: 20 },
+          { header: 'Mulai', key: 'start', width: 15 },
+          { header: 'Selesai', key: 'end', width: 15 },
+          { header: 'Hari', key: 'days', width: 10 },
+          { header: 'Keterangan', key: 'reason', width: 30 },
+        ],
+        'LAPORAN CUTI KARYAWAN',
+        `Periode: ${formatDate(start)} s/d ${formatDate(end)}`,
+        'FF00B050'
+      );
+
+      const typeGroups: Record<string, any[]> = {};
+
+      previewData.forEach((row: any) => {
+        const typeStr = row.type || '-';
+        if (!typeGroups[typeStr]) {
+          typeGroups[typeStr] = [];
+        }
+        typeGroups[typeStr].push(row);
+
+        worksheet.addRow({
+          nik: row.EMP_CD,
+          nama: row.EMP_NM,
+          dep: row.DEP_DESC || '-',
+          sec: row.SEC_DESC || '-',
+          team: row.TEAM || '-',
+          type: typeStr,
+          start: new Date(row.startDate).toLocaleDateString('id-ID').replace(/\//g, '-'),
+          end: new Date(row.endDate).toLocaleDateString('id-ID').replace(/\//g, '-'),
+          days: row.days || 0,
+          reason: row.reason || '-'
+        });
+      });
+
+      applyTableBorders(worksheet, 10);
+
+      for (const [typeStr, rows] of Object.entries(typeGroups)) {
+        let safeSheetName = typeStr.replace(/[^a-zA-Z0-9 \-]/g, '').substring(0, 31);
+        if (!safeSheetName || safeSheetName === '-') safeSheetName = 'Lainnya';
+
+        let uniqueName = safeSheetName;
+        let counter = 1;
+        while (workbook.worksheets.find((w: any) => w.name.toLowerCase() === uniqueName.toLowerCase())) {
+          uniqueName = `${safeSheetName.substring(0, 27)} (${counter})`;
+          counter++;
+        }
+
+        const typeSheet = workbook.addWorksheet(uniqueName);
+        addTitleAndHeader(
+          typeSheet,
+          [
+            { header: 'NIK', key: 'nik', width: 15 },
+            { header: 'Nama', key: 'nama', width: 25 },
+            { header: 'Departemen', key: 'dep', width: 20 },
+            { header: 'Bagian', key: 'sec', width: 20 },
+            { header: 'Team', key: 'team', width: 20 },
+            { header: 'Jenis Cuti', key: 'type', width: 20 },
+            { header: 'Mulai', key: 'start', width: 15 },
+            { header: 'Selesai', key: 'end', width: 15 },
+            { header: 'Hari', key: 'days', width: 10 },
+            { header: 'Keterangan', key: 'reason', width: 30 },
+          ],
+          `LAPORAN ${typeStr.toUpperCase()}`,
+          `Periode: ${formatDate(start)} s/d ${formatDate(end)}`,
+          'FF00B050'
+        );
+
+        rows.forEach((row: any) => {
+          typeSheet.addRow({
+            nik: row.EMP_CD,
+            nama: row.EMP_NM,
+            dep: row.DEP_DESC || '-',
+            sec: row.SEC_DESC || '-',
+            team: row.TEAM || '-',
+            type: row.type || '-',
+            start: new Date(row.startDate).toLocaleDateString('id-ID').replace(/\//g, '-'),
+            end: new Date(row.endDate).toLocaleDateString('id-ID').replace(/\//g, '-'),
+            days: row.days || 0,
+            reason: row.reason || '-'
+          });
+        });
+
+        applyTableBorders(typeSheet, 10);
+      }
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      return new NextResponse(buffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="Laporan_${type}_${start}_${end}.xlsx"`,
+        },
+      });
+    } else if (type === 'skorsing') {
+      const start = searchParams.get('start') || new Date().toISOString().split('T')[0];
+      const end = searchParams.get('end') || new Date().toISOString().split('T')[0];
+
+      const absensiData = await query<any>(`
+        SELECT 
+          RTRIM(a.EMP_CD) AS EMP_CD,
+          RTRIM(e.EMP_NM) AS EMP_NM,
+          RTRIM(d.DEP_DESC) AS DEP_DESC,
+          RTRIM(s.SEC_DESC) AS SEC_DESC,
+          CASE   WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'   WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'   WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'   WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'   WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'   WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'   WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'   WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'   WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'   WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'   WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'   WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'   WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'   WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'   WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'   WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'   WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'   ELSE RTRIM(d.DEP_DESC) END AS TEAM,
+          CONVERT(varchar(10), a.DATE_TRANS, 120) AS dateStr,
+          CONVERT(varchar(8), a.WORK_IN, 108) AS WORK_IN_STR,
+          CONVERT(varchar(8), a.WORK_OUT, 108) AS WORK_OUT_STR,
+          ISNULL(e.ALL_IN, 0) AS isAllIn
+        FROM TR_ABSEN a
+        LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
+        LEFT JOIN MS_DEP d ON RTRIM(e.DEP_CD) = RTRIM(d.DEP_CD)
+        LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+        LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+        WHERE CONVERT(date, a.DATE_TRANS) BETWEEN '${start}' AND '${end}'
+        ${extraCondition}
+        ORDER BY a.DATE_TRANS ASC, a.EMP_CD ASC
+      `);
+
+      const skorsingList: any[] = [];
+      
+      const todayStrLocal = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+
+      absensiData.forEach(row => {
+        let isSkorsing = false;
+        let reasons: string[] = [];
+        
+        let workIn = row.WORK_IN_STR;
+        let workOut = row.WORK_OUT_STR;
+
+        // 1. Double tap morning correction
+        if (workIn && workOut) {
+          const inTime = workIn.substring(0, 5);
+          const outTime = workOut.substring(0, 5);
+          if (inTime < "12:00" && outTime < "12:00") {
+            const earliest = inTime < outTime ? workIn : workOut;
+            workIn = earliest;
+            workOut = null; // Reset Jam Pulang
+            row.WORK_IN_STR = workIn; // Update for excel display
+            row.WORK_OUT_STR = null;
+          }
+        }
+
+        // Jam Masuk check (standard 06:50-07:15)
+        if (workIn) {
+          const inTime = workIn.substring(0, 5);
+          if (inTime > "07:15" && inTime < "12:00") {
+            isSkorsing = true;
+            reasons.push("Terlambat Masuk (" + inTime + ")");
+          } else if (inTime < "06:50") {
+            isSkorsing = true;
+            reasons.push("Masuk Terlalu Awal (" + inTime + ")");
+          }
+        }
+
+        // Jam Pulang check
+        if (workOut) {
+          const outTime = workOut.substring(0, 5);
+          let isValid = false;
+
+          if (
+            (outTime >= "15:50" && outTime <= "16:15") || // Normal Pulang (16:00)
+            (outTime >= "16:50" && outTime <= "17:15") || // OT1 (17:00)
+            (outTime >= "17:50" && outTime <= "18:15") || // OT2 (18:00)
+            (outTime >= "18:50" && outTime <= "19:15") || // OT3 (19:00)
+            (outTime >= "19:50" && outTime <= "20:15") || // OT4 (20:00)
+            (outTime >= "20:50" && outTime <= "21:15")    // OT5 (21:00)
+          ) {
+            isValid = true;
+          }
+
+          if (!isValid) {
+            isSkorsing = true;
+            reasons.push("Pelanggaran Jam Pulang (" + outTime + ")");
+          }
+        } else if (workIn) {
+          // Jam Pulang Kosong (Tidak Absen Pulang)
+          if (row.dateStr !== todayStrLocal) {
+             isSkorsing = true;
+             reasons.push("Tidak Absen Pulang");
+          }
+        }
+
+        if (isSkorsing) {
+          skorsingList.push({
+            ...row,
+            reason: reasons.join(", ")
+          });
+        }
+      });
+
+      if (format === 'json') {
+        return NextResponse.json(skorsingList);
+      }
+
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet('Skorsing Report');
+
+      addTitleAndHeader(
+        worksheet,
+        [
+          { header: 'NIK', key: 'nik', width: 12 },
+          { header: 'NAMA', key: 'nama', width: 25 },
+          { header: 'BAGIAN', key: 'sec', width: 20 },
+          { header: 'TEAM', key: 'team', width: 20 },
+          { header: 'TANGGAL', key: 'date', width: 15 },
+          { header: 'JAM MASUK', key: 'in', width: 15 },
+          { header: 'JAM PULANG', key: 'out', width: 15 },
+          { header: 'KETERANGAN PELANGGARAN', key: 'reason', width: 45 }
+        ],
+        'LAPORAN SKORSING KARYAWAN',
+        `Periode: ${formatDate(start)} s/d ${formatDate(end)}`,
+        'FFFFC000'
+      );
+
+      skorsingList.forEach(row => {
+        worksheet.addRow({
+          nik: row.EMP_CD,
+          nama: row.EMP_NM,
+          sec: row.SEC_DESC || '-',
+          team: row.TEAM || '-',
+          date: formatDate(row.dateStr),
+          in: row.WORK_IN_STR || '-',
+          out: row.WORK_OUT_STR || '-',
+          reason: row.reason || '-'
+        });
+      });
+
+      applyTableBorders(worksheet, 8);
+      const buffer = await workbook.xlsx.writeBuffer();
+      return new NextResponse(buffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="Laporan_Skorsing_${start}_${end}.xlsx"`,
+        },
+      });
+    }
+  } catch (error) {
+    console.error('Excel generation error:', error);
+    return NextResponse.json({ error: String(error) }, { status: 500 });
+  }
+}
