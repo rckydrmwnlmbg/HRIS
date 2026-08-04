@@ -24,7 +24,8 @@ export async function GET(request: Request) {
     let whereClause = 'WHERE 1=1';
     if (status === 'aktif') {
       whereClause += ` AND e.Act_NonAct = 1 
-        AND (e.DT_RSG IS NULL OR e.DT_RSG > GETDATE())`;
+        AND (e.DT_ENTRY IS NULL OR CONVERT(varchar(10), e.DT_ENTRY, 120) <= CONVERT(varchar(10), GETDATE(), 120))
+        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= CONVERT(varchar(10), GETDATE(), 120))`;
     }
     else if (status === 'tidak') whereClause += ' AND e.Act_NonAct = 0';
     if (sec) whereClause += ` AND e.SEC_CD = '${sec.replace(/'/g, "''")}'`;

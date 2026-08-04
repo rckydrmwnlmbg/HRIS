@@ -106,7 +106,7 @@ export default function SplPlanningPage() {
       document.body.classList.remove('exporting-pdf');
     } catch (err) {
       console.error('PDF Error:', err);
-      alert('Gagal menghasilkan PDF');
+      alert(lang === 'id' ? 'Terjadi kendala saat menyusun dokumen' : 'Failed to generate document');
     }
     setIsGeneratingPdf(false);
   };

@@ -16,39 +16,13 @@ export async function GET(request: Request) {
     const d = String(selectedDate.getDate()).padStart(2, '0');
     const selectedDateStr = `${y}-${m}-${d}`;
 
-    // Cek hari: 0=Minggu, 6=Sabtu
+    // Cek hari: 0=Minggu, 6=Sabtu (Sabtu/Minggu libur pabrik)
     const dayOfWeek = selectedDate.getDay();
     if (dayOfWeek === 0 || dayOfWeek === 6) {
-      return NextResponse.json({ data: [] }); // Hari libur, tidak ada yang perlu dicek
+      return NextResponse.json({ data: [] });
     }
 
-    // Cek apakah tanggal yang dipilih adalah hari lampau (sebelum hari ini)
-    const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
-    const ty = todayDate.getFullYear();
-    const tm = String(todayDate.getMonth() + 1).padStart(2, '0');
-    const td = String(todayDate.getDate()).padStart(2, '0');
-    const todayDateStr = `${ty}-${tm}-${td}`;
-
-    const checkDate = new Date(selectedDate);
-    checkDate.setHours(0, 0, 0, 0);
-    const isPastDay = checkDate < todayDate;
-    const isToday = selectedDateStr === todayDateStr;
-
-    // Jika hari ini, cek apakah fingerprint sudah disinkronkan
-    if (isToday) {
-      const syncCheck = await query<any>(`
-        SELECT COUNT(*) as syncedCount
-        FROM TR_ABSEN
-        WHERE CONVERT(date, DATE_TRANS) = '${todayDateStr}'
-          AND (WORK_IN IS NOT NULL OR WORK_OUT IS NOT NULL)
-      `);
-      if ((syncCheck[0]?.syncedCount || 0) === 0) {
-        return NextResponse.json({ data: [], notSynced: true });
-      }
-    }
-
-    // Strategi Jam Kosong Murni: Karyawan aktif yang MEMILIKI salah satu rekaman finger (In ada tapi Out kosong, ATAU Out ada tapi In kosong)
+    // Ambil karyawan aktif yang memiliki jam masuk DAN jam pulang pada tanggal tersebut
     const rawAbsenResult = await query<any>(`
       SELECT 
         RTRIM(e.EMP_CD) as EMP_CD, 
@@ -82,7 +56,7 @@ export async function GET(request: Request) {
         a.WORK_IN1,
         a.WORK_OUT,
         a.WORK_OUT1,
-        a.EMP_CD as TR_EMP_CD
+        a.JAM_KERJA
       FROM EMP_TABLE e
       LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
       LEFT JOIN MS_DEP dp ON RTRIM(e.DEP_CD) = RTRIM(dp.DEP_CD)
@@ -90,6 +64,14 @@ export async function GET(request: Request) {
         AND CONVERT(date, a.DATE_TRANS) = '${selectedDateStr}'
       WHERE (CONVERT(varchar(10), e.DT_ENTRY, 120) <= '${selectedDateStr}')
         AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${selectedDateStr}')
+        AND (
+          (a.WORK_IN IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_IN AS varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_IN, 108) != '00:00:00')
+          OR (a.WORK_IN1 IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_IN1 AS varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_IN1, 108) != '00:00:00')
+        )
+        AND (
+          (a.WORK_OUT IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_OUT AS varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_OUT, 108) != '00:00:00')
+          OR (a.WORK_OUT1 IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_OUT1 AS varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_OUT1, 108) != '00:00:00')
+        )
     `);
 
     const reasonResult = await query<any>(`SELECT RTRIM(REASON_CODE) as REASON_CODE, RTRIM(REASON_GROUP) as REASON_GROUP FROM Ms_Reason`);
@@ -101,65 +83,102 @@ export async function GET(request: Request) {
     const excludedStatuses = ['C', 'CUTI', 'S', 'SAKIT', 'I', 'IJIN', 'L', 'LIBUR', 'H', 'HAID', 'DL'];
     const excludedGroups = ['C', 'H', 'S', 'I'];
 
-    const jamKosongList = rawAbsenResult.filter((r: any) => {
+    const perluPerhatianList: any[] = [];
+
+    rawAbsenResult.forEach((r: any) => {
       const status = (r.STATUS_HARI || '').trim().toUpperCase();
       const reasonGroup = (reasonMap.get((r.REASON || '').trim()) || '').toUpperCase();
 
       if (excludedStatuses.includes(status) || excludedGroups.includes(reasonGroup)) {
-        return false;
+        return;
       }
 
-      const hasIn = !(!r.WORK_IN || r.WORK_IN.toString().trim() === '' || r.WORK_IN.toString().includes('00:00:00')) ||
-                    !(!r.WORK_IN1 || r.WORK_IN1.toString().trim() === '' || r.WORK_IN1.toString().includes('00:00:00'));
+      // Format time string HH:mm:ss
+      const inRaw = r.WORK_IN || r.WORK_IN1;
+      const outRaw = r.WORK_OUT || r.WORK_OUT1;
+      if (!inRaw || !outRaw) return;
 
-      const hasOut = !(!r.WORK_OUT || r.WORK_OUT.toString().trim() === '' || r.WORK_OUT.toString().includes('00:00:00')) ||
-                     !(!r.WORK_OUT1 || r.WORK_OUT1.toString().trim() === '' || r.WORK_OUT1.toString().includes('00:00:00'));
+      const inStr = inRaw instanceof Date ? inRaw.toTimeString().substring(0, 8) : String(inRaw).substring(0, 8);
+      const outStr = outRaw instanceof Date ? outRaw.toTimeString().substring(0, 8) : String(outRaw).substring(0, 8);
 
-      // JAM KOSONG MURNI: Salah satu ada, salah satu TIDAK ADA
-      // 1. Ada Out tapi tidak ada In (Lupa Tap Masuk)
-      // 2. Ada In tapi tidak ada Out (Lupa Tap Pulang - untuk hari lampau atau hari ini setelah jam 16:00)
-      if (hasOut && !hasIn) return true;
-      if (hasIn && !hasOut) {
-        // Jika hari ini, hanya anggap lupa tap pulang jika jam sekarang sudah >= 16:00
-        if (isToday) {
-          const currentHour = new Date().getHours();
-          return currentHour >= 16;
-        }
-        return true;
+      const inParts = inStr.split(':').map(Number);
+      const outParts = outStr.split(':').map(Number);
+      if (inParts.length < 2 || outParts.length < 2) return;
+
+      const inDec = inParts[0] + inParts[1] / 60 + (inParts[2] || 0) / 3600;
+      const outDec = outParts[0] + outParts[1] / 60 + (outParts[2] || 0) / 3600;
+
+      let durationHours = outDec - inDec;
+      if (durationHours < 0) durationHours += 24; // Cross midnight
+
+      // Istirahat 1 jam jika melewati jam istirahat
+      let netWorkHours = durationHours;
+      if (inDec < 12.0 && outDec > 13.0) {
+        netWorkHours = Math.max(0, durationHours - 1.0);
       }
 
-      return false;
-    }).map((r: any) => {
-      const hasIn = !(!r.WORK_IN || r.WORK_IN.toString().trim() === '' || r.WORK_IN.toString().includes('00:00:00')) ||
-                    !(!r.WORK_IN1 || r.WORK_IN1.toString().trim() === '' || r.WORK_IN1.toString().includes('00:00:00'));
-      const hasOut = !(!r.WORK_OUT || r.WORK_OUT.toString().trim() === '' || r.WORK_OUT.toString().includes('00:00:00')) ||
-                     !(!r.WORK_OUT1 || r.WORK_OUT1.toString().trim() === '' || r.WORK_OUT1.toString().includes('00:00:00'));
+      const jk = Number(r.JAM_KERJA) > 0 ? Number(r.JAM_KERJA) : Math.round(netWorkHours * 10) / 10;
 
-      let keterangan_kosong = 'Lupa Tap Masuk';
-      if (hasOut && !hasIn) {
-        keterangan_kosong = 'Lupa Tap Masuk';
-      } else if (hasIn && !hasOut) {
-        keterangan_kosong = 'Lupa Tap Pulang';
+      // 1. Anomali Durasi Sangat Singkat (<= 30 menit / 0.5 jam)
+      if (durationHours <= 0.5) {
+        const diffMinutes = Math.round(durationHours * 60);
+        perluPerhatianList.push({
+          EMP_CD: r.EMP_CD,
+          EMP_NM: r.EMP_NM,
+          SEC_DESC: r.SEC_DESC,
+          SEC_CD: r.SEC_CD,
+          BAGIAN: r.BAGIAN,
+          TEAM: r.TEAM,
+          WORK_IN: inStr,
+          WORK_OUT: outStr,
+          jam_kerja: jk,
+          jenis_anomali: 'DURASI_SINGKAT',
+          keterangan: `Durasi Sangat Singkat (${diffMinutes} menit) - Kemungkinan salah tap`
+        });
+        return;
       }
-      
-      return {
-        EMP_CD: r.EMP_CD,
-        EMP_NM: r.EMP_NM,
-        SEC_DESC: r.SEC_DESC,
-        SEC_CD: r.SEC_CD,
-        BAGIAN: r.BAGIAN,
-        TEAM: r.TEAM,
-        STATUS_HARI: r.STATUS_HARI,
-        REASON: r.REASON,
-        WORK_IN: r.WORK_IN ? String(r.WORK_IN).substring(0, 8) : (r.WORK_IN1 ? String(r.WORK_IN1).substring(0, 8) : null),
-        WORK_OUT: r.WORK_OUT ? String(r.WORK_OUT).substring(0, 8) : (r.WORK_OUT1 ? String(r.WORK_OUT1).substring(0, 8) : null),
-        keterangan_kosong
-      };
+
+      // 2. Anomali Pulang Lebih Awal (< 16:00 dan jam kerja < 7 jam)
+      if (outDec < 16.0 && jk < 7.0) {
+        const kurangJam = (7.0 - jk).toFixed(1);
+        perluPerhatianList.push({
+          EMP_CD: r.EMP_CD,
+          EMP_NM: r.EMP_NM,
+          SEC_DESC: r.SEC_DESC,
+          SEC_CD: r.SEC_CD,
+          BAGIAN: r.BAGIAN,
+          TEAM: r.TEAM,
+          WORK_IN: inStr,
+          WORK_OUT: outStr,
+          jam_kerja: jk,
+          jenis_anomali: 'PULANG_CEPAT',
+          keterangan: `Pulang Lebih Awal pukul ${outStr.substring(0, 5)} (Jam kerja ${jk} jam, kurang ${kurangJam} jam)`
+        });
+        return;
+      }
+
+      // 3. Anomali Terlambat (> 07:15)
+      if (inDec > 7.25) {
+        const telatMenit = Math.round((inDec - 7.0) * 60);
+        perluPerhatianList.push({
+          EMP_CD: r.EMP_CD,
+          EMP_NM: r.EMP_NM,
+          SEC_DESC: r.SEC_DESC,
+          SEC_CD: r.SEC_CD,
+          BAGIAN: r.BAGIAN,
+          TEAM: r.TEAM,
+          WORK_IN: inStr,
+          WORK_OUT: outStr,
+          jam_kerja: jk,
+          jenis_anomali: 'TERLAMBAT',
+          keterangan: `Terlambat Masuk pukul ${inStr.substring(0, 5)} (Telat ${telatMenit} menit)`
+        });
+      }
     });
 
-    return NextResponse.json({ data: jamKosongList });
+    return NextResponse.json({ data: perluPerhatianList });
   } catch (err: any) {
-    console.error('API Error:', err);
-    return NextResponse.json({ error: 'Failed to fetch jam kosong data' }, { status: 500 });
+    console.error('API Error /api/dashboard/perlu-perhatian:', err);
+    return NextResponse.json({ error: 'Failed to fetch perlu perhatian data' }, { status: 500 });
   }
 }

@@ -88,7 +88,7 @@ export default function KaryawanDetailPage({ params }: { params: Promise<{ id: s
           <EmptyState 
             icon="user"
             title={lang === 'id' ? 'Karyawan Tidak Ditemukan' : 'Employee Not Found'}
-            description={`Data karyawan dengan NIK ${id} tidak ada dalam database atau telah dihapus.`}
+            description={lang === 'id' ? `Data karyawan dengan NIK ${id} tidak ditemukan dalam sistem atau telah dinonaktifkan.` : `Employee with ID ${id} was not found in the system or has been deactivated.`}
           />
         </div>
       </div>

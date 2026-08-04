@@ -147,11 +147,11 @@ export default function CutiPage() {
         loadRequests(selectedEmp?.EMP_CD);
       } else {
         const err = await res.json();
-        alert('Gagal menghapus: ' + (err.error || 'Unknown error'));
+        alert(lang === 'id' ? 'Gagal menghapus data' : 'Failed to delete record');
       }
     } catch (err) {
       console.error(err);
-      alert('Gagal menghapus data cuti');
+      alert(lang === 'id' ? 'Terjadi kendala saat menghapus data cuti' : 'Failed to delete leave record');
     }
     setConfirmTarget(null);
   };
@@ -199,8 +199,8 @@ export default function CutiPage() {
     <div className="animate-fadeIn">
       <div className="page-header">
         <div>
-          <h1 className="page-title">{lang === 'id' ? 'Manajemen Cuti & Izin' : 'Leave Management'}</h1>
-          <p className="page-subtitle">{lang === 'id' ? 'Form pengajuan dan riwayat cuti karyawan' : 'Leave request form and history'}</p>
+          <h1 className="page-title">{lang === 'id' ? 'Manajemen Cuti & Perizinan' : 'Leave & Permission Management'}</h1>
+          <p className="page-subtitle">{lang === 'id' ? 'Pengajuan, pengelolaan, dan riwayat hak cuti karyawan' : 'Leave request, management, and employee leave history'}</p>
         </div>
       </div>
 
@@ -219,7 +219,7 @@ export default function CutiPage() {
                     <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text)' }}>{selectedEmp.EMP_NM}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedEmp.EMP_CD}</div>
                   </div>
-                  <button type="button" className="btn btn-sm btn-secondary" onClick={() => { setSelectedEmp(null); setSearchEmp(''); }}>Ganti</button>
+                  <button type="button" className="btn btn-sm btn-secondary" onClick={() => { setSelectedEmp(null); setSearchEmp(''); }}>{lang === 'id' ? 'Ganti' : 'Change'}</button>
                 </div>
               ) : (
                 <div className="search-wrapper">
@@ -265,16 +265,16 @@ export default function CutiPage() {
 
             <div style={{ padding: '16px 20px', background: 'rgba(178, 178, 178, 0.05)', border: '1px solid rgba(79,158,248,0.2)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
               <div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>{lang === 'id' ? 'Total Hari Aktif :' : 'Total Active Days :'}</div>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: isExceedingQuota ? 'var(--danger)' : 'var(--accent-blue)', lineHeight: 1 }}>{days} <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-secondary)' }}>hari</span></div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>{lang === 'id' ? 'Total Hari Kerja :' : 'Total Working Days :'}</div>
+                <div style={{ fontSize: '24px', fontWeight: 700, color: isExceedingQuota ? 'var(--danger)' : 'var(--accent-blue)', lineHeight: 1 }}>{days} <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-secondary)' }}>{lang === 'id' ? 'hari' : 'days'}</span></div>
                 {isExceedingQuota && (
                   <div style={{ fontSize: '11px', color: 'var(--danger)', marginTop: '4px', fontWeight: 500 }}>
-                    ⚠ Jatah cuti tidak cukup (Maks: {BATAS_CUTI} hari/tahun)
+                    ⚠ {lang === 'id' ? `Sisa jatah cuti tidak mencukupi (Maks: ${BATAS_CUTI} hari/tahun)` : `Leave quota exceeded (Max: ${BATAS_CUTI} days/year)`}
                   </div>
                 )}
               </div>
               <button type="submit" className="btn btn-primary" style={{ padding: '10px 24px', fontWeight: 600 }} disabled={!selectedEmp || days <= 0 || isSubmitting || (isExceedingQuota as boolean)}>
-                {isSubmitting ? 'Menyimpan...' : (lang === 'id' ? 'Ajukan' : 'Submit')}
+                {isSubmitting ? (lang === 'id' ? 'Menyimpan...' : 'Saving...') : (lang === 'id' ? 'Ajukan Pengajuan' : 'Submit Request')}
               </button>
             </div>
           </form>
@@ -302,7 +302,7 @@ export default function CutiPage() {
               }}>
                 <span>{lang === 'id' ? 'Total Cuti Terpakai :' : 'Total Leave Used :'}</span>
                 <span style={{ fontSize: '15px', fontWeight: 800 }}>
-                  {totalCutiTerpakai} <span style={{fontSize: '12px', fontWeight: 500}}>hari</span>
+                  {totalCutiTerpakai} <span style={{fontSize: '12px', fontWeight: 500}}>{lang === 'id' ? 'hari' : 'days'}</span>
                 </span>
               </div>
             )}
@@ -322,13 +322,13 @@ export default function CutiPage() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>{lang === 'id' ? 'Karyawan' : 'Employee'}</th>
-                    <th>Bagian / Team</th>
+                    <th>{lang === 'id' ? 'Informasi Karyawan' : 'Employee'}</th>
+                    <th>{lang === 'id' ? 'Unit Kerja & Tim' : 'Section & Team'}</th>
                     <th>{lang === 'id' ? 'Jenis' : 'Type'}</th>
                     <th>{lang === 'id' ? 'Periode' : 'Period'}</th>
 
-                    <th style={{ textAlign: 'center' }}>Status</th>
-                    <th style={{ textAlign: 'center', width: '60px' }}>Aksi</th>
+                    <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Status' : 'Status'}</th>
+                    <th style={{ textAlign: 'center', width: '60px' }}>{lang === 'id' ? 'Tindakan' : 'Actions'}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -351,7 +351,7 @@ export default function CutiPage() {
                         <div style={{ fontSize: '12px' }}>
                           {new Date(r.startDate).toLocaleDateString('id-ID')} - {new Date(r.endDate).toLocaleDateString('id-ID')}
                         </div>
-                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>{r.days} hari</div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>{r.days} {lang === 'id' ? 'hari' : 'days'}</div>
                       </td>
 
                       <td style={{ textAlign: 'center' }}>

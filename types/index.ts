@@ -162,6 +162,20 @@ export interface JamKosongRecord {
   keterangan_kosong: string;
 }
 
+export interface PerluPerhatianRecord {
+  EMP_CD: string;
+  EMP_NM: string;
+  BAGIAN: string;
+  TEAM: string;
+  SEC_DESC: string;
+  SEC_CD: string;
+  WORK_IN: string | null;
+  WORK_OUT: string | null;
+  jam_kerja: number;
+  jenis_anomali: 'PULANG_CEPAT' | 'TERLAMBAT' | 'DURASI_SINGKAT';
+  keterangan: string;
+}
+
 export interface DashboardStats {
   totalKaryawan: number;
   karyawanAktif: number;
@@ -172,6 +186,8 @@ export interface DashboardStats {
   sakitHariIni: number;
   jamKosongHariIni: number;
   jamKosongList: JamKosongRecord[];
+  perluPerhatianHariIni?: number;
+  perluPerhatianList?: PerluPerhatianRecord[];
   lemburBulanIni: number;
   isFingerprintIntegrated?: boolean;
   demografi?: {

@@ -74,7 +74,7 @@ export default function KaryawanBaruPage() {
         }, 1500);
       } else {
         const err = await res.json();
-        alert((lang === 'id' ? 'Gagal menyimpan: ' : 'Failed to save: ') + (err.error || 'Unknown error'));
+        alert((lang === 'id' ? 'Gagal menyimpan: ' : 'Failed to save: ') + (err.error || (lang === 'id' ? 'Terjadi kendala' : 'An error occurred')));
       }
     } catch (err) {
       console.error(err);
@@ -115,7 +115,7 @@ export default function KaryawanBaruPage() {
           </button>
           <div>
             <h1 className="page-title">{lang === 'id' ? 'Karyawan Baru' : 'New Employee'}</h1>
-            <p className="page-subtitle">{lang === 'id' ? 'Tambah data karyawan ke database' : 'Add employee data to database'}</p>
+            <p className="page-subtitle">{lang === 'id' ? 'Pendaftaran data karyawan baru ke sistem' : 'Register new employee into the system'}</p>
           </div>
         </div>
         <button className="btn btn-primary" onClick={handleSave} disabled={saving}>

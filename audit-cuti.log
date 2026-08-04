@@ -1,0 +1,4 @@
+{"ts":"2026-08-04T04:35:28.951Z","action":"CUTI_DELETE","empCd":"26066995","startDate":"2026-07-21","endDate":"2026-07-21"}
+{"ts":"2026-08-04T05:06:47.567Z","action":"CUTI_CREATE","empCd":"26066995","empNm":"WIDYA ETIKA","reasonCode":"18","startDate":"2026-08-10","endDate":"2026-08-13","days":4,"dates":["2026-08-10","2026-08-11","2026-08-12","2026-08-13"]}
+{"ts":"2026-08-04T05:06:54.065Z","action":"CUTI_DELETE","empCd":"26066995","startDate":"2026-08-10","endDate":"2026-08-13"}
+{"ts":"2026-08-04T05:06:58.607Z","action":"CUTI_DELETE","empCd":"26066995","startDate":"2026-07-21","endDate":"2026-07-21"}

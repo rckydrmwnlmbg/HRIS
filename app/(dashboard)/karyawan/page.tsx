@@ -208,8 +208,8 @@ export default function KaryawanPage() {
                   <td colSpan={8} style={{ padding: 0 }}>
                     <EmptyState 
                       icon="search"
-                      title="Karyawan Tidak Ditemukan"
-                      description="Tidak ada karyawan yang cocok dengan pencarian atau filter Anda."
+                      title={lang === 'id' ? 'Data Karyawan Tidak Ditemukan' : 'No Employees Found'}
+                      description={lang === 'id' ? 'Tidak ada karyawan yang sesuai dengan kriteria pencarian atau filter yang dipilih.' : 'No employees match your current search or filter criteria.'}
                     />
                   </td>
                 </tr>
@@ -221,7 +221,7 @@ export default function KaryawanPage() {
                         onClick={() => router.push(`/karyawan/${k.EMP_CD}`)}
                         style={{ cursor: 'pointer' }}
                       >
-                        <td><span style={{ fontFamily: 'monospace', fontSize: '12px', color: 'var(--accent-blue)' }}>{k.EMP_CD}</span></td>
+                        <td><span style={{ fontSize: '12px', color: 'var(--accent-blue)', fontWeight: 500 }}>{k.EMP_CD}</span></td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <div className={styles.avatar}>{(k.EMP_NM || '?').charAt(0)}</div>

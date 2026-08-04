@@ -25,51 +25,64 @@ export async function POST(request: Request) {
       whereClause += ` AND RTRIM(t.EMP_CD) IN (${empList})`;
     }
 
-    // CTE for calculating bounds and proposed times
+    // CTE for calculating bounds, OT and proposed times
     const baseQuery = `
-      WITH CTE_Bounds AS (
+      WITH CTE_Base AS (
         SELECT 
-          t.ID, t.EMP_CD, t.DATE_TRANS, t.WORK_IN, t.WORK_OUT, t.JAM_KERJA AS CURRENT_JAM_KERJA,
+          t.ID, t.EMP_CD, t.DATE_TRANS, t.WORK_IN, t.WORK_OUT, 
+          t.JAM_KERJA AS CURRENT_JAM_KERJA,
+          t.OT_1 AS CURRENT_OT_1,
+          t.OT_2 AS CURRENT_OT_2,
+          t.T_OT AS CURRENT_T_OT,
           t.JAM_MASUK,
           t.JAM_PULANG,
           
-          -- Hitung Bounds IN berdasarkan tanggal aktual WORK_IN
-          DATEADD(minute, -10, CAST(CAST(t.WORK_IN AS DATE) AS DATETIME) + CAST(t.JAM_MASUK AS TIME)) AS IN_LOWER_BOUND,
-          DATEADD(minute, 15, CAST(CAST(t.WORK_IN AS DATE) AS DATETIME) + CAST(t.JAM_MASUK AS TIME)) AS IN_UPPER_BOUND,
-          
-          -- Hitung Bounds OUT berdasarkan tanggal aktual WORK_OUT (Aman untuk Lintas Malam)
-          DATEADD(minute, -10, CAST(CAST(t.WORK_OUT AS DATE) AS DATETIME) + CAST(t.JAM_PULANG AS TIME)) AS OUT_LOWER_BOUND,
-          DATEADD(minute, 15, CAST(CAST(t.WORK_OUT AS DATE) AS DATETIME) + CAST(t.JAM_PULANG AS TIME)) AS OUT_UPPER_BOUND
+          -- Target Jadwal Masuk & Pulang
+          CAST(CONVERT(varchar(10), t.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), t.JAM_MASUK, 108) AS DATETIME) AS SCH_IN,
+          CAST(CONVERT(varchar(10), t.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), t.JAM_PULANG, 108) AS DATETIME) AS SCH_OUT
         FROM TR_ABSEN t
         JOIN EMP_TABLE e ON RTRIM(t.EMP_CD) = RTRIM(e.EMP_CD)
+        LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+        LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
         WHERE ${whereClause}
+          AND ISNULL(RTRIM(j.JOB_DESC),'') <> 'SECURITY'
+          AND ISNULL(RTRIM(s.SEC_DESC),'') <> 'SECURITY'
       ),
-      CTE_Proposed AS (
+      CTE_Calculated AS (
         SELECT 
-          *,
+          b.*,
+          -- Hitung Jam Lembur Bulat (Toleransi 10 mnt sebelum s.d 15 mnt sesudah)
           CASE 
-            WHEN WORK_IN < IN_LOWER_BOUND THEN IN_LOWER_BOUND
-            WHEN WORK_IN > IN_UPPER_BOUND THEN IN_UPPER_BOUND
-            ELSE WORK_IN
-          END AS PROPOSED_WORK_IN,
-          
-          CASE 
-            WHEN WORK_OUT < OUT_LOWER_BOUND THEN OUT_LOWER_BOUND
-            WHEN WORK_OUT > OUT_UPPER_BOUND THEN OUT_UPPER_BOUND
-            ELSE WORK_OUT
-          END AS PROPOSED_WORK_OUT
-        FROM CTE_Bounds
+            WHEN DATEDIFF(minute, b.SCH_OUT, b.WORK_OUT) >= 50
+              THEN CAST(FLOOR((DATEDIFF(minute, b.SCH_OUT, b.WORK_OUT) + 10) / 60.0) AS INT)
+            ELSE 0
+          END AS K_OT
+        FROM CTE_Base b
       ),
       CTE_Final AS (
         SELECT 
-          *,
-          -- Hitung JAM_KERJA baru dengan rumus desimal murni +0.50 berdasarkan PROPOSED_WORK_IN dan PROPOSED_WORK_OUT
+          c.*,
+          -- WORK_IN dikoreksi jika kepagian (> 10 mnt sebelum jadwal)
           CASE 
-            WHEN (DATEDIFF(minute, PROPOSED_WORK_IN, PROPOSED_WORK_OUT) / 60.0) - FLOOR(DATEDIFF(minute, PROPOSED_WORK_IN, PROPOSED_WORK_OUT) / 60.0) < 0.50 
-            THEN FLOOR(DATEDIFF(minute, PROPOSED_WORK_IN, PROPOSED_WORK_OUT) / 60.0) 
-            ELSE FLOOR(DATEDIFF(minute, PROPOSED_WORK_IN, PROPOSED_WORK_OUT) / 60.0) + 0.50 
-          END AS PROPOSED_JAM_KERJA
-        FROM CTE_Proposed
+            WHEN DATEDIFF(minute, c.WORK_IN, c.SCH_IN) > 10
+              THEN DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 540 as int), DATEADD(minute, -10, c.SCH_IN))
+            ELSE c.WORK_IN
+          END AS PROPOSED_WORK_IN,
+          
+          -- WORK_OUT dikoreksi ke jendela aman +1..+15 menit sesudah jadwal + K_OT
+          CASE 
+            WHEN c.K_OT > 0 
+              THEN DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 840 as int) + 60, DATEADD(hour, c.K_OT, c.SCH_OUT))
+            ELSE 
+              DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 840 as int) + 60, c.SCH_OUT)
+          END AS PROPOSED_WORK_OUT,
+          
+          -- OT & JAM_KERJA Bersih (8 jam kerja normal + T_OT)
+          CASE WHEN c.K_OT >= 1 THEN 1.0 ELSE 0.0 END AS PROPOSED_OT_1,
+          CASE WHEN c.K_OT > 1 THEN CAST(c.K_OT - 1 AS NUMERIC(18,2)) ELSE 0.0 END AS PROPOSED_OT_2,
+          CASE WHEN c.K_OT > 0 THEN c.K_OT ELSE 0 END AS PROPOSED_T_OT,
+          CASE WHEN c.K_OT > 0 THEN 8 + c.K_OT ELSE 8 END AS PROPOSED_JAM_KERJA
+        FROM CTE_Calculated c
       )
     `;
 
@@ -78,14 +91,17 @@ export async function POST(request: Request) {
       const previewSql = `
         ${baseQuery}
         SELECT * FROM CTE_Final
-        WHERE WORK_IN <> PROPOSED_WORK_IN OR WORK_OUT <> PROPOSED_WORK_OUT
+        WHERE WORK_IN <> PROPOSED_WORK_IN 
+           OR WORK_OUT <> PROPOSED_WORK_OUT
+           OR CURRENT_JAM_KERJA <> PROPOSED_JAM_KERJA
+           OR ISNULL(CURRENT_T_OT, 0) <> PROPOSED_T_OT
         ORDER BY DATE_TRANS, EMP_CD
       `;
 
       const previewData = await query(previewSql, { startDate, endDate });
       return NextResponse.json({ success: true, data: previewData });
-    } 
-    
+    }
+
     if (action === 'apply') {
       // Execute Atomic Transaction to AUDIT and UPDATE
       const applySql = `
@@ -104,19 +120,32 @@ export async function POST(request: Request) {
             c.EMP_CD, c.DATE_TRANS,
             c.WORK_IN, c.WORK_OUT, c.CURRENT_JAM_KERJA,
             c.PROPOSED_WORK_IN, c.PROPOSED_WORK_OUT, c.PROPOSED_JAM_KERJA,
-            'SYSTEM_OT_AUTO', GETDATE(), 'Otomasi Pembulatan Target OT (Closest Boundary)'
+            'SYSTEM_OT_AUTO', GETDATE(), 'Otomasi Pembulatan Target OT (Integer Rounding)'
           FROM CTE_Final c
-          WHERE c.WORK_IN <> c.PROPOSED_WORK_IN OR c.WORK_OUT <> c.PROPOSED_WORK_OUT;
+          WHERE c.WORK_IN <> c.PROPOSED_WORK_IN 
+             OR c.WORK_OUT <> c.PROPOSED_WORK_OUT
+             OR c.CURRENT_JAM_KERJA <> c.PROPOSED_JAM_KERJA
+             OR ISNULL(c.CURRENT_T_OT, 0) <> c.PROPOSED_T_OT;
 
           -- 2. Update TR_ABSEN (Hanya yang akan berubah)
           UPDATE t
           SET 
             t.WORK_IN = c.PROPOSED_WORK_IN,
             t.WORK_OUT = c.PROPOSED_WORK_OUT,
+            t.OT_1 = c.PROPOSED_OT_1,
+            t.OT_2 = c.PROPOSED_OT_2,
+            t.OT_3 = 0.0,
+            t.OT_4 = 0.0,
+            t.OT_5 = 0.0,
+            t.OT_6 = 0.0,
+            t.T_OT = c.PROPOSED_T_OT,
             t.JAM_KERJA = c.PROPOSED_JAM_KERJA
           FROM TR_ABSEN t
           INNER JOIN CTE_Final c ON t.ID = c.ID
-          WHERE c.WORK_IN <> c.PROPOSED_WORK_IN OR c.WORK_OUT <> c.PROPOSED_WORK_OUT;
+          WHERE c.WORK_IN <> c.PROPOSED_WORK_IN 
+             OR c.WORK_OUT <> c.PROPOSED_WORK_OUT
+             OR c.CURRENT_JAM_KERJA <> c.PROPOSED_JAM_KERJA
+             OR ISNULL(c.CURRENT_T_OT, 0) <> c.PROPOSED_T_OT;
           
           COMMIT TRAN;
         END TRY

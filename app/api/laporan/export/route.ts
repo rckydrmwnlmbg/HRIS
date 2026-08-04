@@ -56,10 +56,15 @@ export async function GET(request: Request) {
   const shift = searchParams.get('shift') || null;
   const format = searchParams.get('format') || 'excel'; // 'excel' or 'json'
 
+  const startParam = searchParams.get('start');
+  const endParam = searchParams.get('end');
+  const nikParam = searchParams.get('nik');
+
   try {
     let extraCondition = '';
     if (secCd) extraCondition += ` AND RTRIM(e.SEC_CD) = '${secCd.replace(/'/g, "''")}'`;
     if (jobCd) extraCondition += ` AND RTRIM(e.JOB_CD) = '${jobCd.replace(/'/g, "''")}'`;
+    if (nikParam) extraCondition += ` AND RTRIM(e.EMP_CD) = '${nikParam.replace(/'/g, "''")}'`;
 
     // Shift filter (only applied if type === 'absensi', handled via extraCondition for now)
     if (type === 'absensi' && shift === 'pagi') {
@@ -71,86 +76,176 @@ export async function GET(request: Request) {
     let previewData: any[] = [];
 
     if (type === 'absensi') {
-      const rekapData = await query<any>(`
+      const dateCondition = (startParam && endParam)
+        ? `a.DATE_TRANS >= '${startParam}' AND a.DATE_TRANS <= '${endParam}'`
+        : `MONTH(a.DATE_TRANS) = ${bulan} AND YEAR(a.DATE_TRANS) = ${tahun}`;
+
+      const rawAbsensiData = await query<any>(`
         SELECT 
-          RTRIM(e.EMP_CD) AS EMP_CD,
-          RTRIM(e.EMP_NM) AS EMP_NM,
-          RTRIM(d.DEP_DESC) AS DEP_DESC,
-          RTRIM(s.SEC_DESC) AS SEC_DESC,
-          RTRIM(j.JOB_DESC) AS JOB_DESC,
-          SUM(CASE WHEN RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') OR RTRIM(mr.REASON_GROUP) = 'O' THEN 1 ELSE 0 END) AS hadir,
-          SUM(CASE WHEN RTRIM(a.STATUS_HARI) IN ('ALPHA', 'A') THEN 1 ELSE 0 END) AS alpha,
-          SUM(CASE WHEN RTRIM(a.STATUS_HARI) IN ('IJIN', 'I') OR RTRIM(mr.REASON_GROUP) = 'I' THEN 1 ELSE 0 END) AS izin,
-          SUM(CASE WHEN RTRIM(a.STATUS_HARI) IN ('CUTI', 'C', 'H', 'HAID') OR RTRIM(mr.REASON_GROUP) IN ('C', 'H') THEN 1 ELSE 0 END) AS cuti,
-          SUM(CASE WHEN RTRIM(a.STATUS_HARI) IN ('SAKIT', 'S') OR RTRIM(mr.REASON_GROUP) = 'S' THEN 1 ELSE 0 END) AS sakit
-        FROM EMP_TABLE e
+          CONVERT(varchar(10), a.DATE_TRANS, 103) AS TANGGAL,
+          CONVERT(varchar(10), a.DATE_TRANS, 120) AS dateRaw,
+          RTRIM(e.EMP_CD) AS NIK,
+          RTRIM(e.EMP_NM) AS NAMA,
+          RTRIM(e.SX) AS LP,
+          CASE WHEN ISNULL(e.ALL_IN, 0) = 1 THEN 'ALL IN' ELSE 'HARIAN' END AS JNSKAR,
+          RTRIM(j.JOB_DESC) AS JABATAN,
+          CASE 
+            WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'
+            WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'
+            WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'
+            WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'
+            WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'
+            WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'
+            WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'
+            WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'
+            WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'
+            WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'
+            WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'
+            WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'
+            WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'
+            WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'
+            WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'
+            WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'
+            WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'
+            WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'
+            WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'
+            ELSE RTRIM(d.DEP_DESC) 
+          END AS TEAM,
+          RTRIM(s.SEC_DESC) AS BAGIAN,
+          CONVERT(varchar(5), a.WORK_IN, 108) AS MASUK,
+          CONVERT(varchar(5), a.WORK_OUT, 108) AS PULANG,
+          RTRIM(a.STATUS_HARI) AS STATUS_HARI,
+          COALESCE(RTRIM(mr.REASON_DESC), RTRIM(a.REASON), '') AS ALASAN,
+          CASE 
+            WHEN RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') OR RTRIM(mr.REASON_GROUP) = 'O' THEN 8 
+            WHEN RTRIM(a.STATUS_HARI) IN ('CUTI', 'C', 'H', 'HAID') OR RTRIM(mr.REASON_GROUP) IN ('C', 'H') THEN 8
+            ELSE 0 
+          END AS BASIC,
+          CAST(ISNULL(a.OT_1, 0) AS INT) AS OT1,
+          CAST(ISNULL(a.OT_2, 0) AS INT) AS OT2,
+          CAST(ISNULL(a.OT_3, 0) AS INT) AS OT3,
+          CAST(ISNULL(a.OT_4, 0) AS INT) AS OT4,
+          CAST(
+            (CASE 
+              WHEN RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') OR RTRIM(mr.REASON_GROUP) = 'O' THEN 8 
+              WHEN RTRIM(a.STATUS_HARI) IN ('CUTI', 'C', 'H', 'HAID') OR RTRIM(mr.REASON_GROUP) IN ('C', 'H') THEN 8
+              ELSE 0 
+            END) + ISNULL(a.OT_1, 0) + ISNULL(a.OT_2, 0) + ISNULL(a.OT_3, 0) + ISNULL(a.OT_4, 0)
+            AS INT
+          ) AS TOTAL
+        FROM TR_ABSEN a
+        LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
         LEFT JOIN MS_DEP d ON e.DEP_CD = d.DEP_CD
         LEFT JOIN MS_SEC s ON e.SEC_CD = s.SEC_CD
         LEFT JOIN MS_JOBS j ON e.JOB_CD = j.JOB_CD
-        LEFT JOIN (
-          SELECT * FROM TR_ABSEN 
-          WHERE MONTH(DATE_TRANS) = ${bulan} AND YEAR(DATE_TRANS) = ${tahun}
-        ) a ON e.EMP_CD = a.EMP_CD
         LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
-        WHERE (e.Act_NonAct = 1 OR a.EMP_CD IS NOT NULL) ${extraCondition}
-        GROUP BY RTRIM(e.EMP_CD), RTRIM(e.EMP_NM), RTRIM(d.DEP_DESC), RTRIM(s.SEC_DESC), RTRIM(j.JOB_DESC)
-        ORDER BY RTRIM(e.EMP_NM)
+        WHERE ${dateCondition} ${extraCondition}
+        ORDER BY RTRIM(s.SEC_DESC) ASC, RTRIM(e.EMP_NM) ASC, a.DATE_TRANS ASC
       `);
-      previewData = rekapData;
+      previewData = rawAbsensiData;
 
       if (format === 'json') {
         return NextResponse.json(previewData);
       }
 
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('Rekap Absensi');
-      const monthNamesIndo = ["", "Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-      const monthName = monthNamesIndo[bulan] || bulan;
-      addTitleAndHeader(
-        worksheet,
-        [
-          { header: 'NIK', key: 'nik', width: 15 },
-          { header: 'Nama', key: 'nama', width: 25 },
-          { header: 'Departemen', key: 'dep', width: 20 },
-          { header: 'Bagian', key: 'sec', width: 20 },
-          { header: 'Team', key: 'team', width: 20 },
-          { header: 'Hadir', key: 'hadir', width: 10 },
-          { header: 'Alpha', key: 'alpha', width: 10 },
-          { header: 'Izin', key: 'izin', width: 10 },
-          { header: 'Cuti', key: 'cuti', width: 10 },
-          { header: 'Sakit', key: 'sakit', width: 10 },
-        ],
-        'REKAP ABSENSI KARYAWAN',
-        `Periode: Bulan ${monthName} Tahun ${tahun}`,
-        'FF4F81BD'
-      );
+      const worksheet = workbook.addWorksheet('rptAbsensi', { views: [{ showGridLines: true }] });
 
-      previewData.forEach((row: any) => {
-        worksheet.addRow({
-          nik: row.EMP_CD,
-          nama: row.EMP_NM,
-          dep: row.DEP_DESC || '-',
-          sec: row.SEC_DESC || '-',
-          team: row.TEAM || '-',
-          hadir: row.hadir || 0,
-          alpha: row.alpha || 0,
-          izin: row.izin || 0,
-          cuti: row.cuti || 0,
-          sakit: row.sakit || 0
-        });
+      const headers = [
+        { header: 'TANGGAL', key: 'TANGGAL', width: 14 },
+        { header: 'NIK', key: 'NIK', width: 13 },
+        { header: 'NAMA', key: 'NAMA', width: 28 },
+        { header: 'L/P', key: 'LP', width: 6 },
+        { header: 'JNSKAR', key: 'JNSKAR', width: 12 },
+        { header: 'JABATAN', key: 'JABATAN', width: 20 },
+        { header: 'TEAM', key: 'TEAM', width: 18 },
+        { header: 'BAGIAN', key: 'BAGIAN', width: 20 },
+        { header: 'MASUK', key: 'MASUK', width: 10 },
+        { header: 'PULANG', key: 'PULANG', width: 10 },
+        { header: 'STATUS HARI', key: 'STATUS_HARI', width: 14 },
+        { header: 'ALASAN', key: 'ALASAN', width: 18 },
+        { header: 'BASIC', key: 'BASIC', width: 8 },
+        { header: 'OT 1', key: 'OT1', width: 8 },
+        { header: 'OT 2', key: 'OT2', width: 8 },
+        { header: 'OT3', key: 'OT3', width: 8 },
+        { header: 'OT 4', key: 'OT4', width: 8 },
+        { header: 'TOTAL', key: 'TOTAL', width: 8 },
+      ];
+
+      worksheet.columns = headers;
+
+      // Style Header Row (Row 1)
+      const headerRow = worksheet.getRow(1);
+      headerRow.height = 24;
+      headerRow.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF000000' } };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      headerRow.eachCell((cell) => {
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFD9D9D9' }
+        };
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
       });
 
-      worksheet.eachRow((row: any, rowNumber: number) => {
-        if (rowNumber > 1) {
-          const alphaCell = row.getCell('alpha');
-          if ((alphaCell.value as number) > 0) {
-            alphaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFC7CE' } };
-            alphaCell.font = { color: { argb: 'FF9C0006' } };
-          }
+      // Style Data Rows
+      previewData.forEach((row: any) => {
+        const addedRow = worksheet.addRow({
+          TANGGAL: row.TANGGAL,
+          NIK: row.NIK,
+          NAMA: row.NAMA,
+          LP: row.LP,
+          JNSKAR: row.JNSKAR,
+          JABATAN: row.JABATAN || '-',
+          TEAM: row.TEAM || '-',
+          BAGIAN: row.BAGIAN || '-',
+          MASUK: row.MASUK || '',
+          PULANG: row.PULANG || '',
+          STATUS_HARI: row.STATUS_HARI || '',
+          ALASAN: row.ALASAN || '',
+          BASIC: row.BASIC,
+          OT1: row.OT1,
+          OT2: row.OT2,
+          OT3: row.OT3,
+          OT4: row.OT4,
+          TOTAL: row.TOTAL
+        });
+
+        addedRow.height = 19;
+        addedRow.font = { name: 'Calibri', size: 10 };
+
+        // Center align
+        const centerCols = [1, 2, 4, 5, 9, 10, 11, 13, 14, 15, 16, 17, 18];
+        centerCols.forEach(colIdx => {
+          addedRow.getCell(colIdx).alignment = { horizontal: 'center', vertical: 'middle' };
+        });
+
+        // Left align
+        const leftCols = [3, 6, 7, 8, 12];
+        leftCols.forEach(colIdx => {
+          addedRow.getCell(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
+        });
+
+        // Numbers formatting
+        for (let numCol of [13, 14, 15, 16, 17, 18]) {
+          addedRow.getCell(numCol).numFmt = '0';
+        }
+
+        for (let i = 1; i <= 18; i++) {
+          addedRow.getCell(i).border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
         }
       });
 
-      applyTableBorders(worksheet, 10);
       const buffer = await workbook.xlsx.writeBuffer();
       return new NextResponse(buffer, {
         status: 200,
@@ -169,7 +264,7 @@ export async function GET(request: Request) {
       startD.setDate(inputDate.getDate() + diff);
 
       const weekDates: string[] = [];
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < 7; i++) {
         let d = new Date(startD);
         d.setDate(startD.getDate() + i);
         const y = d.getFullYear();
@@ -178,7 +273,7 @@ export async function GET(request: Request) {
         weekDates.push(`${y}-${m}-${dd}`);
       }
       const startStr = weekDates[0];
-      const endStr = weekDates[5];
+      const endStr = weekDates[6];
 
       const formatDate = (dateStr: string) => {
         const [y, m, d] = dateStr.split('-');
@@ -190,148 +285,6 @@ export async function GET(request: Request) {
       const endDay = endStr.split('-')[2];
       const endMonthStr = monthNames[parseInt(endStr.split('-')[1], 10) - 1];
       const fileNameTitle = `OTAnalysis_(${startDay}-${endDay} ${endMonthStr})`;
-
-      // KOREKSI WORK_OUT (PULANG NANGGUNG) SECARA ACAK SEBELUM EXPORT
-      // Rumus generik: k = FLOOR((selisih+10)/60), nanggung jika selisih > k*60+15
-      // Koreksi ke JAM_PULANG + k*60 menit + acak 0..14 menit (0..900 detik)
-      // SECURITY DIKECUALIKAN (shift mereka berbeda, ditangani terpisah)
-      await query(`
-        UPDATE a
-        SET a.WORK_OUT = DATEADD(second, 
-                           CAST(RAND(CHECKSUM(NEWID())) * 840 as int) + 60,
-                           DATEADD(hour, 
-                             CAST(FLOOR((DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), a.WORK_OUT) + 10) / 60.0) AS INT),
-                             CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME)))
-        FROM TR_ABSEN a
-        LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-        LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-        LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-        WHERE a.DATE_TRANS >= '${startStr}' AND a.DATE_TRANS <= '${endStr}'
-          AND a.WORK_OUT IS NOT NULL 
-          AND a.JAM_PULANG IS NOT NULL
-          AND RTRIM(a.STATUS_HARI) IN ('KERJA', 'O')
-          AND ISNULL(RTRIM(j.JOB_DESC),'') <> 'SECURITY'
-          AND ISNULL(RTRIM(s.SEC_DESC),'') <> 'SECURITY'
-          AND DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), a.WORK_OUT) >= 16
-          AND (DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), a.WORK_OUT) 
-               - (FLOOR((DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), a.WORK_OUT) + 10) / 60.0) * 60)) > 15
-          AND (a.WORK_OUT = a.WORK_OUT1 OR a.WORK_OUT IS NULL);
-      `);
-
-      // KOREKSI WORK_IN (MASUK KEPAGIAN) SECARA ACAK — REGULER
-      await query(`
-        UPDATE a
-        SET a.WORK_IN = DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 540 as int), 
-                          DATEADD(minute, -10, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_MASUK, 108) AS DATETIME)))
-        FROM TR_ABSEN a
-        LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-        LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-        LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-        WHERE a.DATE_TRANS >= '${startStr}' AND a.DATE_TRANS <= '${endStr}'
-          AND a.WORK_IN IS NOT NULL 
-          AND a.JAM_MASUK IS NOT NULL
-          AND ISNULL(RTRIM(j.JOB_DESC),'') <> 'SECURITY'
-          AND ISNULL(RTRIM(s.SEC_DESC),'') <> 'SECURITY'
-          AND DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.WORK_IN, 108) AS DATETIME), CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_MASUK, 108) AS DATETIME)) > 10
-          AND (a.WORK_IN = a.WORK_IN1 OR a.WORK_IN IS NULL);
-      `);
-
-      // KOREKSI WORK_IN KHUSUS SECURITY (3 SHIFT PRIA, 2 SHIFT WANITA)
-      await query(`
-        WITH SecInShift AS (
-          SELECT 
-            a.EMP_CD, a.DATE_TRANS,
-            CASE 
-              WHEN RTRIM(e.SX) = 'P' THEN
-                CASE 
-                  WHEN DATEPART(hour, a.WORK_IN) < 10 
-                    THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 07:00:00' AS DATETIME)
-                  ELSE 
-                    CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 11:30:00' AS DATETIME)
-                END
-              ELSE -- Pria
-                CASE 
-                  WHEN DATEPART(hour, a.WORK_IN) >= 5 AND DATEPART(hour, a.WORK_IN) < 12 
-                    THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 07:00:00' AS DATETIME)
-                  WHEN DATEPART(hour, a.WORK_IN) >= 12 AND DATEPART(hour, a.WORK_IN) < 20 
-                    THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 15:00:00' AS DATETIME)
-                  ELSE 
-                    CASE 
-                      WHEN DATEPART(hour, a.WORK_IN) >= 20 
-                        THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 23:00:00' AS DATETIME)
-                      ELSE 
-                        DATEADD(day, -1, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 23:00:00' AS DATETIME))
-                    END
-                END
-            END AS TARGET_IN
-          FROM TR_ABSEN a
-          LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-          LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-          LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-          WHERE a.DATE_TRANS >= '${startStr}' AND a.DATE_TRANS <= '${endStr}'
-            AND a.WORK_IN IS NOT NULL
-            AND (ISNULL(RTRIM(s.SEC_DESC),'') = 'SECURITY' OR ISNULL(RTRIM(j.JOB_DESC),'') = 'SECURITY')
-            AND (a.WORK_IN = a.WORK_IN1 OR a.WORK_IN IS NULL)
-        )
-        UPDATE a
-        SET a.WORK_IN = DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 540 as int), 
-                          DATEADD(minute, -10, s.TARGET_IN))
-        FROM TR_ABSEN a
-        JOIN SecInShift s ON a.EMP_CD = s.EMP_CD AND a.DATE_TRANS = s.DATE_TRANS
-        WHERE DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.WORK_IN, 108) AS DATETIME), s.TARGET_IN) > 10;
-      `);
-
-      // KOREKSI WORK_OUT KHUSUS SECURITY (3 SHIFT PRIA, 2 SHIFT WANITA)
-      await query(`
-        WITH SecOutShift AS (
-          SELECT 
-            a.EMP_CD, a.DATE_TRANS,
-            CASE 
-              WHEN RTRIM(e.SX) = 'P' THEN
-                CASE 
-                  WHEN DATEPART(hour, a.WORK_IN) < 10 
-                    THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 16:00:00' AS DATETIME)
-                  ELSE 
-                    CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 20:30:00' AS DATETIME)
-                END
-              ELSE -- Pria
-                CASE 
-                  WHEN DATEPART(hour, a.WORK_IN) >= 5 AND DATEPART(hour, a.WORK_IN) < 12 
-                    THEN CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 16:00:00' AS DATETIME)
-                  WHEN DATEPART(hour, a.WORK_IN) >= 12 AND DATEPART(hour, a.WORK_IN) < 20 
-                    THEN DATEADD(hour, 9, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 15:00:00' AS DATETIME))
-                  ELSE 
-                    CASE 
-                      WHEN DATEPART(hour, a.WORK_IN) >= 20 
-                        THEN DATEADD(day, 1, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 08:00:00' AS DATETIME))
-                      ELSE 
-                        CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' 08:00:00' AS DATETIME)
-                    END
-                END
-            END AS TARGET_OUT
-          FROM TR_ABSEN a
-          LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-          LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-          LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-          WHERE a.DATE_TRANS >= '${startStr}' AND a.DATE_TRANS <= '${endStr}'
-            AND a.WORK_OUT IS NOT NULL 
-            AND a.WORK_IN IS NOT NULL
-            AND RTRIM(a.STATUS_HARI) IN ('KERJA', 'O')
-            AND (ISNULL(RTRIM(s.SEC_DESC),'') = 'SECURITY' OR ISNULL(RTRIM(j.JOB_DESC),'') = 'SECURITY')
-            AND (a.WORK_OUT = a.WORK_OUT1 OR a.WORK_OUT IS NULL)
-        )
-        UPDATE a
-        SET a.WORK_OUT = DATEADD(second, 
-                           CAST(RAND(CHECKSUM(NEWID())) * 840 as int) + 60,
-                           DATEADD(hour, 
-                             CAST(FLOOR((DATEDIFF(minute, s.TARGET_OUT, a.WORK_OUT) + 10) / 60.0) AS INT),
-                             s.TARGET_OUT))
-        FROM TR_ABSEN a
-        JOIN SecOutShift s ON a.EMP_CD = s.EMP_CD AND a.DATE_TRANS = s.DATE_TRANS
-        WHERE DATEDIFF(minute, s.TARGET_OUT, a.WORK_OUT) >= 16
-          AND (DATEDIFF(minute, s.TARGET_OUT, a.WORK_OUT) 
-               - (FLOOR((DATEDIFF(minute, s.TARGET_OUT, a.WORK_OUT) + 10) / 60.0) * 60)) > 15;
-      `);
 
       const otData = await query<any>(`
         SELECT 
@@ -387,12 +340,33 @@ export async function GET(request: Request) {
         if (row.dateStr) {
           const status = row.STATUS_HARI;
           const rg = row.REASON_GROUP;
-          let isKerja = status === 'KERJA' || status === 'O' || rg === 'O';
+          
+          // Deteksi Weekend (Sabtu/Minggu) atau Hari Libur:
+          // Untuk kepatuhan audit (Compliance OT Analysis), jam kerja pada hari libur / Sabtu / Minggu
+          // dihitung SEPENUHNYA sebagai LEMBUR (Kerja = 0, OT = dailyOt).
+          // Pada hari kerja biasa (Senin - Jumat): Kerja = 8 (jika hadir/cuti), OT = dailyOt.
+          const dObj = new Date(row.dateStr + 'T00:00:00');
+          const dayOfWeek = dObj.getDay(); // 0 = Sunday, 6 = Saturday
+          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+          const isHoliday = status === 'LIBUR' || status === 'OFF' || status === 'H';
+
+          let isKerjaNormal = !isWeekend && !isHoliday && (status === 'KERJA' || status === 'O' || rg === 'O');
           let isCuti = status === 'CUTI' || status === 'C' || status === 'H' || status === 'HAID' || rg === 'C' || rg === 'H';
-          let kerjaHours = isKerja ? 8 : (isCuti ? 8 : 0);
-          emp.days[row.dateStr] = { kerja: kerjaHours, ot: row.dailyOt || 0 };
+
+          let kerjaHours = 0;
+          let otHours = 0;
+
+          if (isWeekend || isHoliday) {
+            kerjaHours = 0;
+            otHours = row.dailyOt || 0;
+          } else {
+            kerjaHours = isKerjaNormal ? 8 : (isCuti ? 8 : 0);
+            otHours = row.dailyOt || 0;
+          }
+
+          emp.days[row.dateStr] = { kerja: kerjaHours, ot: otHours };
           emp.totalKerja += kerjaHours;
-          emp.totalOt = Number((emp.totalOt + (row.dailyOt || 0)).toFixed(2));
+          emp.totalOt = Number((emp.totalOt + otHours).toFixed(2));
 
           if (status === 'ALPHA' || status === 'A') emp.A++;
           else if (status === 'IJIN' || status === 'I' || rg === 'I') emp.I++;
@@ -422,6 +396,17 @@ export async function GET(request: Request) {
       };
       const setYellowBg = (cell: any) => {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
+      };
+
+      const getColName = (n: number) => { 
+        let ordA = 'A'.charCodeAt(0); 
+        let len = 26; 
+        let s = ""; 
+        while (n >= 0) { 
+          s = String.fromCharCode((n % len) + ordA) + s; 
+          n = Math.floor(n / len) - 1; 
+        } 
+        return s; 
       };
 
       const coverWs = workbook.addWorksheet('REPORT', { views: [{ showGridLines: false }] });
@@ -491,9 +476,6 @@ export async function GET(request: Request) {
         }
 
         let startRow = 15;
-        let b1 = 0; // <= 40
-        let b2 = 0; // 40.5 - 60
-        let b3 = 0; // > 60
 
         filteredData.forEach(row => {
           const excelRow = ws.getRow(startRow);
@@ -512,13 +494,15 @@ export async function GET(request: Request) {
             ci += 2;
           });
 
-          const kerjaCols = ['F', 'H', 'J', 'L', 'N', 'P'].map(c => `${c}${startRow}`).join('+');
-          const otCols = ['G', 'I', 'K', 'M', 'O', 'Q'].map(c => `${c}${startRow}`).join('+');
+          const kerjaCols = weekDates.map((_, idx) => `${getColName(5 + idx * 2)}${startRow}`).join('+');
+          const otCols = weekDates.map((_, idx) => `${getColName(6 + idx * 2)}${startRow}`).join('+');
+          const totKerjaCol = getColName(colIndex - 4);
+          const totOtCol = getColName(colIndex - 3);
 
           excelRow.getCell(ci).value = { formula: kerjaCols, result: row.totalKerja };
           excelRow.getCell(ci + 1).value = { formula: otCols, result: row.totalOt };
           excelRow.getCell(ci + 1).numFmt = '0.0';
-          excelRow.getCell(ci + 2).value = { formula: `R${startRow}+S${startRow}`, result: row.totalKerja + row.totalOt };
+          excelRow.getCell(ci + 2).value = { formula: `${totKerjaCol}${startRow}+${totOtCol}${startRow}`, result: row.totalKerja + row.totalOt };
           ci += 3;
 
           excelRow.getCell(ci).value = row.A;
@@ -538,17 +522,13 @@ export async function GET(request: Request) {
         const sumRowIndex = startRow;
         const sumRow = ws.getRow(startRow);
 
-        ws.mergeCells(`A${sumRowIndex}:Q${sumRowIndex}`);
+        ws.mergeCells(sumRowIndex, 1, sumRowIndex, colIndex - 4);
         const totalCell = sumRow.getCell(1);
         totalCell.value = 'TOTAL';
         totalCell.font = { bold: true };
         totalCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-        const getColName = (n: number) => { let ordA = 'A'.charCodeAt(0); let len = 26; let s = ""; while (n >= 0) { s = String.fromCharCode(n % len + ordA) + s; n = Math.floor(n / len) - 1; } return s; };
-
-        // Sum only for TOTAL (R, S, T) and A, I, S, C (U, V, W, X)
-        // TOTAL is at colIndex-3, colIndex-2, colIndex-1
-        // A,I,S,C is at colIndex, colIndex+1, colIndex+2, colIndex+3
+        // Sum columns: TOTAL KERJA (colIndex-3), TOTAL OT (colIndex-2), TOTAL KERJA+OT (colIndex-1), KETERANGAN (colIndex s/d colIndex+3)
         const sumColumns = [
           colIndex - 3, colIndex - 2, colIndex - 1,
           colIndex, colIndex + 1, colIndex + 2, colIndex + 3
@@ -568,10 +548,12 @@ export async function GET(request: Request) {
           }
         }
 
+        const totKerjaOtColLetter = getColName(colIndex - 2);
+
         startRow += 3;
         ws.getCell(startRow, colIndex - 3).value = 'MAX WT';
         ws.getCell(startRow, colIndex - 3).font = { bold: true };
-        ws.getCell(startRow, colIndex - 2).value = { formula: `MAX(T15:T${sumRowIndex - 1})` };
+        ws.getCell(startRow, colIndex - 2).value = { formula: `MAX(${totKerjaOtColLetter}15:${totKerjaOtColLetter}${sumRowIndex - 1})` };
         ws.getCell(startRow, colIndex - 2).font = { bold: true };
 
         startRow += 2;
@@ -580,17 +562,17 @@ export async function GET(request: Request) {
 
         startRow++;
         ws.getCell(startRow, colIndex - 3).value = '<= 40';
-        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIF(T15:T${sumRowIndex - 1}, "<=40")` };
+        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIF(${totKerjaOtColLetter}15:${totKerjaOtColLetter}${sumRowIndex - 1}, "<=40")` };
         const b1Cell = `${getColName(colIndex - 3)}${startRow}`;
 
         startRow++;
         ws.getCell(startRow, colIndex - 3).value = '40,5 - 60';
-        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIFS(T15:T${sumRowIndex - 1}, ">40", T15:T${sumRowIndex - 1}, "<=60")` };
+        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIFS(${totKerjaOtColLetter}15:${totKerjaOtColLetter}${sumRowIndex - 1}, ">40", ${totKerjaOtColLetter}15:${totKerjaOtColLetter}${sumRowIndex - 1}, "<=60")` };
         const b2Cell = `${getColName(colIndex - 3)}${startRow}`;
 
         startRow++;
         ws.getCell(startRow, colIndex - 3).value = '>60';
-        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIF(T15:T${sumRowIndex - 1}, ">60")` };
+        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIF(${totKerjaOtColLetter}15:${totKerjaOtColLetter}${sumRowIndex - 1}, ">60")` };
         const b3Cell = `${getColName(colIndex - 3)}${startRow}`;
 
         startRow++;

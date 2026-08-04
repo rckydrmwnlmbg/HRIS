@@ -42,39 +42,6 @@ export async function GET() {
       WHERE (CONVERT(varchar(10), e.DT_ENTRY, 120) <= '${todayStr}')
         AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${todayStr}')
     `);
-    const absensiHariIni = await query<any>(`
-      SELECT 
-        RTRIM(a.STATUS_HARI) AS STATUS_HARI,
-        RTRIM(a.REASON) AS REASON,
-        a.WORK_IN,
-        a.WORK_IN1
-      FROM TR_ABSEN a
-      JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-      WHERE a.DATE_TRANS >= '${todayStr}' AND a.DATE_TRANS < '${tomorrowStr}'
-        AND (CONVERT(varchar(10), e.DT_ENTRY, 120) <= '${todayStr}')
-        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${todayStr}')
-    `);
-    const jamKosongListResult = await query<any>(`
-      SELECT RTRIM(e.EMP_CD) as EMP_CD, RTRIM(e.EMP_NM) as EMP_NM, RTRIM(s.SEC_DESC) as SEC_DESC, RTRIM(e.SEC_CD) as SEC_CD, 
-             RTRIM(a.STATUS_HARI) as STATUS_HARI, RTRIM(a.REASON) as REASON, a.WORK_IN, a.WORK_IN1, a.WORK_OUT, a.WORK_OUT1,
-             a.EMP_CD as TR_EMP_CD,
-             RTRIM(s.SEC_DESC) as BAGIAN, CASE WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING' ELSE RTRIM(d.DEP_DESC) END AS TEAM
-      FROM EMP_TABLE e
-      LEFT JOIN TR_ABSEN a ON RTRIM(e.EMP_CD) = RTRIM(a.EMP_CD) AND a.DATE_TRANS >= '${todayStr}' AND a.DATE_TRANS < '${tomorrowStr}'
-      LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-      LEFT JOIN MS_DEP d ON RTRIM(e.DEP_CD) = RTRIM(d.DEP_CD)
-      LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-      WHERE (CONVERT(varchar(10), e.DT_ENTRY, 120) <= '${todayStr}')
-        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${todayStr}')
-        AND (
-          a.EMP_CD IS NULL 
-          OR (
-            (a.WORK_IN IS NULL OR LTRIM(RTRIM(CAST(a.WORK_IN AS varchar(50)))) = '' OR CONVERT(varchar(8), a.WORK_IN, 108) = '00:00:00')
-            AND
-            (a.WORK_IN1 IS NULL OR LTRIM(RTRIM(CAST(a.WORK_IN1 AS varchar(50)))) = '' OR CONVERT(varchar(8), a.WORK_IN1, 108) = '00:00:00')
-          )
-        )
-    `);
     const fingerprintSyncResult = await query<any>(`
       SELECT COUNT(*) as syncedCount
       FROM TR_ABSEN
@@ -82,6 +49,28 @@ export async function GET() {
         AND (WORK_IN IS NOT NULL OR WORK_OUT IS NOT NULL)
     `);
     const isFingerprintIntegrated = (fingerprintSyncResult[0]?.syncedCount || 0) > 0;
+
+    // Ambil data absensi seluruh karyawan aktif hari ini
+    const rawAbsenHariIni = await query<any>(`
+      SELECT 
+        RTRIM(e.EMP_CD) as EMP_CD, 
+        RTRIM(e.EMP_NM) as EMP_NM, 
+        RTRIM(s.SEC_DESC) as SEC_DESC, 
+        RTRIM(e.SEC_CD) as SEC_CD,
+        RTRIM(s.SEC_DESC) as BAGIAN,
+        CASE WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING' ELSE RTRIM(d.DEP_DESC) END AS TEAM,
+        RTRIM(a.STATUS_HARI) as STATUS_HARI, 
+        RTRIM(a.REASON) as REASON, 
+        a.WORK_IN, a.WORK_IN1, a.WORK_OUT, a.WORK_OUT1,
+        a.JAM_KERJA,
+        a.EMP_CD as TR_EMP_CD
+      FROM EMP_TABLE e
+      LEFT JOIN TR_ABSEN a ON RTRIM(e.EMP_CD) = RTRIM(a.EMP_CD) AND a.DATE_TRANS >= '${todayStr}' AND a.DATE_TRANS < '${tomorrowStr}'
+      LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+      LEFT JOIN MS_DEP d ON RTRIM(e.DEP_CD) = RTRIM(d.DEP_CD)
+      WHERE (CONVERT(varchar(10), e.DT_ENTRY, 120) <= '${todayStr}')
+        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${todayStr}')
+    `);
 
     const lemburResult = await query<any>(`
       SELECT COUNT(*) as total
@@ -125,69 +114,145 @@ export async function GET() {
     };
 
     let hadirHariIni = 0, alphaHariIni = 0, izinHariIni = 0, cutiHariIni = 0, sakitHariIni = 0;
+    const jamKosongList: any[] = [];
+    const perluPerhatianList: any[] = [];
 
-    absensiHariIni.forEach((row: any) => {
+    const currentHour = new Date().getHours();
+
+    rawAbsenHariIni.forEach((row: any) => {
       const s = getStatus(row.STATUS_HARI, row.REASON);
-      
-      const missingIn = !row.WORK_IN || row.WORK_IN.toString().trim() === '' || row.WORK_IN.toString().includes('00:00:00');
-      const missingIn1 = !row.WORK_IN1 || row.WORK_IN1.toString().trim() === '' || row.WORK_IN1.toString().includes('00:00:00');
-      const isJamKosong = missingIn && missingIn1;
+      const reasonGroup = (reasonMap.get((row.REASON || '').trim()) || '').toUpperCase();
 
-      // Jika dia Jam Kosong, dan status akhirnya (s) adalah Alpha/Kerja/Kosong,
-      // JANGAN hitung dia sebagai Alpha/Hadir karena untuk HARI INI dia masih butuh verifikasi (Jam Kosong).
-      const isUnverifiedAlpha = isJamKosong && (s === 'A' || s === 'ALPHA' || s === '' || s === 'KERJA' || s === 'O');
+      const isCuti = s === 'CUTI' || s === 'C' || s === 'H' || reasonGroup === 'C' || reasonGroup === 'H';
+      const isSakit = s === 'SAKIT' || s === 'S' || reasonGroup === 'S';
+      const isIzin = s === 'IJIN' || s === 'I' || reasonGroup === 'I';
+      const isLibur = s === 'LIBUR' || s === 'L';
 
-      if (isUnverifiedAlpha) {
-        return; 
+      if (isCuti) { cutiHariIni++; return; }
+      if (isSakit) { sakitHariIni++; return; }
+      if (isIzin) { izinHariIni++; return; }
+      if (isLibur) { return; }
+
+      const inRaw = row.WORK_IN || row.WORK_IN1;
+      const outRaw = row.WORK_OUT || row.WORK_OUT1;
+
+      const hasIn = !(!inRaw || inRaw.toString().trim() === '' || inRaw.toString().includes('00:00:00'));
+      const hasOut = !(!outRaw || outRaw.toString().trim() === '' || outRaw.toString().includes('00:00:00'));
+
+      const inStr = inRaw instanceof Date ? inRaw.toTimeString().substring(0, 8) : (inRaw ? String(inRaw).substring(0, 8) : null);
+      const outStr = outRaw instanceof Date ? outRaw.toTimeString().substring(0, 8) : (outRaw ? String(outRaw).substring(0, 8) : null);
+
+      // KASUS 1: Tidak ada In dan Tidak ada Out -> ALPHA (Tidak Masuk Kerja)
+      if (!hasIn && !hasOut) {
+        if (isFingerprintIntegrated) {
+          alphaHariIni++;
+        }
+        return;
       }
 
-      if (s === 'KERJA' || s === 'O') hadirHariIni++;
-      else if (s === 'ALPHA' || s === 'A') alphaHariIni++;
-      else if (s === 'IJIN' || s === 'I') izinHariIni++;
-      else if (s === 'CUTI' || s === 'C' || s === 'H') cutiHariIni++;
-      else if (s === 'SAKIT' || s === 'S') sakitHariIni++;
-    });
-
-    const jamKosongList = !isFingerprintIntegrated ? [] : jamKosongListResult.filter((r: any) => {
-      // Jika belum ada record absen hari ini
-      if (!r.STATUS_HARI && !r.REASON && !r.TR_EMP_CD) return true;
-
-      const s = getStatus(r.STATUS_HARI, r.REASON);
-      const reasonLower = (r.REASON || '').trim().toLowerCase();
-      const statusLower = (r.STATUS_HARI || '').trim().toLowerCase();
-      
-      // Yang dikecualikan dari jam kosong: Cuti, Sakit, Izin, Dinas Luar, Libur, Haid
-      const hasVerifiedReason = !!r.REASON && r.REASON.trim() !== '' && 
-                                reasonLower !== 'a' && reasonLower !== 'alpha';
-
-      const isExcluded = ['dl', 'dinas', 'luar', 'cuti', 'ijin', 'izin', 'sakit', 'libur', 'haid'].some(w => reasonLower.includes(w) || statusLower.includes(w)) || 
-                         reasonLower === 'c' || reasonLower === 'i' || reasonLower === 's' || reasonLower === 'l' || reasonLower === 'h' ||
-                         s === 'CUTI' || s === 'SAKIT' || s === 'IJIN' || s === 'LIBUR' || hasVerifiedReason;
-      
-      return !isExcluded;
-    }).map((r: any) => {
-      const hasOut = !!(r.WORK_OUT || r.WORK_OUT1) && !r.WORK_OUT?.toString().includes('00:00:00');
-      const hasIn = !(!r.WORK_IN || r.WORK_IN.toString().trim() === '' || r.WORK_IN.toString().includes('00:00:00')) ||
-                    !(!r.WORK_IN1 || r.WORK_IN1.toString().trim() === '' || r.WORK_IN1.toString().includes('00:00:00'));
-
-      let keterangan_kosong = 'Belum Ada Rekaman Absen';
-      if (r.TR_EMP_CD && hasOut && !hasIn) {
-        keterangan_kosong = 'Lupa Tap Masuk';
-      } else {
-        keterangan_kosong = 'Belum Ada Rekaman Absen';
+      // KASUS 2: JAM KOSONG MURNI (Salah satu ada, salah satu kosong)
+      if (hasOut && !hasIn) {
+        hadirHariIni++;
+        jamKosongList.push({
+          EMP_CD: row.EMP_CD,
+          EMP_NM: row.EMP_NM,
+          SEC_DESC: row.SEC_DESC,
+          SEC_CD: row.SEC_CD,
+          BAGIAN: row.BAGIAN,
+          TEAM: row.TEAM,
+          WORK_IN: null,
+          WORK_OUT: outStr,
+          keterangan_kosong: 'Lupa Tap Masuk'
+        });
+        return;
       }
 
-      return {
-        EMP_CD: r.EMP_CD,
-        EMP_NM: r.EMP_NM,
-        SEC_DESC: r.SEC_DESC,
-        SEC_CD: r.SEC_CD,
-        BAGIAN: r.BAGIAN,
-        TEAM: r.TEAM,
-        WORK_IN: r.WORK_IN || r.WORK_IN1 || null,
-        WORK_OUT: r.WORK_OUT || null,
-        keterangan_kosong
-      };
+      if (hasIn && !hasOut) {
+        hadirHariIni++;
+        // Hanya masukkan ke Jam Kosong jika sudah sore (>= 16:00)
+        if (currentHour >= 16) {
+          jamKosongList.push({
+            EMP_CD: row.EMP_CD,
+            EMP_NM: row.EMP_NM,
+            SEC_DESC: row.SEC_DESC,
+            SEC_CD: row.SEC_CD,
+            BAGIAN: row.BAGIAN,
+            TEAM: row.TEAM,
+            WORK_IN: inStr,
+            WORK_OUT: null,
+            keterangan_kosong: 'Lupa Tap Pulang'
+          });
+        }
+        return;
+      }
+
+      // KASUS 3: HADIR LENGKAP (hasIn && hasOut) -> Evaluasi Perlu Perhatian (Exceptions)
+      hadirHariIni++;
+
+      if (inStr && outStr) {
+        const inParts = inStr.split(':').map(Number);
+        const outParts = outStr.split(':').map(Number);
+        if (inParts.length >= 2 && outParts.length >= 2) {
+          const inDec = inParts[0] + inParts[1] / 60 + (inParts[2] || 0) / 3600;
+          const outDec = outParts[0] + outParts[1] / 60 + (outParts[2] || 0) / 3600;
+
+          let durationHours = outDec - inDec;
+          if (durationHours < 0) durationHours += 24;
+
+          let netWorkHours = durationHours;
+          if (inDec < 12.0 && outDec > 13.0) {
+            netWorkHours = Math.max(0, durationHours - 1.0);
+          }
+          const jk = Number(row.JAM_KERJA) > 0 ? Number(row.JAM_KERJA) : Math.round(netWorkHours * 10) / 10;
+
+          if (durationHours <= 0.5) {
+            const diffMinutes = Math.round(durationHours * 60);
+            perluPerhatianList.push({
+              EMP_CD: row.EMP_CD,
+              EMP_NM: row.EMP_NM,
+              SEC_DESC: row.SEC_DESC,
+              SEC_CD: row.SEC_CD,
+              BAGIAN: row.BAGIAN,
+              TEAM: row.TEAM,
+              WORK_IN: inStr,
+              WORK_OUT: outStr,
+              jam_kerja: jk,
+              jenis_anomali: 'DURASI_SINGKAT',
+              keterangan: `Durasi Sangat Singkat (${diffMinutes} menit)`
+            });
+          } else if (outDec < 16.0 && jk < 7.0) {
+            const kurangJam = (7.0 - jk).toFixed(1);
+            perluPerhatianList.push({
+              EMP_CD: row.EMP_CD,
+              EMP_NM: row.EMP_NM,
+              SEC_DESC: row.SEC_DESC,
+              SEC_CD: row.SEC_CD,
+              BAGIAN: row.BAGIAN,
+              TEAM: row.TEAM,
+              WORK_IN: inStr,
+              WORK_OUT: outStr,
+              jam_kerja: jk,
+              jenis_anomali: 'PULANG_CEPAT',
+              keterangan: `Pulang Lebih Awal (${outStr.substring(0, 5)} / Kurang ${kurangJam} Jam)`
+            });
+          } else if (inDec > 7.25) {
+            const telatMenit = Math.round((inDec - 7.0) * 60);
+            perluPerhatianList.push({
+              EMP_CD: row.EMP_CD,
+              EMP_NM: row.EMP_NM,
+              SEC_DESC: row.SEC_DESC,
+              SEC_CD: row.SEC_CD,
+              BAGIAN: row.BAGIAN,
+              TEAM: row.TEAM,
+              WORK_IN: inStr,
+              WORK_OUT: outStr,
+              jam_kerja: jk,
+              jenis_anomali: 'TERLAMBAT',
+              keterangan: `Terlambat Masuk (${inStr.substring(0, 5)} / Telat ${telatMenit} Menit)`
+            });
+          }
+        }
+      }
     });
 
     const responseData = {
@@ -200,8 +265,10 @@ export async function GET() {
       sakitHariIni,
       jamKosongHariIni: jamKosongList.length,
       jamKosongList,
+      perluPerhatianHariIni: perluPerhatianList.length,
+      perluPerhatianList,
       lemburBulanIni: lemburResult[0]?.total || 0,
-      isFingerprintIntegrated: (fingerprintSyncResult[0]?.syncedCount || 0) > 0,
+      isFingerprintIntegrated,
       demografi: {
         allIn: demografiResult[0]?.totalAllIn || 0,
         harian: demografiResult[0]?.totalHarian || 0,

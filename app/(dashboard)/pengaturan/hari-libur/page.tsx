@@ -51,15 +51,15 @@ export default function HariLiburPage() {
       });
       const data = await res.json();
       if (data.success) {
-        alert('Berhasil menyimpan hari libur');
+        alert(lang === 'id' ? 'Hari libur berhasil ditambahkan' : 'Holiday added successfully');
         setFormTanggal('');
         setFormKeterangan('');
         fetchHolidays();
       } else {
-        alert('Gagal: ' + data.error);
+        alert(lang === 'id' ? 'Terjadi kendala saat menyimpan data' : 'Failed to save data');
       }
     } catch (error) {
-      alert('Terjadi kesalahan sistem.');
+      alert(lang === 'id' ? 'Terjadi kendala pada sistem' : 'A system error occurred');
     } finally {
       setIsSubmitting(false);
     }
@@ -80,10 +80,10 @@ export default function HariLiburPage() {
       if (data.success) {
         fetchHolidays();
       } else {
-        alert('Gagal menghapus: ' + data.error);
+        alert(lang === 'id' ? 'Terjadi kendala saat menghapus data' : 'Failed to delete data');
       }
     } catch (error) {
-      alert('Terjadi kesalahan sistem.');
+      alert(lang === 'id' ? 'Terjadi kendala pada sistem' : 'A system error occurred');
     }
     setConfirmTarget(null);
   };
@@ -92,8 +92,8 @@ export default function HariLiburPage() {
     <div className="animate-fadeIn">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Hari Libur</h1>
-          <p className="page-subtitle">Kelola kalender libur nasional dan libur pabrik. Data ini otomatis dibaca oleh Mesin Tarik Absen.</p>
+          <h1 className="page-title">{lang === 'id' ? 'Kalender Hari Libur' : 'Holiday Calendar'}</h1>
+          <p className="page-subtitle">{lang === 'id' ? 'Pengelolaan kalender libur nasional dan libur perusahaan yang diterapkan secara otomatis pada seluruh catatan kehadiran.' : 'Manage national and company holidays automatically applied to all attendance records.'}</p>
         </div>
       </div>
 

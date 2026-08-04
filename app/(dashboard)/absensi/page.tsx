@@ -123,8 +123,12 @@ function AbsensiContent() {
     if (selectedEmp) loadAbsensi(selectedEmp.EMP_CD, bulan, tahun);
   };
 
-  const isJamKosong = (r: AbsensiRecord) =>
-    (r.STATUS_HARI || '').trim() === 'O' && (!r.WORK_IN || !r.WORK_OUT);
+  const isJamKosong = (r: AbsensiRecord) => {
+    const status = (r.STATUS_HARI || '').trim().toUpperCase();
+    const hasIn = !(!r.WORK_IN || r.WORK_IN.toString().trim() === '' || r.WORK_IN.toString().includes('00:00:00'));
+    const hasOut = !(!r.WORK_OUT || r.WORK_OUT.toString().trim() === '' || r.WORK_OUT.toString().includes('00:00:00'));
+    return (status === 'O' || status === 'KERJA' || status === '') && ((hasIn && !hasOut) || (!hasIn && hasOut));
+  };
 
   const showToast = (msg: string, type: 'success' | 'warning') => {
     setToast({ msg, type });
@@ -202,7 +206,7 @@ function AbsensiContent() {
           map.set(key, { ...rec, correction_status: 'applied' });
           return map;
         });
-        showToast(lang === 'id' ? 'Koreksi berhasil diterapkan ke database!' : 'Correction applied to database!', 'success');
+        showToast(lang === 'id' ? 'Penyesuaian presensi berhasil diterapkan!' : 'Attendance adjustment applied successfully!', 'success');
         handleLoadAbsensi();
       } else {
         const err = await res.json();
@@ -210,7 +214,7 @@ function AbsensiContent() {
       }
     } catch (err) {
       console.error(err);
-      showToast('Error', 'warning');
+      showToast(lang === 'id' ? 'Terjadi kendala pada sistem' : 'A system error occurred', 'warning');
     }
   };
 
@@ -322,7 +326,7 @@ function AbsensiContent() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <h1 className="page-title">{t(lang, 'absensiKaryawan')}</h1>
-          <p className="page-subtitle">{lang === 'id' ? 'Lihat dan koreksi data absensi karyawan' : 'View and correct employee attendance'}</p>
+          <p className="page-subtitle">{lang === 'id' ? 'Manajemen dan penyesuaian catatan presensi kehadiran karyawan' : 'Manage and adjust employee attendance records'}</p>
         </div>
         <button 
           className="btn btn-warning" 
@@ -335,7 +339,7 @@ function AbsensiContent() {
             setShowSyncModal(true);
           }}
         >
-          <CloudDownload size={16} /> Tarik Log Mesin
+          <CloudDownload size={16} /> {lang === 'id' ? 'Sinkronisasi Kehadiran' : 'Sync Attendance'}
         </button>
       </div>
 
@@ -457,14 +461,14 @@ function AbsensiContent() {
                         <td>{getStatusBadge(disp.corrected_status || r.STATUS_HARI)}</td>
                         <td>
                           {(r as any).WORK_IN1 || (r as any).WORK_OUT1 ? (
-                            <div style={{ fontSize: '12px', fontFamily: 'monospace' }}>
-                              {(r as any).WORK_IN1_STR ? <span style={{ color: 'var(--success)' }}>IN: {(r as any).WORK_IN1_STR.split(' ')[1]}</span> : ((r as any).WORK_IN1 ? <span style={{ color: 'var(--success)' }}>IN: {new Date((r as any).WORK_IN1).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--danger)' }}>IN: --:--:--</span>)}
+                            <div style={{ fontSize: '12px' }}>
+                              {(r as any).WORK_IN1_STR ? <span style={{ color: 'var(--success)' }}>{lang === 'id' ? 'Masuk' : 'In'}: {(r as any).WORK_IN1_STR.split(' ')[1]}</span> : ((r as any).WORK_IN1 ? <span style={{ color: 'var(--success)' }}>{lang === 'id' ? 'Masuk' : 'In'}: {new Date((r as any).WORK_IN1).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--danger)' }}>{lang === 'id' ? 'Masuk' : 'In'}: --:--:--</span>)}
                               {' · '}
-                              {(r as any).WORK_OUT1_STR ? <span style={{ color: 'var(--info)' }}>OUT: {(r as any).WORK_OUT1_STR.split(' ')[1]}</span> : ((r as any).WORK_OUT1 ? <span style={{ color: 'var(--info)' }}>OUT: {new Date((r as any).WORK_OUT1).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--danger)' }}>OUT: --:--:--</span>)}
+                              {(r as any).WORK_OUT1_STR ? <span style={{ color: 'var(--info)' }}>{lang === 'id' ? 'Pulang' : 'Out'}: {(r as any).WORK_OUT1_STR.split(' ')[1]}</span> : ((r as any).WORK_OUT1 ? <span style={{ color: 'var(--info)' }}>{lang === 'id' ? 'Pulang' : 'Out'}: {new Date((r as any).WORK_OUT1).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--danger)' }}>{lang === 'id' ? 'Pulang' : 'Out'}: --:--:--</span>)}
                             </div>
                           ) : (
                             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>
-                              {normalizeStatus(r.STATUS_HARI) === 'L' || normalizeStatus(r.STATUS_HARI) === 'LIBUR' ? 'Libur Kerja' : (r.REASON ? (masterReasons.find(mr => mr.REASON_CODE === r.REASON)?.REASON_DESC || r.REASON) : 'Tidak ada jam dari mesin')}
+                              {normalizeStatus(r.STATUS_HARI) === 'L' || normalizeStatus(r.STATUS_HARI) === 'LIBUR' ? (lang === 'id' ? 'Hari Libur' : 'Holiday') : (r.REASON ? (masterReasons.find(mr => mr.REASON_CODE === r.REASON)?.REASON_DESC || r.REASON) : (lang === 'id' ? 'Belum ada catatan presensi' : 'No attendance record'))}
                             </div>
                           )}
                           {kosong && !r.REASON && <span className={`badge badge-warning`} style={{ marginTop: '2px', fontSize: '10px' }}>⚠ {t(lang, 'jamKosongLabel')}</span>}
@@ -477,10 +481,10 @@ function AbsensiContent() {
                                   {corrStatus === 'applied' ? '✓ ' + t(lang, 'applied') : '⏳ ' + t(lang, 'draft')}
                                 </span>
                               )}
-                              <div style={{ fontFamily: 'monospace' }}>
-                                {disp.WORK_IN_STR || (hasCorrection && disp.WORK_IN) ? <span style={{ color: 'var(--success)' }}>IN: {(disp as any).WORK_IN_STR ? (disp as any).WORK_IN_STR.split(' ')[1] : new Date(disp.WORK_IN!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--text-secondary)' }}>IN: --:--:--</span>}
+                              <div>
+                                {disp.WORK_IN_STR || (hasCorrection && disp.WORK_IN) ? <span style={{ color: 'var(--success)' }}>{lang === 'id' ? 'Masuk' : 'In'}: {(disp as any).WORK_IN_STR ? (disp as any).WORK_IN_STR.split(' ')[1] : new Date(disp.WORK_IN!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--text-secondary)' }}>{lang === 'id' ? 'Masuk' : 'In'}: --:--:--</span>}
                                 {' · '}
-                                {disp.WORK_OUT_STR || (hasCorrection && disp.WORK_OUT) ? <span style={{ color: 'var(--info)' }}>OUT: {(disp as any).WORK_OUT_STR ? (disp as any).WORK_OUT_STR.split(' ')[1] : new Date(disp.WORK_OUT!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--text-secondary)' }}>OUT: --:--:--</span>}
+                                {disp.WORK_OUT_STR || (hasCorrection && disp.WORK_OUT) ? <span style={{ color: 'var(--info)' }}>{lang === 'id' ? 'Pulang' : 'Out'}: {(disp as any).WORK_OUT_STR ? (disp as any).WORK_OUT_STR.split(' ')[1] : new Date(disp.WORK_OUT!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--text-secondary)' }}>{lang === 'id' ? 'Pulang' : 'Out'}: --:--:--</span>}
                               </div>
                               {disp.corrected_reason && <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{masterReasons.find(mr => mr.REASON_CODE === disp.corrected_reason)?.REASON_DESC}</div>}
                               {corrStatus === 'draft' && (
@@ -643,7 +647,7 @@ function AbsensiContent() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
-                    <label className="form-label">{lang === 'id' ? 'Koreksi Jam Masuk' : 'Correct In Time'}</label>
+                    <label className="form-label">{lang === 'id' ? 'Waktu Masuk Disesuaikan' : 'Adjusted Clock In'}</label>
                     <input
                       type="time"
                       step="1"
@@ -653,7 +657,7 @@ function AbsensiContent() {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">{lang === 'id' ? 'Koreksi Jam Pulang' : 'Correct Out Time'}</label>
+                    <label className="form-label">{lang === 'id' ? 'Waktu Pulang Disesuaikan' : 'Adjusted Clock Out'}</label>
                     <input
                       type="time"
                       step="1"
@@ -665,9 +669,9 @@ function AbsensiContent() {
                 </div>
 
                 <div style={{ padding: '10px 14px', background: 'rgba(245,158,11,0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(245,158,11,0.2)', fontSize: '12px', color: 'var(--warning)' }}>
-                  ⚠ {lang === 'id'
-                    ? 'Data asli (log mesin) di database tetap tersimpan dengan aman sebagai riwayat.'
-                    : 'Original log data in the database remains securely stored as history.'}
+                  ℹ {lang === 'id'
+                    ? 'Rekaman presensi awal akan tetap diarsipkan dengan aman sebagai data historis.'
+                    : 'Original attendance records remain safely archived as history.'}
                 </div>
               </div>
             </div>
@@ -689,30 +693,32 @@ function AbsensiContent() {
         <div className="modal-overlay" onClick={() => !isSyncing && setShowSyncModal(false)}>
           <div className="modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">☁️ Tarik Absen Mesin (Sinkronisasi)</h3>
+              <h3 className="modal-title">☁️ {lang === 'id' ? 'Sinkronisasi Data Kehadiran' : 'Synchronize Attendance'}</h3>
               <button className="btn btn-sm btn-secondary btn-icon" onClick={() => !isSyncing && setShowSyncModal(false)}><X size={14} /></button>
             </div>
             <div className="modal-body">
-              <div style={{ padding: '12px', background: 'rgba(59,130,246,0.08)', borderRadius: 'var(--radius-md)', marginBottom: '16px', border: '1px solid rgba(59,130,246,0.2)', fontSize: '13px' }}>
-                Proses ini akan mengotomasi toleransi pengacakan jam masuk/pulang, dan mengkalkulasi ulang Lembur (Harian & ALL IN). Data hasil koreksi manual (Berita Acara) tidak akan tertimpa berkat perlindungan <b>Smart Skip</b>.
+              <div style={{ padding: '12px', background: 'rgba(59,130,246,0.08)', borderRadius: 'var(--radius-md)', marginBottom: '16px', border: '1px solid rgba(59,130,246,0.2)', fontSize: '13px', lineHeight: '1.5' }}>
+                {lang === 'id'
+                  ? 'Proses ini akan menyelaraskan data kehadiran terkini, menerapkan standarisasi jam kerja, dan memperbarui kalkulasi lembur secara otomatis. Seluruh data penyesuaian manual yang telah disetujui akan tetap terlindungi dan terjaga keamanannya.'
+                  : 'This process will synchronize attendance records, apply standard working hours, and update overtime calculations automatically. All verified manual adjustments will remain securely protected.'}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div className="form-group">
-                  <label className="form-label">Mulai Tanggal</label>
+                  <label className="form-label">{lang === 'id' ? 'Tanggal Mulai' : 'Start Date'}</label>
                   <input type="date" className="form-input" value={syncStart} onChange={e => setSyncStart(e.target.value)} disabled={isSyncing} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Sampai Tanggal</label>
+                  <label className="form-label">{lang === 'id' ? 'Tanggal Selesai' : 'End Date'}</label>
                   <input type="date" className="form-input" value={syncEnd} onChange={e => setSyncEnd(e.target.value)} disabled={isSyncing} />
                 </div>
               </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowSyncModal(false)} disabled={isSyncing}>Batal</button>
+              <button className="btn btn-secondary" onClick={() => setShowSyncModal(false)} disabled={isSyncing}>{t(lang, 'batal')}</button>
               <button
                 className="btn btn-primary"
                 onClick={async () => {
-                  if (!syncStart || !syncEnd) return alert('Pilih rentang tanggal!');
+                  if (!syncStart || !syncEnd) return alert(lang === 'id' ? 'Silakan tentukan rentang tanggal!' : 'Please select date range!');
                   setIsSyncing(true);
                   try {
                     const res = await fetch('/api/absensi/sync-finger', {
@@ -722,21 +728,21 @@ function AbsensiContent() {
                     });
                     const result = await res.json();
                     if (result.success) {
-                      showToast(result.message || 'Sinkronisasi berhasil!', 'success');
+                      showToast(lang === 'id' ? 'Sinkronisasi data kehadiran berhasil diselesaikan.' : 'Attendance synchronization completed successfully.', 'success');
                       setShowSyncModal(false);
                       if (selectedEmp) handleLoadAbsensi();
                     } else {
-                      showToast('Gagal: ' + (result.error || 'Unknown error'), 'warning');
+                      showToast((lang === 'id' ? 'Gagal: ' : 'Failed: ') + (result.error || 'Terjadi kendala'), 'warning');
                     }
                   } catch (e) {
-                    showToast('Terjadi kesalahan koneksi', 'warning');
+                    showToast(lang === 'id' ? 'Terjadi kesalahan koneksi' : 'Connection error', 'warning');
                   } finally {
                     setIsSyncing(false);
                   }
                 }}
                 disabled={isSyncing}
               >
-                {isSyncing ? 'Memproses Otomasi...' : 'Mulai Tarik & Otomasi'}
+                {isSyncing ? (lang === 'id' ? 'Memproses Sinkronisasi...' : 'Synchronizing...') : (lang === 'id' ? 'Mulai Sinkronisasi Data' : 'Start Synchronization')}
               </button>
             </div>
           </div>

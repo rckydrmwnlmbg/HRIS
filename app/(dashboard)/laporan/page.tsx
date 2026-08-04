@@ -60,7 +60,7 @@ export default function LaporanPage() {
         const data = await res.json();
         setPreviewData(data);
       } else {
-        alert('Gagal mengambil data laporan dari server.');
+        alert(lang === 'id' ? 'Gagal mengambil data laporan dari server.' : 'Failed to fetch report data from server.');
       }
     } catch (e) {
       alert(lang === 'id' ? 'Gagal membuat pratinjau' : 'Failed to generate preview');
@@ -102,8 +102,8 @@ export default function LaporanPage() {
     <div className="animate-fadeIn">
       <div className="page-header">
         <div>
-          <h1 className="page-title">{lang === 'id' ? 'Laporan & Export' : 'Reports & Export'}</h1>
-          <p className="page-subtitle">{lang === 'id' ? 'Tarik data absensi dan lembur dalam format Excel' : 'Export attendance and overtime data in Excel format'}</p>
+          <h1 className="page-title">{lang === 'id' ? 'Laporan & Rekapitulasi' : 'Reports & Analytics'}</h1>
+          <p className="page-subtitle">{lang === 'id' ? 'Pusat unduhan dan pratinjau rekapitulasi presensi, lembur, serta perizinan kerja' : 'Central hub for downloading and previewing attendance, overtime, and leave summaries'}</p>
         </div>
       </div>
 
@@ -112,7 +112,7 @@ export default function LaporanPage() {
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
             <h3 style={{ margin: 0, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Filter size={18} /> Filter Laporan
+              <Filter size={18} /> {lang === 'id' ? 'Parameter Laporan' : 'Report Parameters'}
             </h3>
           </div>
           <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -125,7 +125,7 @@ export default function LaporanPage() {
                   style={{ display: 'flex', flexDirection: 'column', padding: '12px 8px', height: 'auto', gap: '6px' }}
                 >
                   <FileText size={20} />
-                  <span>Rekap Absensi</span>
+                  <span>{lang === 'id' ? 'Rekap Presensi' : 'Attendance Summary'}</span>
                 </button>
                 <button 
                   className={`btn ${tab === 'ot' ? 'btn-primary' : 'btn-secondary'}`}
@@ -133,7 +133,7 @@ export default function LaporanPage() {
                   style={{ display: 'flex', flexDirection: 'column', padding: '12px 8px', height: 'auto', gap: '6px' }}
                 >
                   <BarChart3 size={20} />
-                  <span>OT Analysis</span>
+                  <span>{lang === 'id' ? 'Analisis Lembur' : 'OT Analysis'}</span>
                 </button>
                 <button 
                   className={`btn ${tab === 'cuti' ? 'btn-primary' : 'btn-secondary'}`}
@@ -141,7 +141,7 @@ export default function LaporanPage() {
                   style={{ display: 'flex', flexDirection: 'column', padding: '12px 8px', height: 'auto', gap: '6px' }}
                 >
                   <CalendarIcon size={20} />
-                  <span>Laporan Cuti</span>
+                  <span>{lang === 'id' ? 'Rekap Cuti' : 'Leave Summary'}</span>
                 </button>
                 <button 
                   className={`btn ${tab === 'skorsing' ? 'btn-primary' : 'btn-secondary'}`}
@@ -149,7 +149,7 @@ export default function LaporanPage() {
                   style={{ display: 'flex', flexDirection: 'column', padding: '12px 8px', height: 'auto', gap: '6px' }}
                 >
                   <FileText size={20} />
-                  <span>Laporan Skorsing</span>
+                  <span>{lang === 'id' ? 'Penegakan Disiplin' : 'Disciplinary Summary'}</span>
                 </button>
               </div>
             </div>
@@ -168,7 +168,7 @@ export default function LaporanPage() {
             ) : tab === 'ot' ? (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
                 <div className="form-group">
-                  <label className="form-label">{lang === 'id' ? 'Pilih Tanggal (Otomatis Senin s/d Sabtu)' : 'Select Date (Auto Mon - Sat)'}</label>
+                  <label className="form-label">{lang === 'id' ? 'Pilih Tanggal (Rentang 1 Pekan: Senin s/d Minggu)' : 'Select Date (Auto Full Week: Mon - Sun)'}</label>
                   <input type="date" className="form-input" value={otDate} onChange={e => { setOtDate(e.target.value); setPreviewData(null); }} />
                 </div>
               </div>
@@ -191,11 +191,11 @@ export default function LaporanPage() {
 
             {tab === 'absensi' && (
               <div className="form-group">
-                <label className="form-label">Shift</label>
+                <label className="form-label">{lang === 'id' ? 'Jadwal Kerja' : 'Work Shift'}</label>
                 <select className="form-select" value={filterShift} onChange={e => { setFilterShift(e.target.value); setPreviewData(null); }}>
-                  <option value="">Semua Waktu</option>
-                  <option value="pagi">Shift Pagi (Khusus Security)</option>
-                  <option value="sore">Shift Sore/Malam (Khusus Security)</option>
+                  <option value="">{lang === 'id' ? 'Semua Jadwal Kerja' : 'All Work Shifts'}</option>
+                  <option value="pagi">{lang === 'id' ? 'Jadwal Pagi (Petugas Keamanan)' : 'Morning Shift (Security)'}</option>
+                  <option value="sore">{lang === 'id' ? 'Jadwal Sore / Malam (Petugas Keamanan)' : 'Afternoon/Night Shift (Security)'}</option>
                 </select>
               </div>
             )}
@@ -221,7 +221,7 @@ export default function LaporanPage() {
                 {generating ? <><Loader2 size={16} className="spinner" /> {lang === 'id' ? 'Memproses...' : 'Processing...'}</> : (lang === 'id' ? 'Tampilkan Pratinjau' : 'Show Preview')}
               </button>
               <button className="btn btn-primary" onClick={handleExport} disabled={generating}>
-                <Download size={16} /> Export ke Excel
+                <Download size={16} /> {lang === 'id' ? 'Unduh Berkas Excel' : 'Export Excel'}
               </button>
             </div>
           </div>
@@ -237,7 +237,7 @@ export default function LaporanPage() {
               <EmptyState 
                 icon="document"
                 title={lang === 'id' ? 'Belum Ada Pratinjau' : 'No Preview Available'}
-                description={lang === 'id' ? 'Klik tombol Tampilkan Pratinjau di panel sebelah kiri untuk melihat rangkuman data laporan sebelum Anda mendownloadnya ke Excel.' : 'Click Show Preview button to view the report summary before downloading it to Excel.'}
+                description={lang === 'id' ? 'Klik tombol Tampilkan Pratinjau di panel parameter sebelah kiri untuk melihat rangkuman data laporan sebelum mengunduh berkas Excel.' : 'Click Show Preview button to view the report summary before downloading it to Excel.'}
               />
             ) : (
               <div className="table-wrapper">
@@ -246,33 +246,53 @@ export default function LaporanPage() {
                     <>
                       <thead>
                         <tr>
+                          <th>{lang === 'id' ? 'Tanggal' : 'Date'}</th>
                           <th>{t(lang, 'nik')}</th>
                           <th>{t(lang, 'nama')}</th>
-                          <th>{t(lang, 'departemen')}</th>
-                          <th>{t(lang, 'bagian')}</th>
+                          <th>{lang === 'id' ? 'Gender' : 'Gender'}</th>
+                          <th>{lang === 'id' ? 'Kategori' : 'Category'}</th>
                           <th>{t(lang, 'jabatan')}</th>
-                          <th>{t(lang, 'hadir')}</th>
-                          <th>{t(lang, 'alpha')}</th>
-                          <th>{t(lang, 'izin')}</th>
-                          <th>{t(lang, 'cuti')}</th>
-                          <th>{t(lang, 'sakit')}</th>
+                          <th>{lang === 'id' ? 'Tim' : 'Team'}</th>
+                          <th>{t(lang, 'bagian')}</th>
+                          <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Waktu Masuk' : 'Clock In'}</th>
+                          <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Waktu Pulang' : 'Clock Out'}</th>
+                          <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Status Kehadiran' : 'Attendance Status'}</th>
+                          <th>{lang === 'id' ? 'Keterangan' : 'Notes'}</th>
+                          <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Jam Reguler' : 'Basic'}</th>
+                          <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Lembur 1' : 'OT 1'}</th>
+                          <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Lembur 2' : 'OT 2'}</th>
+                          <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Lembur 3' : 'OT 3'}</th>
+                          <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Lembur 4' : 'OT 4'}</th>
+                          <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Total Lembur' : 'Total OT'}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {previewData.length === 0 ? (
-                          <tr><td colSpan={8} style={{ textAlign: 'center', padding: '20px' }}>Tidak ada data</td></tr>
-                        ) : previewData.slice(0, 100).map((r, i) => (
+                          <tr><td colSpan={18} style={{ textAlign: 'center', padding: '20px' }}>{lang === 'id' ? 'Tidak ada catatan laporan pada parameter yang dipilih' : 'No records found'}</td></tr>
+                        ) : previewData.slice(0, 150).map((r, i) => (
                           <tr key={i}>
-                            <td><span style={{ fontSize: '12px', fontFamily: 'monospace' }}>{r.EMP_CD}</span></td>
-                            <td style={{ fontWeight: 500 }}>{r.EMP_NM}</td>
-                            <td style={{ fontSize: '12px' }}>{r.DEP_DESC || '-'}</td>
-                            <td style={{ fontSize: '12px' }}>{r.SEC_DESC || '-'}</td>
-                            <td style={{ fontSize: '12px' }}>{r.TEAM || r.JOB_DESC || '-'}</td>
-                            <td>{r.hadir > 0 ? <span className="badge badge-hadir">{r.hadir}</span> : '-'}</td>
-                            <td>{r.alpha > 0 ? <span className="badge badge-alpha">{r.alpha}</span> : '-'}</td>
-                            <td>{r.izin > 0 ? <span className="badge badge-izin">{r.izin}</span> : '-'}</td>
-                            <td>{r.cuti > 0 ? <span className="badge badge-cuti">{r.cuti}</span> : '-'}</td>
-                            <td>{r.sakit > 0 ? <span className="badge badge-sakit">{r.sakit}</span> : '-'}</td>
+                            <td style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{r.TANGGAL}</td>
+                            <td><span style={{ fontSize: '12px', fontFamily: 'monospace' }}>{r.NIK}</span></td>
+                            <td style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{r.NAMA}</td>
+                            <td style={{ textAlign: 'center' }}>{r.LP}</td>
+                            <td style={{ fontSize: '12px' }}>{r.JNSKAR}</td>
+                            <td style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{r.JABATAN || '-'}</td>
+                            <td style={{ fontSize: '12px' }}>{r.TEAM || '-'}</td>
+                            <td style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{r.BAGIAN || '-'}</td>
+                            <td style={{ textAlign: 'center', fontFamily: 'monospace' }}>{r.MASUK || '-'}</td>
+                            <td style={{ textAlign: 'center', fontFamily: 'monospace' }}>{r.PULANG || '-'}</td>
+                            <td style={{ textAlign: 'center' }}>
+                              <span className={`badge badge-${(r.STATUS_HARI || '').toLowerCase().includes('kerja') ? 'hadir' : (r.STATUS_HARI || '').toLowerCase().includes('libur') ? 'netral' : 'alpha'}`}>
+                                {r.STATUS_HARI || '-'}
+                              </span>
+                            </td>
+                            <td style={{ fontSize: '12px' }}>{r.ALASAN || '-'}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.BASIC}</td>
+                            <td style={{ textAlign: 'center', color: r.OT1 > 0 ? '#0ea5e9' : 'inherit', fontWeight: r.OT1 > 0 ? 600 : 400 }}>{r.OT1}</td>
+                            <td style={{ textAlign: 'center', color: r.OT2 > 0 ? '#3b82f6' : 'inherit', fontWeight: r.OT2 > 0 ? 600 : 400 }}>{r.OT2}</td>
+                            <td style={{ textAlign: 'center', color: r.OT3 > 0 ? '#8b5cf6' : 'inherit', fontWeight: r.OT3 > 0 ? 600 : 400 }}>{r.OT3}</td>
+                            <td style={{ textAlign: 'center', color: r.OT4 > 0 ? '#ec4899' : 'inherit', fontWeight: r.OT4 > 0 ? 600 : 400 }}>{r.OT4}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 700, background: 'rgba(59, 130, 246, 0.05)' }}>{r.TOTAL}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -286,14 +306,14 @@ export default function LaporanPage() {
                           <th>{t(lang, 'departemen')}</th>
                           <th>{t(lang, 'bagian')}</th>
                           <th>{t(lang, 'jabatan')}</th>
-                          <th>Keterangan</th>
-                          <th>Total Kerja</th>
-                          <th>Total OT</th>
+                          <th>{lang === 'id' ? 'Skema Kerja' : 'Scheme'}</th>
+                          <th>{lang === 'id' ? 'Total Jam Kerja' : 'Total Work Hours'}</th>
+                          <th>{lang === 'id' ? 'Total Jam Lembur' : 'Total Overtime'}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {previewData.length === 0 ? (
-                          <tr><td colSpan={8} style={{ textAlign: 'center', padding: '20px' }}>Tidak ada data</td></tr>
+                          <tr><td colSpan={8} style={{ textAlign: 'center', padding: '20px' }}>{lang === 'id' ? 'Tidak ada catatan laporan pada parameter yang dipilih' : 'No records found'}</td></tr>
                         ) : previewData.slice(0, 100).map((r, i) => (
                           <tr key={i}>
                             <td><span style={{ fontSize: '12px', fontFamily: 'monospace' }}>{r.EMP_CD}</span></td>
@@ -302,8 +322,8 @@ export default function LaporanPage() {
                             <td style={{ fontSize: '12px' }}>{r.SEC_DESC || '-'}</td>
                             <td style={{ fontSize: '12px' }}>{r.TEAM || r.JOB_DESC || '-'}</td>
                             <td>{r.isAllIn ? 'ALL IN' : 'HARIAN'}</td>
-                            <td><span style={{ fontWeight: 'bold' }}>{r.totalKerja || 0}</span></td>
-                            <td><span style={{ fontWeight: 'bold' }}>{r.totalOt || 0}</span></td>
+                            <td><span style={{ fontWeight: 'bold' }}>{r.totalKerja || 0} {lang === 'id' ? 'Jam' : 'Hrs'}</span></td>
+                            <td><span style={{ fontWeight: 'bold' }}>{r.totalOt || 0} {lang === 'id' ? 'Jam' : 'Hrs'}</span></td>
                           </tr>
                         ))}
                       </tbody>
@@ -317,15 +337,15 @@ export default function LaporanPage() {
                           <th>{t(lang, 'departemen')}</th>
                           <th>{t(lang, 'bagian')}</th>
                           <th>{t(lang, 'jabatan')}</th>
-                          <th>Jenis Cuti</th>
-                          <th>Mulai</th>
-                          <th>Selesai</th>
-                          <th>Hari</th>
+                          <th>{lang === 'id' ? 'Jenis Cuti' : 'Leave Type'}</th>
+                          <th>{lang === 'id' ? 'Tanggal Mulai' : 'Start Date'}</th>
+                          <th>{lang === 'id' ? 'Tanggal Selesai' : 'End Date'}</th>
+                          <th>{lang === 'id' ? 'Durasi (Hari)' : 'Duration (Days)'}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {previewData.length === 0 ? (
-                          <tr><td colSpan={9} style={{ textAlign: 'center', padding: '20px' }}>Tidak ada data</td></tr>
+                          <tr><td colSpan={9} style={{ textAlign: 'center', padding: '20px' }}>{lang === 'id' ? 'Tidak ada catatan laporan pada parameter yang dipilih' : 'No records found'}</td></tr>
                         ) : previewData.slice(0, 100).map((r, i) => (
                           <tr key={i}>
                             <td><span style={{ fontSize: '12px', fontFamily: 'monospace' }}>{r.EMP_CD}</span></td>
@@ -336,7 +356,7 @@ export default function LaporanPage() {
                             <td><span className="badge badge-cuti">{r.type}</span></td>
                             <td>{new Date(r.startDate).toLocaleDateString('id-ID')}</td>
                             <td>{new Date(r.endDate).toLocaleDateString('id-ID')}</td>
-                            <td>{r.days}</td>
+                            <td>{r.days} {lang === 'id' ? 'Hari' : 'Days'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -350,15 +370,15 @@ export default function LaporanPage() {
                           <th>{t(lang, 'departemen')}</th>
                           <th>{t(lang, 'bagian')}</th>
                           <th>{t(lang, 'jabatan')}</th>
-                          <th>Tanggal</th>
-                          <th>Jam Masuk</th>
-                          <th>Jam Pulang</th>
-                          <th>Keterangan Pelanggaran</th>
+                          <th>{lang === 'id' ? 'Tanggal Kejadian' : 'Incident Date'}</th>
+                          <th>{lang === 'id' ? 'Waktu Masuk' : 'Clock In'}</th>
+                          <th>{lang === 'id' ? 'Waktu Pulang' : 'Clock Out'}</th>
+                          <th>{lang === 'id' ? 'Catatan Tindakan Disiplin' : 'Disciplinary Note'}</th>
                         </tr>
                       </thead>
                       <tbody>
                         {previewData.length === 0 ? (
-                          <tr><td colSpan={9} style={{ textAlign: 'center', padding: '20px' }}>Tidak ada pelanggaran skorsing</td></tr>
+                          <tr><td colSpan={9} style={{ textAlign: 'center', padding: '20px' }}>{lang === 'id' ? 'Tidak ditemukan catatan tindakan disiplin pada periode ini' : 'No disciplinary records found'}</td></tr>
                         ) : previewData.slice(0, 100).map((r, i) => (
                           <tr key={i}>
                             <td><span style={{ fontSize: '12px', fontFamily: 'monospace' }}>{r.EMP_CD}</span></td>
@@ -378,7 +398,7 @@ export default function LaporanPage() {
                 </table>
                 {previewData.length > 100 && (
                   <div style={{ padding: '10px', textAlign: 'center', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    Menampilkan 100 baris pertama. Export ke Excel untuk melihat seluruh data ({previewData.length} baris).
+                    {lang === 'id' ? `Menampilkan 100 baris pertama. Unduh berkas Excel untuk meninjau seluruh data (${previewData.length} baris).` : `Showing first 100 rows. Export to Excel to view all data (${previewData.length} rows).`}
                   </div>
                 )}
               </div>

@@ -6,11 +6,12 @@ import { useApp } from '@/lib/context';
 import { t } from '@/lib/i18n';
 import {
   Users, UserCheck, UserX, Clock, TrendingUp,
-  AlertTriangle, ClipboardList, BarChart3, Plus, FileText, Settings, Sun, Moon
+  AlertTriangle, ClipboardList, BarChart3, Plus, FileText, Settings, Sun, Moon, Zap
 } from 'lucide-react';
-import type { DashboardStats, TrendAbsensi, Karyawan, JamKosongRecord } from '@/types';
+import type { DashboardStats, TrendAbsensi, Karyawan, JamKosongRecord, PerluPerhatianRecord } from '@/types';
 import styles from './dashboard.module.css';
 import JamKosongModal from '@/components/dashboard/JamKosongModal';
+import PerluPerhatianModal from '@/components/dashboard/PerluPerhatianModal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 
@@ -23,8 +24,10 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [trend, setTrend] = useState<TrendAbsensi[]>([]);
   const [jamKosong, setJamKosong] = useState<JamKosongRecord[]>([]);
+  const [perluPerhatian, setPerluPerhatian] = useState<PerluPerhatianRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showJamKosongModal, setShowJamKosongModal] = useState(false);
+  const [showPerluPerhatianModal, setShowPerluPerhatianModal] = useState(false);
 
   const [trendLoading, setTrendLoading] = useState(true);
 
@@ -47,13 +50,28 @@ export default function DashboardPage() {
           if (data.error) throw new Error(data.error);
           setStats(data);
           setJamKosong(data.jamKosongList || []);
+          setPerluPerhatian(data.perluPerhatianList || []);
         } else {
           throw new Error('Response not ok');
         }
       } catch (err) {
         console.error('Failed to load dashboard stats', err);
-        setStats({ totalKaryawan: 0, karyawanAktif: 0, hadirHariIni: 0, alphaHariIni: 0, izinHariIni: 0, cutiHariIni: 0, sakitHariIni: 0, jamKosongHariIni: 0, lemburBulanIni: 0, jamKosongList: [] });
+        setStats({ 
+          totalKaryawan: 0, 
+          karyawanAktif: 0, 
+          hadirHariIni: 0, 
+          alphaHariIni: 0, 
+          izinHariIni: 0, 
+          cutiHariIni: 0, 
+          sakitHariIni: 0, 
+          jamKosongHariIni: 0, 
+          perluPerhatianHariIni: 0,
+          lemburBulanIni: 0, 
+          jamKosongList: [],
+          perluPerhatianList: []
+        });
         setJamKosong([]);
+        setPerluPerhatian([]);
       }
       setLoading(false);
     }
@@ -121,11 +139,11 @@ export default function DashboardPage() {
     return (
       <EmptyState 
         icon="user"
-        title="Belum Ada Karyawan"
-        description="Database karyawan saat ini kosong. Mulai tambahkan karyawan baru untuk melihat statistik dasbor."
+        title={lang === 'id' ? 'Belum Ada Data Karyawan' : 'No Employee Data Yet'}
+        description={lang === 'id' ? 'Data karyawan belum tersedia. Mulai tambahkan karyawan baru untuk menampilkan ringkasan dasbor.' : 'No employee data available. Add a new employee to see dashboard statistics.'}
         action={
           <button className="btn btn-primary" onClick={() => router.push('/karyawan/baru')}>
-            <Plus size={16} /> Tambah Karyawan Pertama
+            <Plus size={16} /> {lang === 'id' ? 'Tambah Karyawan Pertama' : 'Add First Employee'}
           </button>
         }
       />
@@ -156,18 +174,18 @@ export default function DashboardPage() {
           <div className={styles.greetingDesc}>
             {lang === 'id'
               ? (stats?.isFingerprintIntegrated 
-                  ? `Anda memiliki ${stats?.jamKosongHariIni || 0} item absensi yang perlu ditinjau hari ini. Pastikan kerja tenang dan nyaman agar bisa menyelesaikan semua tugas dan pulang cepat.`
-                  : `Data absensi hari ini belum ditarik dari mesin fingerprint. Silakan klik tombol 'Tarik Absensi' di bawah untuk memperbarui data kehadiran.`)
+                  ? `Terdapat ${stats?.jamKosongHariIni || 0} catatan presensi yang memerlukan peninjauan hari ini. Semoga aktivitas kerja Anda berjalan lancar dan produktif.`
+                  : `Data kehadiran hari ini belum diperbarui. Silakan klik tombol 'Sinkronisasi Kehadiran' untuk memuat data terkini.`)
               : (stats?.isFingerprintIntegrated
-                  ? `You have ${stats?.jamKosongHariIni || 0} attendance items to review today. Make sure you work quietly and comfortably so you can complete all your tasks and go home quickly.`
-                  : `Today's attendance data has not been synced from the fingerprint machine. Please click 'Sync Attendance' below.`)}
+                  ? `You have ${stats?.jamKosongHariIni || 0} attendance records requiring review today. Wishing you a productive and smooth workday.`
+                  : `Today's attendance records have not been synchronized. Please click 'Sync Attendance' to load the latest data.`)}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className={`${styles.heroCta} ${styles.heroCtaPrimary}`} onClick={() => router.push('/absensi?sync=true')}>
-              {lang === 'id' ? 'Tarik Absensi' : 'Sync Attendance'}
+              {lang === 'id' ? 'Sinkronisasi Kehadiran' : 'Sync Attendance'}
             </button>
             <button className={`${styles.heroCta} ${styles.heroCtaSecondary}`} onClick={() => router.push('/karyawan/baru')}>
-              <Plus size={15} /> {lang === 'id' ? 'Karyawan Baru' : 'New Employee'}
+              <Plus size={15} /> {lang === 'id' ? 'Tambah Karyawan' : 'Add Employee'}
             </button>
           </div>
         </div>
@@ -184,7 +202,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ========== STAT CARDS ========== */}
+      {/* ========== STAT CARDS (4 KPI CARDS) ========== */}
       <div className={`${styles.statsGrid} stagger-1`}>
         <StatCard
           icon={<Users size={28} />}
@@ -198,16 +216,16 @@ export default function DashboardPage() {
           icon={<UserCheck size={28} />}
           label={t(lang, 'hadirHariIni')}
           value={stats?.hadirHariIni || 0}
-          sub={`${stats?.karyawanAktif ? Math.round(((stats?.hadirHariIni || 0) / stats.karyawanAktif) * 100) : 0}% ${lang === 'id' ? 'kehadiran' : 'attendance'}`}
+          sub={`${stats?.karyawanAktif ? Math.round(((stats?.hadirHariIni || 0) / stats.karyawanAktif) * 100) : 0}% ${lang === 'id' ? 'tingkat kehadiran' : 'attendance rate'}`}
           color="green"
           onClick={() => router.push('/absensi')}
           integrated={stats?.isFingerprintIntegrated ?? false}
         />
         <StatCard
           icon={<UserX size={28} />}
-          label={t(lang, 'alphaHariIni')}
+          label={lang === 'id' ? 'Ketidakhadiran (Alpha)' : 'Absences (Alpha)'}
           value={stats?.alphaHariIni || 0}
-          sub={`${stats?.izinHariIni || 0} izin/cuti/sakit`}
+          sub={`${stats?.izinHariIni || 0} ${lang === 'id' ? 'izin, cuti & sakit' : 'excused leave'}`}
           color="red"
           onClick={() => router.push('/absensi')}
           integrated={stats?.isFingerprintIntegrated ?? false}
@@ -216,7 +234,7 @@ export default function DashboardPage() {
           icon={<Clock size={28} />}
           label={t(lang, 'jamKosong')}
           value={stats?.jamKosongHariIni || 0}
-          sub={lang === 'id' ? 'perlu koreksi hari ini' : 'needs correction today'}
+          sub={lang === 'id' ? 'Presensi belum lengkap' : 'Incomplete clock in/out'}
           color="orange"
           onClick={() => setShowJamKosongModal(true)}
           highlight={(stats?.isFingerprintIntegrated ?? false) && (stats?.jamKosongHariIni || 0) > 0}
@@ -369,56 +387,83 @@ export default function DashboardPage() {
 
       {/* ========== ROW 3: Alerts + Quick Access ========== */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-        {/* Jam Kosong */}
+        {/* Perlu Perhatian */}
         <div className="glass-card stagger-4" style={{ padding: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <AlertTriangle size={18} color="var(--warning)" />
             <h3>{t(lang, 'perhatian')}</h3>
-            <span className="badge badge-warning" style={{ marginLeft: 'auto' }}>{jamKosong.length}</span>
+            <span 
+              className="badge badge-warning" 
+              style={{ marginLeft: 'auto', cursor: perluPerhatian.length > 0 ? 'pointer' : 'default' }}
+              onClick={() => perluPerhatian.length > 0 && setShowPerluPerhatianModal(true)}
+            >
+              {perluPerhatian.length}
+            </span>
           </div>
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14 }}>
-            {t(lang, 'karyawanJamKosong')}
+            {lang === 'id' 
+              ? 'Daftar karyawan dengan penyesuaian jam kerja (pulang lebih awal, keterlambatan, atau durasi singkat).' 
+              : 'Employees with attendance anomalies (early departure, late arrival, or short duration).'}
           </p>
           {!(stats?.isFingerprintIntegrated ?? false) ? (
             <div className="empty-state" style={{ padding: '24px 16px', textAlign: 'center' }}>
               <Clock size={30} color="var(--text-muted)" style={{ opacity: 0.6, marginBottom: 8 }} />
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4 }}>
-                {lang === 'id' ? 'Data absensi hari ini belum ditarik' : "Today's attendance not synced"}
+                {lang === 'id' ? 'Data kehadiran hari ini belum disinkronkan' : "Today's attendance not synchronized"}
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14, maxWidth: 300, margin: '0 auto 14px' }}>
-                {lang === 'id' ? 'Silakan lakukan tarik absensi terlebih dahulu untuk memeriksa kehadiran dan jam kosong.' : 'Please sync attendance first to check attendance and missing punches.'}
+                {lang === 'id' ? 'Silakan lakukan sinkronisasi kehadiran terlebih dahulu untuk meninjau data kehadiran.' : 'Please synchronize attendance first to review attendance records.'}
               </div>
               <button 
                 className="btn btn-primary btn-sm" 
                 style={{ fontSize: 12, padding: '6px 16px', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}
                 onClick={() => router.push('/absensi?sync=true')}
               >
-                {lang === 'id' ? 'Tarik Absensi Sekarang' : 'Sync Attendance Now'}
+                {lang === 'id' ? 'Sinkronisasi Kehadiran Sekarang' : 'Sync Attendance Now'}
               </button>
             </div>
-          ) : jamKosong.length === 0 ? (
+          ) : perluPerhatian.length === 0 ? (
             <div className="empty-state" style={{ padding: 30 }}>
               <UserCheck size={32} color="var(--success)" style={{ opacity: 0.6 }} />
-              <span style={{ fontSize: 13 }}>{lang === 'id' ? 'Semua jam sudah terisi ✓' : 'All punches complete ✓'}</span>
+              <span style={{ fontSize: 13 }}>{lang === 'id' ? 'Seluruh presensi kerja tercatat tertib & sesuai jadwal ✓' : 'All attendance records are complete and on schedule ✓'}</span>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {jamKosong.map(k => (
+              {perluPerhatian.slice(0, 5).map((k, idx) => (
                 <div
-                  key={k.EMP_CD}
+                  key={`${k.EMP_CD}-${idx}`}
                   className={styles.alertRow}
-                  onClick={() => setShowJamKosongModal(true)}
+                  onClick={() => setShowPerluPerhatianModal(true)}
+                  style={{ cursor: 'pointer' }}
                 >
                   <div className={styles.alertAvatar}>{k.EMP_NM.charAt(0)}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.EMP_NM}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{k.EMP_CD} · {k.SEC_DESC || k.SEC_CD}</div>
                   </div>
-                  <span className={k.keterangan_kosong === 'Lupa Tap Masuk' ? 'badge badge-warning' : 'badge badge-danger'} style={{ fontSize: 10 }}>
-                    {k.keterangan_kosong}
+                  <span 
+                    className={
+                      k.jenis_anomali === 'PULANG_CEPAT' 
+                        ? 'badge badge-warning' 
+                        : k.jenis_anomali === 'TERLAMBAT' 
+                          ? 'badge badge-danger' 
+                          : 'badge badge-info'
+                    } 
+                    style={{ fontSize: 10, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                  >
+                    {k.keterangan || (k.jenis_anomali === 'PULANG_CEPAT' ? 'Pulang Lebih Awal' : k.jenis_anomali === 'TERLAMBAT' ? 'Terlambat Hadir' : 'Durasi Singkat')}
                   </span>
                 </div>
               ))}
+              {perluPerhatian.length > 5 && (
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  style={{ width: '100%', marginTop: 6, fontSize: 12, padding: '6px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}
+                  onClick={() => setShowPerluPerhatianModal(true)}
+                >
+                  {lang === 'id' ? `Lihat Semua (${perluPerhatian.length} Karyawan) →` : `View All (${perluPerhatian.length} Employees) →`}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -454,6 +499,13 @@ export default function DashboardPage() {
         data={jamKosong}
         lang={lang}
       />
+
+      <PerluPerhatianModal
+        isOpen={showPerluPerhatianModal}
+        onClose={() => setShowPerluPerhatianModal(false)}
+        initialData={perluPerhatian}
+        lang={lang}
+      />
     </div>
   );
 }
@@ -466,7 +518,7 @@ function StatCard({
   label: string;
   value: number;
   sub: string;
-  color: 'blue' | 'green' | 'red' | 'orange';
+  color: 'blue' | 'green' | 'red' | 'yellow' | 'orange' | 'purple';
   onClick?: () => void;
   highlight?: boolean;
   integrated?: boolean;
@@ -475,7 +527,9 @@ function StatCard({
     blue: { accent: '#3b82f6', glow: 'rgba(59,130,246,0.12)' },
     green: { accent: '#10b981', glow: 'rgba(16,185,129,0.12)' },
     red: { accent: '#ef4444', glow: 'rgba(239,68,68,0.12)' },
-    orange: { accent: '#f97316', glow: 'rgba(249,115,22,0.12)' },
+    yellow: { accent: '#ca8a04', glow: 'rgba(202,138,4,0.12)' },
+    orange: { accent: '#f59e0b', glow: 'rgba(245,158,11,0.12)' },
+    purple: { accent: '#8b5cf6', glow: 'rgba(139,92,246,0.12)' },
   };
   const c = colors[color];
 
@@ -484,7 +538,7 @@ function StatCard({
       className={`glass-card stat-card ${highlight ? styles.highlighted : ''}`}
       style={{
         cursor: onClick ? 'pointer' : 'default',
-        borderColor: highlight ? 'rgba(249,115,22,0.3)' : undefined,
+        borderColor: highlight ? `${c.accent}4d` : undefined,
       }}
       onClick={onClick}
     >

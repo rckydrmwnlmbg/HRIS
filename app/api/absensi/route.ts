@@ -49,19 +49,6 @@ export async function GET(request: Request) {
       ORDER BY a.DATE_TRANS ASC
     `);
 
-    result.forEach((r: any) => {
-      const inTime = r.WORK_IN_STR ? r.WORK_IN_STR.split(' ')[1] : null;
-      const outTime = r.WORK_OUT_STR ? r.WORK_OUT_STR.split(' ')[1] : null;
-      if (inTime && outTime && inTime.substring(0, 2) < '12' && outTime.substring(0, 2) < '12') {
-        const earliest = inTime < outTime ? r.WORK_IN : r.WORK_OUT;
-        const earliestStr = inTime < outTime ? r.WORK_IN_STR : r.WORK_OUT_STR;
-        r.WORK_IN = earliest;
-        r.WORK_IN_STR = earliestStr;
-        r.WORK_OUT = null;
-        r.WORK_OUT_STR = null;
-      }
-    });
-
     return NextResponse.json(result);
   } catch (error: any) {
     console.error('API /absensi error:', error);
