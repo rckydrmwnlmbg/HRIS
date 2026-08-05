@@ -182,9 +182,9 @@ export default function KaryawanDetailPage({ params }: { params: Promise<{ id: s
               <InfoRow icon={<Calendar size={14} />} label={lang === 'id' ? 'Tanggal Resign' : 'Resignation Date'} value={new Date(karyawan.DT_RSG).toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })} />
             )}
             <InfoRow icon={<BadgeInfo size={14} />} label={lang === 'id' ? 'No. SPSI' : 'SPSI No.' } value={karyawan.SPSI_NO} mono />
-            <InfoRow icon={<BadgeInfo size={14} />} label={lang === 'id' ? 'No. Reg' : 'Reg No.'} value={karyawan.No_Reg} mono />
-            <InfoRow icon={<BadgeInfo size={14} />} label="Flag OT" value={karyawan.FLAG_OT === '1' ? (lang === 'id' ? 'Berhak Lembur' : 'OT Eligible') : (lang === 'id' ? 'Tidak Lembur' : 'No OT')} />
-            <InfoRow icon={<BadgeInfo size={14} />} label="ALL IN" value={karyawan.ALL_IN === '1' ? 'Ya / Yes' : 'Tidak / No'} />
+            <InfoRow icon={<BadgeInfo size={14} />} label={lang === 'id' ? 'Nomor Registrasi' : 'Registration No.'} value={karyawan.No_Reg} mono />
+            <InfoRow icon={<BadgeInfo size={14} />} label={lang === 'id' ? 'Hak Lembur' : 'Overtime Eligibility'} value={karyawan.FLAG_OT === '1' ? (lang === 'id' ? 'Berhak Lembur' : 'OT Eligible') : (lang === 'id' ? 'Tidak Lembur' : 'No OT')} />
+            <InfoRow icon={<BadgeInfo size={14} />} label={lang === 'id' ? 'Status Paket (ALL IN)' : 'Overtime Package (ALL IN)'} value={karyawan.ALL_IN === '1' ? (lang === 'id' ? 'Ya (ALL IN)' : 'Yes (ALL IN)') : (lang === 'id' ? 'Reguler' : 'Regular')} />
           </div>
         </div>
           )}
@@ -220,7 +220,7 @@ export default function KaryawanDetailPage({ params }: { params: Promise<{ id: s
           <div className={styles.infoList}>
             <InfoRow icon={<CreditCard size={14} />} label={t(lang, 'noRek')} value={karyawan.ACC_NO} mono />
             <InfoRow icon={<CreditCard size={14} />} label={t(lang, 'npwp')} value={karyawan.NPWP} mono />
-            <InfoRow icon={<BadgeInfo size={14} />} label="PTKP Status" value={karyawan.PTKP_ST} />
+            <InfoRow icon={<BadgeInfo size={14} />} label={lang === 'id' ? 'Status PTKP' : 'Tax Status (PTKP)'} value={karyawan.PTKP_ST} />
             <div className={styles.infoRow}>
               <div className={styles.infoIcon}><CreditCard size={14} /></div>
               <div className={styles.infoContent}>
@@ -266,7 +266,7 @@ export default function KaryawanDetailPage({ params }: { params: Promise<{ id: s
               <Edit2 size={14} /> {lang === 'id' ? 'Edit Data Karyawan' : 'Edit Employee Data'}
             </button>
             <button className="btn btn-secondary w-full" style={{ backgroundColor: 'var(--accent-blue)', color: 'white', borderColor: 'var(--accent-blue)' }} onClick={() => setShowIDCard(true)}>
-              <ImageIcon size={14} /> {lang === 'id' ? 'Generate ID Card' : 'Generate ID Card'}
+              <ImageIcon size={14} /> {lang === 'id' ? 'Cetak Kartu Identitas' : 'Generate ID Card'}
             </button>
           </div>
         </div>

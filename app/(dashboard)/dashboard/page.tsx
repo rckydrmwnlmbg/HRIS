@@ -6,7 +6,8 @@ import { useApp } from '@/lib/context';
 import { t } from '@/lib/i18n';
 import {
   Users, UserCheck, UserX, Clock, TrendingUp,
-  AlertTriangle, ClipboardList, BarChart3, Plus, FileText, Settings, Sun, Moon, Zap
+  AlertTriangle, ClipboardList, BarChart3, Plus, FileText, Settings, Sun, Moon, Zap,
+  CloudDownload, X, CheckCircle, AlertCircle
 } from 'lucide-react';
 import type { DashboardStats, TrendAbsensi, Karyawan, JamKosongRecord, PerluPerhatianRecord } from '@/types';
 import styles from './dashboard.module.css';
@@ -31,6 +32,27 @@ export default function DashboardPage() {
 
   const [trendLoading, setTrendLoading] = useState(true);
 
+  // Global Sync States
+  const [showSyncModal, setShowSyncModal] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStart, setSyncStart] = useState('');
+  const [syncEnd, setSyncEnd] = useState('');
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'warning' } | null>(null);
+
+  const showToast = (msg: string, type: 'success' | 'warning') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const handleOpenSyncModal = () => {
+    const hMin1 = new Date();
+    hMin1.setDate(hMin1.getDate() - 1);
+    const defaultDate = hMin1.toISOString().split('T')[0];
+    setSyncStart(defaultDate);
+    setSyncEnd(defaultDate);
+    setShowSyncModal(true);
+  };
+
   const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
   const heroImages = ['/hero-hr.png', '/hero-hr1.png', '/hero-hr2.png', '/hero-hr3.png'];
 
@@ -41,55 +63,57 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [heroImages.length]);
 
-  useEffect(() => {
-    async function loadDashboard() {
-      try {
-        const res = await fetch('/api/dashboard');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.error) throw new Error(data.error);
-          setStats(data);
-          setJamKosong(data.jamKosongList || []);
-          setPerluPerhatian(data.perluPerhatianList || []);
-        } else {
-          throw new Error('Response not ok');
-        }
-      } catch (err) {
-        console.error('Failed to load dashboard stats', err);
-        setStats({ 
-          totalKaryawan: 0, 
-          karyawanAktif: 0, 
-          hadirHariIni: 0, 
-          alphaHariIni: 0, 
-          izinHariIni: 0, 
-          cutiHariIni: 0, 
-          sakitHariIni: 0, 
-          jamKosongHariIni: 0, 
-          perluPerhatianHariIni: 0,
-          lemburBulanIni: 0, 
-          jamKosongList: [],
-          perluPerhatianList: []
-        });
-        setJamKosong([]);
-        setPerluPerhatian([]);
+  const loadDashboard = async () => {
+    try {
+      const res = await fetch('/api/dashboard');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        setStats(data);
+        setJamKosong(data.jamKosongList || []);
+        setPerluPerhatian(data.perluPerhatianList || []);
+      } else {
+        throw new Error('Response not ok');
       }
+    } catch (err) {
+      console.error('Failed to load dashboard stats', err);
+      setStats({ 
+        totalKaryawan: 0, 
+        karyawanAktif: 0, 
+        hadirHariIni: 0, 
+        alphaHariIni: 0, 
+        izinHariIni: 0, 
+        cutiHariIni: 0, 
+        sakitHariIni: 0, 
+        jamKosongHariIni: 0, 
+        perluPerhatianHariIni: 0,
+        lemburBulanIni: 0, 
+        jamKosongList: [],
+        perluPerhatianList: []
+      });
+      setJamKosong([]);
+      setPerluPerhatian([]);
+    } finally {
       setLoading(false);
     }
+  };
 
-    async function loadTrend() {
-      try {
-        const res = await fetch('/api/dashboard/trend');
-        if (res.ok) {
-          const data = await res.json();
-          setTrend(data || []);
-        }
-      } catch (err) {
-        console.error('Failed to load dashboard trend', err);
-        setTrend([]);
+  const loadTrend = async () => {
+    try {
+      const res = await fetch('/api/dashboard/trend');
+      if (res.ok) {
+        const data = await res.json();
+        setTrend(data || []);
       }
+    } catch (err) {
+      console.error('Failed to load dashboard trend', err);
+      setTrend([]);
+    } finally {
       setTrendLoading(false);
     }
+  };
 
+  useEffect(() => {
     loadDashboard();
     loadTrend();
   }, []);
@@ -181,8 +205,8 @@ export default function DashboardPage() {
                   : `Today's attendance records have not been synchronized. Please click 'Sync Attendance' to load the latest data.`)}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className={`${styles.heroCta} ${styles.heroCtaPrimary}`} onClick={() => router.push('/absensi?sync=true')}>
-              {lang === 'id' ? 'Sinkronisasi Kehadiran' : 'Sync Attendance'}
+            <button className={`${styles.heroCta} ${styles.heroCtaPrimary}`} onClick={handleOpenSyncModal}>
+              <CloudDownload size={15} /> {lang === 'id' ? 'Sinkronisasi Kehadiran' : 'Sync Attendance'}
             </button>
             <button className={`${styles.heroCta} ${styles.heroCtaSecondary}`} onClick={() => router.push('/karyawan/baru')}>
               <Plus size={15} /> {lang === 'id' ? 'Tambah Karyawan' : 'Add Employee'}
@@ -211,6 +235,7 @@ export default function DashboardPage() {
           sub={lang === 'id' ? 'Karyawan Aktif' : 'Active Employees'}
           color="blue"
           onClick={() => router.push('/karyawan')}
+          lang={lang}
         />
         <StatCard
           icon={<UserCheck size={28} />}
@@ -220,6 +245,7 @@ export default function DashboardPage() {
           color="green"
           onClick={() => router.push('/absensi')}
           integrated={stats?.isFingerprintIntegrated ?? false}
+          lang={lang}
         />
         <StatCard
           icon={<UserX size={28} />}
@@ -229,6 +255,7 @@ export default function DashboardPage() {
           color="red"
           onClick={() => router.push('/absensi')}
           integrated={stats?.isFingerprintIntegrated ?? false}
+          lang={lang}
         />
         <StatCard
           icon={<Clock size={28} />}
@@ -239,6 +266,7 @@ export default function DashboardPage() {
           onClick={() => setShowJamKosongModal(true)}
           highlight={(stats?.isFingerprintIntegrated ?? false) && (stats?.jamKosongHariIni || 0) > 0}
           integrated={stats?.isFingerprintIntegrated ?? false}
+          lang={lang}
         />
       </div>
 
@@ -269,7 +297,7 @@ export default function DashboardPage() {
               </div>
             ) : trend.length === 0 ? (
               <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', width: '100%', color: 'var(--text-secondary)' }}>
-                Belum ada data trend
+                {lang === 'id' ? 'Belum ada data tren presensi' : 'No attendance trend data available'}
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -477,7 +505,7 @@ export default function DashboardPage() {
               { icon: ClipboardList, label: lang === 'id' ? 'Absensi' : 'Attendance', href: '/absensi', color: '#10b981' },
               { icon: Clock, label: lang === 'id' ? 'Input Lembur' : 'Overtime', href: '/lembur', color: '#f59e0b' },
               { icon: BarChart3, label: lang === 'id' ? 'Laporan Excel' : 'Excel Reports', href: '/laporan', color: '#8b5cf6' },
-              { icon: TrendingUp, label: lang === 'id' ? 'OT Analysis' : 'OT Analysis', href: '/laporan?tab=ot', color: '#f97316' },
+              { icon: TrendingUp, label: lang === 'id' ? 'Analisis Lembur' : 'OT Analysis', href: '/laporan?tab=ot', color: '#f97316' },
               { icon: Settings, label: lang === 'id' ? 'Pengaturan' : 'Settings', href: '/pengaturan', color: '#6b7280' },
             ].map(item => (
               <button
@@ -506,13 +534,90 @@ export default function DashboardPage() {
         initialData={perluPerhatian}
         lang={lang}
       />
+
+      {/* Global Sync Modal - Seluruh Karyawan Aktif */}
+      {showSyncModal && (
+        <div className="modal-overlay" onClick={() => !isSyncing && setShowSyncModal(false)}>
+          <div className="modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">☁️ {lang === 'id' ? 'Sinkronisasi Presensi Seluruh Personel' : 'Global Attendance Synchronization'}</h3>
+              <button className="btn btn-sm btn-secondary btn-icon" onClick={() => !isSyncing && setShowSyncModal(false)}><X size={14} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ padding: '12px', background: 'rgba(59,130,246,0.08)', borderRadius: 'var(--radius-md)', marginBottom: '16px', border: '1px solid rgba(59,130,246,0.2)', fontSize: '13px', lineHeight: '1.5' }}>
+                {lang === 'id'
+                  ? 'Proses ini akan menyelaraskan rekaman kehadiran, menstandarisasi toleransi jam kerja, dan memperbarui kalkulasi lembur secara otomatis untuk seluruh karyawan aktif pada periode yang ditentukan. Seluruh catatan penyesuaian yang telah disetujui akan tetap terlindungi.'
+                  : 'This process will synchronize attendance records, standardize working hours, and update overtime calculations automatically for all active employees over the selected period. All verified manual adjustments will remain securely protected.'}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label className="form-label">{lang === 'id' ? 'Tanggal Mulai' : 'Start Date'}</label>
+                  <input type="date" className="form-input" value={syncStart} onChange={e => setSyncStart(e.target.value)} disabled={isSyncing} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">{lang === 'id' ? 'Tanggal Selesai' : 'End Date'}</label>
+                  <input type="date" className="form-input" value={syncEnd} onChange={e => setSyncEnd(e.target.value)} disabled={isSyncing} />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowSyncModal(false)} disabled={isSyncing}>{t(lang, 'batal')}</button>
+              <button
+                className="btn btn-primary"
+                onClick={async () => {
+                  if (!syncStart || !syncEnd) return showToast(lang === 'id' ? 'Silakan tentukan rentang tanggal periode presensi.' : 'Please select the date range.', 'warning');
+                  setIsSyncing(true);
+                  try {
+                    const res = await fetch('/api/absensi/sync-finger', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ startDate: syncStart, endDate: syncEnd })
+                    });
+                    const result = await res.json();
+                    if (result.success) {
+                      showToast(
+                        lang === 'id' 
+                          ? 'Sinkronisasi presensi untuk seluruh karyawan aktif berhasil diselesaikan.' 
+                          : 'Attendance synchronization for all active employees completed successfully.', 
+                        'success'
+                      );
+                      setShowSyncModal(false);
+                      loadDashboard();
+                      loadTrend();
+                    } else {
+                      showToast((lang === 'id' ? 'Kendala sinkronisasi: ' : 'Sync issue: ') + (result.error || 'Terjadi kendala pada sistem'), 'warning');
+                    }
+                  } catch (e) {
+                    showToast(lang === 'id' ? 'Terjadi kendala koneksi sistem' : 'Connection error occurred', 'warning');
+                  } finally {
+                    setIsSyncing(false);
+                  }
+                }}
+                disabled={isSyncing}
+              >
+                {isSyncing ? (lang === 'id' ? 'Memproses Sinkronisasi...' : 'Synchronizing...') : (lang === 'id' ? 'Mulai Sinkronisasi Presensi' : 'Start Synchronization')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toast && (
+        <div className="toast-container">
+          <div className={`toast toast-${toast.type}`}>
+            {toast.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+            {toast.msg}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ========== Stat Card Component ==========
 function StatCard({
-  icon, label, value, sub, color, onClick, highlight, integrated = true
+  icon, label, value, sub, color, onClick, highlight, integrated = true, lang = 'id'
 }: {
   icon: React.ReactNode;
   label: string;
@@ -522,6 +627,7 @@ function StatCard({
   onClick?: () => void;
   highlight?: boolean;
   integrated?: boolean;
+  lang?: string;
 }) {
   const colors = {
     blue: { accent: '#3b82f6', glow: 'rgba(59,130,246,0.12)' },
@@ -551,7 +657,7 @@ function StatCard({
       ) : (
         <>
           <div className="stat-value" style={{ color: 'var(--text-muted)' }}>–</div>
-          <div className="stat-sub" style={{ fontStyle: 'italic', color: 'var(--text-muted)', fontSize: 10 }}>Data belum tersinkron</div>
+          <div className="stat-sub" style={{ fontStyle: 'italic', color: 'var(--text-muted)', fontSize: 10 }}>{lang === 'id' ? 'Data belum tersinkron' : 'Data not synchronized'}</div>
         </>
       )}
       <div className="stat-icon" style={{ color: c.accent }}>

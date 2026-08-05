@@ -8,7 +8,7 @@ import Breadcrumb from '@/components/layout/Breadcrumb';
 import styles from './layout.module.css';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { isLoggedIn, isInit } = useApp();
+  const { isLoggedIn, isInit, settings } = useApp();
   const router = useRouter();
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -34,7 +34,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className={styles.layout}>
-      <a href="#main-content" className="skip-link">Lompat ke konten utama</a>
+      <a href="#main-content" className="skip-link">{settings.language === 'id' ? 'Lompat ke konten utama' : 'Skip to main content'}</a>
       <div className={`${styles.sidebarWrapper} ${isSidebarOpen ? styles.sidebarOpen : ''}`}>
         <Sidebar />
       </div>

@@ -168,7 +168,7 @@ export default function LemburAllInPage() {
               {lang === 'id' ? 'Lembur ALL IN' : 'ALL IN Overtime'}
             </span>
           </h1>
-          <p className="page-subtitle">{lang === 'id' ? 'Rekapan Lembur Karyawan ALL IN' : 'All In Employee Overtime Summary'}</p>
+          <p className="page-subtitle">{lang === 'id' ? 'Rekapitulasi Lembur Karyawan ALL IN' : 'ALL IN Employee Overtime Summary'}</p>
         </div>
       </div>
 
@@ -196,7 +196,7 @@ export default function LemburAllInPage() {
                     <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{selectedEmp.EMP_NM || '-'}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedEmp.EMP_CD}</div>
                   </div>
-                  <button type="button" className="btn btn-sm btn-secondary" onClick={() => { setSelectedEmp(null); setSearchEmp(''); }}>Ganti</button>
+                  <button type="button" className="btn btn-sm btn-secondary" onClick={() => { setSelectedEmp(null); setSearchEmp(''); }}>{lang === 'id' ? 'Ganti' : 'Change'}</button>
                 </div>
               ) : (
                 <div style={{ position: 'relative' }}>
@@ -277,14 +277,23 @@ export default function LemburAllInPage() {
             </div>
 
             <div style={{ marginTop: '12px', padding: '12px', background: 'var(--info-bg)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(59, 130, 246, 0.2)', fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-              <strong style={{ color: 'var(--text-primary)' }}>{lang === 'id' ? 'Aturan Tarif:' : 'Rate Rules:'}</strong><br />
-              S/d 24:00 = 100rb | 00:01-03:00 = 125rb | &gt; 03:01 = 150rb<br />
-              Libur (07:00-16:00) = 100rb
+              <strong style={{ color: 'var(--text-primary)' }}>{lang === 'id' ? 'Ketentuan Tarif Lembur:' : 'Overtime Rate Policy:'}</strong><br />
+              {lang === 'id' ? (
+                <>
+                  s/d 24:00 = Rp 100.000 | 00:01 - 03:00 = Rp 125.000 | &gt; 03:01 = Rp 150.000<br />
+                  Hari Libur (07:00 - 16:00) = Rp 100.000
+                </>
+              ) : (
+                <>
+                  Up to 24:00 = Rp 100,000 | 00:01 - 03:00 = Rp 125,000 | &gt; 03:01 = Rp 150,000<br />
+                  Holiday (07:00 - 16:00) = Rp 100,000
+                </>
+              )}
             </div>
 
             <div style={{ padding: '16px 20px', background: 'rgba(178, 178, 178, 0.05)', border: '1px solid rgba(79,158,248,0.2)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
               <div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>{lang === 'id' ? 'Total (Auto-kalkulasi) :' : 'Total (Auto-calc) :'}</div>
+                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>{lang === 'id' ? 'Estimasi Nominal:' : 'Estimated Compensation:'}</div>
                 <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--accent-blue)', lineHeight: 1 }}>
                   Rp {nominal.toLocaleString('id-ID')}
                 </div>
@@ -414,7 +423,7 @@ export default function LemburAllInPage() {
                           <button
                             onClick={() => handleDelete(r.ID)}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)', padding: '6px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto' }}
-                            title="Hapus Data"
+                            title={lang === 'id' ? 'Hapus' : 'Delete'}
                           >
                             <Trash2 size={16} />
                           </button>

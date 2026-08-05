@@ -92,12 +92,12 @@ export default function PengaturanPage() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {[
-              { label: lang === 'id' ? 'Nama Aplikasi' : 'Application Name', value: 'HRIS Widy' },
+              { label: lang === 'id' ? 'Nama Aplikasi' : 'Application Name', value: 'HRIS TMNB' },
               { label: lang === 'id' ? 'Versi' : 'Version', value: '2.0.0' },
               { label: lang === 'id' ? 'Teknologi' : 'Framework', value: 'Next.js 14' },
               { label: lang === 'id' ? 'Penyimpanan Data' : 'Data Storage', value: 'Microsoft SQL Server' },
               { label: lang === 'id' ? 'Tahapan Saat Ini' : 'Current Phase', value: lang === 'id' ? 'Fase Uji Coba' : 'Trial Phase' },
-              { label: lang === 'id' ? 'Pembaruan Terakhir' : 'Last Updated', value: new Date().toLocaleDateString('id-ID') },
+              { label: lang === 'id' ? 'Pembaruan Terakhir' : 'Last Updated', value: new Date().toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US') },
             ].map(item => (
               <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-sm)', fontSize: '13px' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>{item.label}</span>

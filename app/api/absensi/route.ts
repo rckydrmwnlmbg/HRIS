@@ -35,10 +35,11 @@ export async function GET(request: Request) {
         RTRIM(a.REASON) AS REASON,
         RTRIM(mr.REASON_GROUP) AS REASON_GROUP,
         RTRIM(a.STATUS_HARI) AS STATUS_HARI,
-        a.OT_1 AS OT1,
-        a.OT_2 AS OT2,
-        a.OT_3 AS OT3,
-        a.OT_4 AS OT4,
+        CAST(ISNULL(a.OT_1, 0) AS INT) AS OT1,
+        CAST(ISNULL(a.OT_2, 0) AS INT) AS OT2,
+        CAST(ISNULL(a.OT_3, 0) AS INT) AS OT3,
+        CAST(ISNULL(a.OT_4, 0) AS INT) AS OT4,
+        CAST(ISNULL(a.T_OT, 0) AS INT) AS T_OT,
         RTRIM(a.SEC_CD) AS SEC_CD,
         a.Time_Late
       FROM TR_ABSEN a

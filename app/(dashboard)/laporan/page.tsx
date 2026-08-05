@@ -249,8 +249,8 @@ export default function LaporanPage() {
                           <th>{lang === 'id' ? 'Tanggal' : 'Date'}</th>
                           <th>{t(lang, 'nik')}</th>
                           <th>{t(lang, 'nama')}</th>
-                          <th>{lang === 'id' ? 'Gender' : 'Gender'}</th>
-                          <th>{lang === 'id' ? 'Kategori' : 'Category'}</th>
+                          <th>{lang === 'id' ? 'Jenis Kelamin' : 'Gender'}</th>
+                          <th>{lang === 'id' ? 'Kategori Karyawan' : 'Category'}</th>
                           <th>{t(lang, 'jabatan')}</th>
                           <th>{lang === 'id' ? 'Tim' : 'Team'}</th>
                           <th>{t(lang, 'bagian')}</th>
@@ -258,7 +258,7 @@ export default function LaporanPage() {
                           <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Waktu Pulang' : 'Clock Out'}</th>
                           <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Status Kehadiran' : 'Attendance Status'}</th>
                           <th>{lang === 'id' ? 'Keterangan' : 'Notes'}</th>
-                          <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Jam Reguler' : 'Basic'}</th>
+                          <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Jam Normal' : 'Regular Hours'}</th>
                           <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Lembur 1' : 'OT 1'}</th>
                           <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Lembur 2' : 'OT 2'}</th>
                           <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Lembur 3' : 'OT 3'}</th>
@@ -292,7 +292,7 @@ export default function LaporanPage() {
                             <td style={{ textAlign: 'center', color: r.OT2 > 0 ? '#3b82f6' : 'inherit', fontWeight: r.OT2 > 0 ? 600 : 400 }}>{r.OT2}</td>
                             <td style={{ textAlign: 'center', color: r.OT3 > 0 ? '#8b5cf6' : 'inherit', fontWeight: r.OT3 > 0 ? 600 : 400 }}>{r.OT3}</td>
                             <td style={{ textAlign: 'center', color: r.OT4 > 0 ? '#ec4899' : 'inherit', fontWeight: r.OT4 > 0 ? 600 : 400 }}>{r.OT4}</td>
-                            <td style={{ textAlign: 'center', fontWeight: 700, background: 'rgba(59, 130, 246, 0.05)' }}>{r.TOTAL}</td>
+                            <td style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent)' }}>{r.TOTAL}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -321,7 +321,7 @@ export default function LaporanPage() {
                             <td style={{ fontSize: '12px' }}>{r.DEP_DESC || '-'}</td>
                             <td style={{ fontSize: '12px' }}>{r.SEC_DESC || '-'}</td>
                             <td style={{ fontSize: '12px' }}>{r.TEAM || r.JOB_DESC || '-'}</td>
-                            <td>{r.isAllIn ? 'ALL IN' : 'HARIAN'}</td>
+                            <td>{r.isAllIn ? (lang === 'id' ? 'Paket ALL IN' : 'ALL IN Package') : (lang === 'id' ? 'Harian' : 'Daily')}</td>
                             <td><span style={{ fontWeight: 'bold' }}>{r.totalKerja || 0} {lang === 'id' ? 'Jam' : 'Hrs'}</span></td>
                             <td><span style={{ fontWeight: 'bold' }}>{r.totalOt || 0} {lang === 'id' ? 'Jam' : 'Hrs'}</span></td>
                           </tr>
@@ -354,8 +354,8 @@ export default function LaporanPage() {
                             <td style={{ fontSize: '12px' }}>{r.SEC_DESC || '-'}</td>
                             <td style={{ fontSize: '12px' }}>{r.TEAM || r.JOB_DESC || '-'}</td>
                             <td><span className="badge badge-cuti">{r.type}</span></td>
-                            <td>{new Date(r.startDate).toLocaleDateString('id-ID')}</td>
-                            <td>{new Date(r.endDate).toLocaleDateString('id-ID')}</td>
+                            <td>{new Date(r.startDate).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US')}</td>
+                            <td>{new Date(r.endDate).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US')}</td>
                             <td>{r.days} {lang === 'id' ? 'Hari' : 'Days'}</td>
                           </tr>
                         ))}

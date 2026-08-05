@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 
 import { Trash2 } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { useApp } from '@/lib/context';
 
 interface Holiday {
   tanggal: string;
@@ -13,6 +14,8 @@ interface Holiday {
 }
 
 export default function HariLiburPage() {
+  const { settings } = useApp();
+  const lang = settings.language;
   const [holidays, setHolidays] = useState<Holiday[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [confirmTarget, setConfirmTarget] = useState<string | null>(null);
@@ -100,10 +103,10 @@ export default function HariLiburPage() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', alignItems: 'start' }}>
         {/* Form Tambah Libur */}
         <div className="glass-card" style={{ padding: '24px' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '16px' }}>Tambah / Edit Libur</h2>
+          <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '16px' }}>{lang === 'id' ? 'Tambah Hari Libur Baru' : 'Add New Holiday'}</h2>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div className="form-group">
-              <label className="form-label">Tanggal</label>
+              <label className="form-label">{lang === 'id' ? 'Tanggal' : 'Date'}</label>
               <input 
                 type="date" 
                 required
@@ -113,11 +116,11 @@ export default function HariLiburPage() {
               />
             </div>
             <div className="form-group">
-              <label className="form-label">Keterangan</label>
+              <label className="form-label">{lang === 'id' ? 'Keterangan' : 'Description'}</label>
               <input 
                 type="text" 
                 required
-                placeholder="Cth: Libur Nasional Idul Fitri"
+                placeholder={lang === 'id' ? 'Cth: Hari Raya Idul Fitri' : 'E.g: National Holiday'}
                 className="form-input"
                 value={formKeterangan}
                 onChange={(e) => setFormKeterangan(e.target.value)}
@@ -129,7 +132,7 @@ export default function HariLiburPage() {
               className="btn btn-primary"
               style={{ marginTop: '8px' }}
             >
-              {isSubmitting ? 'Menyimpan...' : 'Simpan Hari Libur'}
+              {isSubmitting ? (lang === 'id' ? 'Menyimpan...' : 'Saving...') : (lang === 'id' ? 'Simpan Hari Libur' : 'Save Holiday')}
             </button>
           </form>
         </div>
@@ -137,7 +140,7 @@ export default function HariLiburPage() {
         {/* Daftar Libur */}
         <div className="glass-card" style={{ padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>Daftar Libur</h2>
+            <h2 style={{ fontSize: '1rem', fontWeight: 600 }}>{lang === 'id' ? 'Daftar Hari Libur' : 'Holiday List'}</h2>
             <div className="form-group" style={{ marginBottom: 0 }}>
               <select 
                 className="form-select"
@@ -156,19 +159,19 @@ export default function HariLiburPage() {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Tanggal</th>
-                  <th>Keterangan</th>
-                  <th style={{ textAlign: 'center' }}>Aksi</th>
+                  <th>{lang === 'id' ? 'Tanggal' : 'Date'}</th>
+                  <th>{lang === 'id' ? 'Keterangan' : 'Description'}</th>
+                  <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Tindakan' : 'Actions'}</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>Memuat data kalender...</td>
+                    <td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>{lang === 'id' ? 'Memuat kalender hari libur...' : 'Loading holiday calendar...'}</td>
                   </tr>
                 ) : holidays.length === 0 ? (
                   <tr>
-                    <td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>Belum ada hari libur di tahun {year}</td>
+                    <td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>{lang === 'id' ? `Belum ada hari libur yang terdaftar di tahun ${year}` : `No holidays registered for ${year}`}</td>
                   </tr>
                 ) : (
                   holidays.map((h) => (
@@ -184,7 +187,7 @@ export default function HariLiburPage() {
                           onClick={() => handleDelete(h.tanggal)}
                           className="btn btn-sm btn-icon"
                           style={{ color: 'var(--danger)', background: 'rgba(239,68,68,0.1)' }}
-                          title="Hapus"
+                          title={lang === 'id' ? 'Hapus' : 'Delete'}
                         >
                           <Trash2 size={14} />
                         </button>
@@ -200,10 +203,10 @@ export default function HariLiburPage() {
 
       <ConfirmModal
         isOpen={!!confirmTarget}
-        title="Hapus Hari Libur"
-        description={`Apakah Anda yakin ingin menghapus hari libur pada tanggal ${confirmTarget}?`}
-        confirmText="Hapus"
-        cancelText="Batal"
+        title={lang === 'id' ? 'Hapus Hari Libur' : 'Delete Holiday'}
+        description={lang === 'id' ? `Apakah Anda yakin ingin menghapus hari libur pada tanggal ${confirmTarget}?` : `Are you sure you want to delete the holiday on ${confirmTarget}?`}
+        confirmText={lang === 'id' ? 'Hapus' : 'Delete'}
+        cancelText={lang === 'id' ? 'Batal' : 'Cancel'}
         onConfirm={confirmDelete}
         onCancel={() => setConfirmTarget(null)}
         variant="danger"

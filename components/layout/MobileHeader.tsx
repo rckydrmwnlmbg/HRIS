@@ -45,7 +45,7 @@ export default function MobileHeader({ onMenuClick }: MobileHeaderProps) {
           <Menu size={24} />
         </button>
         <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--accent-dark)', letterSpacing: '-0.5px' }}>
-          HRIS <span style={{ color: 'var(--accent)' }}>Widy</span>
+          HRIS <span style={{ color: 'var(--accent)' }}>TMNB</span>
         </div>
       </div>
       

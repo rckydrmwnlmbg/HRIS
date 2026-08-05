@@ -58,7 +58,7 @@ export default function IDCardModal({ karyawan, onClose }: Props) {
 
       if (!removeBgRes.ok) {
         const err = await removeBgRes.json();
-        throw new Error(err.details || 'Gagal menghapus background (Cek API Key / Koneksi)');
+        throw new Error(err.details || 'Terjadi kendala saat memproses foto');
       }
 
       const noBgBlob = await removeBgRes.blob();
@@ -82,7 +82,7 @@ export default function IDCardModal({ karyawan, onClose }: Props) {
 
         if (!generateRes.ok) {
           const err = await generateRes.json();
-          throw new Error(err.details || 'Gagal merender ID Card');
+          throw new Error(err.details || 'Terjadi kendala saat menyusun kartu identitas');
         }
 
         const finalBlob = await generateRes.blob();

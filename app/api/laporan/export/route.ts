@@ -64,7 +64,7 @@ export async function GET(request: Request) {
     let extraCondition = '';
     if (secCd) extraCondition += ` AND RTRIM(e.SEC_CD) = '${secCd.replace(/'/g, "''")}'`;
     if (jobCd) extraCondition += ` AND RTRIM(e.JOB_CD) = '${jobCd.replace(/'/g, "''")}'`;
-    if (nikParam) extraCondition += ` AND RTRIM(e.EMP_CD) = '${nikParam.replace(/'/g, "''")}'`;
+    if (nikParam) extraCondition += ` AND RTRIM(a.EMP_CD) = '${nikParam.replace(/'/g, "''")}'`;
 
     // Shift filter (only applied if type === 'absensi', handled via extraCondition for now)
     if (type === 'absensi' && shift === 'pagi') {
@@ -76,9 +76,10 @@ export async function GET(request: Request) {
     let previewData: any[] = [];
 
     if (type === 'absensi') {
+      const lastDayOfMonth = new Date(tahun, bulan, 0).getDate();
       const dateCondition = (startParam && endParam)
         ? `a.DATE_TRANS >= '${startParam}' AND a.DATE_TRANS <= '${endParam}'`
-        : `MONTH(a.DATE_TRANS) = ${bulan} AND YEAR(a.DATE_TRANS) = ${tahun}`;
+        : `a.DATE_TRANS >= '${tahun}-${String(bulan).padStart(2, '0')}-01' AND a.DATE_TRANS <= '${tahun}-${String(bulan).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}'`;
 
       const rawAbsensiData = await query<any>(`
         SELECT 
@@ -87,7 +88,7 @@ export async function GET(request: Request) {
           RTRIM(e.EMP_CD) AS NIK,
           RTRIM(e.EMP_NM) AS NAMA,
           RTRIM(e.SX) AS LP,
-          CASE WHEN ISNULL(e.ALL_IN, 0) = 1 THEN 'ALL IN' ELSE 'HARIAN' END AS JNSKAR,
+          CASE WHEN UPPER(ISNULL(RTRIM(e.ALL_IN), '0')) IN ('1', 'Y', 'TRUE') THEN 'ALL IN' ELSE 'HARIAN' END AS JNSKAR,
           RTRIM(j.JOB_DESC) AS JABATAN,
           CASE 
             WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'
@@ -295,7 +296,7 @@ export async function GET(request: Request) {
           RTRIM(s.SEC_DESC) AS SEC_DESC,
           RTRIM(j.JOB_DESC) AS JOB_DESC,
           CASE   WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'   WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'   WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'   WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'   WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'   WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'   WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'   WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'   WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'   WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'   WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'   WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'   WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'   WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'   WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'   WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'   WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'   ELSE RTRIM(d.DEP_DESC) END AS TEAM,
-          ISNULL(e.ALL_IN, 0) AS isAllIn,
+          CASE WHEN UPPER(ISNULL(RTRIM(e.ALL_IN), '0')) IN ('1', 'Y', 'TRUE') THEN 1 ELSE 0 END AS isAllIn,
           e.DT_RSG,
           e.DT_ENTRY,
           CONVERT(varchar(10), a.DATE_TRANS, 120) AS dateStr,
@@ -966,7 +967,7 @@ export async function GET(request: Request) {
           CONVERT(varchar(10), a.DATE_TRANS, 120) AS dateStr,
           CONVERT(varchar(8), a.WORK_IN, 108) AS WORK_IN_STR,
           CONVERT(varchar(8), a.WORK_OUT, 108) AS WORK_OUT_STR,
-          ISNULL(e.ALL_IN, 0) AS isAllIn
+          CASE WHEN UPPER(ISNULL(RTRIM(e.ALL_IN), '0')) IN ('1', 'Y', 'TRUE') THEN 1 ELSE 0 END AS isAllIn
         FROM TR_ABSEN a
         LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
         LEFT JOIN MS_DEP d ON RTRIM(e.DEP_CD) = RTRIM(d.DEP_CD)

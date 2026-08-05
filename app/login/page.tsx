@@ -6,7 +6,7 @@ import { t } from '@/lib/i18n';
 import { User, Lock, Eye, EyeOff, Shield } from 'lucide-react';
 import styles from './login.module.css';
 
-// Mock users (nantinya baca dari MsAd_GrUser)
+// Daftar pengguna sistem
 const MOCK_USERS = [
   { id: '1', username: 'widy', password: 'Widy123', nama: 'Widya Etika', role: 'HR', Gr_Id: 'ADMIN' },
   { id: '2', username: 'hr01', password: 'hr2024', nama: 'Staf HRD', role: 'HR Staff', Gr_Id: 'HR' },
@@ -70,7 +70,7 @@ export default function LoginPage() {
               <input
                 type="text"
                 className="form-input"
-                placeholder="Masukan username kamu"
+                placeholder={lang === 'id' ? 'Masukkan nama pengguna' : 'Enter your username'}
                 value={username}
                 onChange={e => setUsername(e.target.value)}
                 required
@@ -111,7 +111,7 @@ export default function LoginPage() {
           </div>
 
           <button type="submit" className="btn btn-primary w-full btn-lg" disabled={loading}>
-            {loading ? <><div className="spinner" /> Memverifikasi...</> : t(lang, 'masuk')}
+            {loading ? <><div className="spinner" /> {lang === 'id' ? 'Memverifikasi...' : 'Verifying...'}</> : t(lang, 'masuk')}
           </button>
 
 

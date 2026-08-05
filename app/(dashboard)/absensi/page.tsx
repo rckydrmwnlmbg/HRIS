@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DataTable } from '@/components/ui/DataTable';
 import { STATUS_HARI_MAP } from '@/types';
-import { Search, AlertCircle, CheckCircle, Clock, Edit2, CheckSquare, X, CloudDownload } from 'lucide-react';
+import { Search, AlertCircle, CheckCircle, Clock, Edit2, CheckSquare, X, CloudDownload, ShieldAlert, ShieldCheck } from 'lucide-react';
 import styles from './absensi.module.css';
 
 function AbsensiContent() {
@@ -47,10 +47,12 @@ function AbsensiContent() {
       const defaultDate = hMin1.toISOString().split('T')[0];
       setSyncStart(defaultDate);
       setSyncEnd(defaultDate);
-      setShowSyncModal(true);
+      if (selectedEmp) {
+        setShowSyncModal(true);
+      }
       window.history.replaceState(null, '', '/absensi');
     }
-  }, [syncParam]);
+  }, [syncParam, selectedEmp]);
 
   // Load masters and initial params
   useEffect(() => {
@@ -321,6 +323,31 @@ function AbsensiContent() {
     return key === rekapDetailMode;
   }) : [];
 
+  const isSecurityEmployee = (emp: Karyawan | null) => {
+    if (!emp) return false;
+    const job = (emp.JOB_DESC || emp.JOB_CD || '').toUpperCase();
+    const sec = (emp.SEC_DESC || emp.SEC_CD || '').toUpperCase();
+    return job.includes('SECURITY') || job.includes('SATPAM') || sec.includes('SECURITY') || sec.includes('SATPAM');
+  };
+
+  const handleOpenSyncModal = () => {
+    if (!selectedEmp) {
+      showToast(
+        lang === 'id'
+          ? 'Silakan tentukan personel terlebih dahulu sebelum melakukan sinkronisasi presensi.'
+          : 'Please select an employee before performing attendance synchronization.',
+        'warning'
+      );
+      return;
+    }
+    const hMin1 = new Date();
+    hMin1.setDate(hMin1.getDate() - 1);
+    const defaultDate = hMin1.toISOString().split('T')[0];
+    setSyncStart(defaultDate);
+    setSyncEnd(defaultDate);
+    setShowSyncModal(true);
+  };
+
   return (
     <div className="animate-fadeIn">
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -330,16 +357,10 @@ function AbsensiContent() {
         </div>
         <button 
           className="btn btn-warning" 
-          onClick={() => {
-            const hMin1 = new Date();
-            hMin1.setDate(hMin1.getDate() - 1);
-            const defaultDate = hMin1.toISOString().split('T')[0];
-            setSyncStart(defaultDate);
-            setSyncEnd(defaultDate);
-            setShowSyncModal(true);
-          }}
+          onClick={handleOpenSyncModal}
+          title={selectedEmp ? `Sinkronisasi presensi untuk NIK ${selectedEmp.EMP_CD}` : (lang === 'id' ? 'Pilih karyawan terlebih dahulu' : 'Select an employee first')}
         >
-          <CloudDownload size={16} /> {lang === 'id' ? 'Sinkronisasi Kehadiran' : 'Sync Attendance'}
+          <CloudDownload size={16} /> {selectedEmp ? `${lang === 'id' ? 'Sinkronisasi Kehadiran' : 'Sync Attendance'} (${selectedEmp.EMP_CD})` : (lang === 'id' ? 'Sinkronisasi Kehadiran' : 'Sync Attendance')}
         </button>
       </div>
 
@@ -689,62 +710,145 @@ function AbsensiContent() {
       , document.body)}
 
       {/* Sync Modal */}
-      {showSyncModal && (
+      {showSyncModal && selectedEmp && (
         <div className="modal-overlay" onClick={() => !isSyncing && setShowSyncModal(false)}>
-          <div className="modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title">☁️ {lang === 'id' ? 'Sinkronisasi Data Kehadiran' : 'Synchronize Attendance'}</h3>
-              <button className="btn btn-sm btn-secondary btn-icon" onClick={() => !isSyncing && setShowSyncModal(false)}><X size={14} /></button>
-            </div>
-            <div className="modal-body">
-              <div style={{ padding: '12px', background: 'rgba(59,130,246,0.08)', borderRadius: 'var(--radius-md)', marginBottom: '16px', border: '1px solid rgba(59,130,246,0.2)', fontSize: '13px', lineHeight: '1.5' }}>
-                {lang === 'id'
-                  ? 'Proses ini akan menyelaraskan data kehadiran terkini, menerapkan standarisasi jam kerja, dan memperbarui kalkulasi lembur secara otomatis. Seluruh data penyesuaian manual yang telah disetujui akan tetap terlindungi dan terjaga keamanannya.'
-                  : 'This process will synchronize attendance records, apply standard working hours, and update overtime calculations automatically. All verified manual adjustments will remain securely protected.'}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">{lang === 'id' ? 'Tanggal Mulai' : 'Start Date'}</label>
-                  <input type="date" className="form-input" value={syncStart} onChange={e => setSyncStart(e.target.value)} disabled={isSyncing} />
+          <div className="modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            {isSecurityEmployee(selectedEmp) ? (
+              <>
+                <div className="modal-header">
+                  <h3 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ShieldAlert size={20} color="var(--accent-orange)" />
+                    {lang === 'id' ? 'Proteksi Presensi Divisi Pengamanan' : 'Security Attendance Protection'}
+                  </h3>
+                  <button className="btn btn-sm btn-secondary btn-icon" onClick={() => setShowSyncModal(false)}><X size={14} /></button>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">{lang === 'id' ? 'Tanggal Selesai' : 'End Date'}</label>
-                  <input type="date" className="form-input" value={syncEnd} onChange={e => setSyncEnd(e.target.value)} disabled={isSyncing} />
+                <div className="modal-body">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: 'rgba(245,158,11,0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(245,158,11,0.25)', marginBottom: '16px' }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'linear-gradient(135deg,#f59e0b,#d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                      {selectedEmp.EMP_NM.charAt(0)}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{selectedEmp.EMP_NM}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        NIK: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-primary)' }}>{selectedEmp.EMP_CD}</span>
+                        {selectedEmp.SEC_DESC ? ` · ${selectedEmp.SEC_DESC}` : ''}
+                        {selectedEmp.JOB_DESC ? ` · ${selectedEmp.JOB_DESC}` : ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '14px', background: 'rgba(59,130,246,0.06)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(59,130,246,0.2)', fontSize: '13px', lineHeight: '1.6', color: 'var(--text-primary)', marginBottom: '12px' }}>
+                    <p style={{ margin: '0 0 8px 0', fontWeight: 600, color: 'var(--accent-blue)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <ShieldCheck size={16} /> {lang === 'id' ? 'Jadwal Khusus Rotasi Shift Terlindungi' : 'Protected Shift Rotation Schedule'}
+                    </p>
+                    <p style={{ margin: '0 0 8px 0' }}>
+                      {lang === 'id'
+                        ? 'Personel ini beroperasi dengan sistem kerja rotasi shift khusus (Shift Pagi, Siang, dan Malam).'
+                        : 'This employee operates under specialized shift rotations (Morning, Afternoon, and Night Shifts).'}
+                    </p>
+                    <p style={{ margin: 0, color: 'var(--text-secondary)' }}>
+                      {lang === 'id'
+                        ? 'Untuk menjaga keutuhan serta akurasi rekaman jam tugas jaga pos dan serah terima dinas operasional, proses penyesuaian toleransi jam kantor reguler otomatis dikecualikan pada personel ini.'
+                        : 'To maintain the integrity of security post duty logs and shifts handover, regular office tolerance adjustments are safely excluded for this employee.'}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowSyncModal(false)} disabled={isSyncing}>{t(lang, 'batal')}</button>
-              <button
-                className="btn btn-primary"
-                onClick={async () => {
-                  if (!syncStart || !syncEnd) return alert(lang === 'id' ? 'Silakan tentukan rentang tanggal!' : 'Please select date range!');
-                  setIsSyncing(true);
-                  try {
-                    const res = await fetch('/api/absensi/sync-finger', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ startDate: syncStart, endDate: syncEnd })
-                    });
-                    const result = await res.json();
-                    if (result.success) {
-                      showToast(lang === 'id' ? 'Sinkronisasi data kehadiran berhasil diselesaikan.' : 'Attendance synchronization completed successfully.', 'success');
-                      setShowSyncModal(false);
-                      if (selectedEmp) handleLoadAbsensi();
-                    } else {
-                      showToast((lang === 'id' ? 'Gagal: ' : 'Failed: ') + (result.error || 'Terjadi kendala'), 'warning');
-                    }
-                  } catch (e) {
-                    showToast(lang === 'id' ? 'Terjadi kesalahan koneksi' : 'Connection error', 'warning');
-                  } finally {
-                    setIsSyncing(false);
-                  }
-                }}
-                disabled={isSyncing}
-              >
-                {isSyncing ? (lang === 'id' ? 'Memproses Sinkronisasi...' : 'Synchronizing...') : (lang === 'id' ? 'Mulai Sinkronisasi Data' : 'Start Synchronization')}
-              </button>
-            </div>
+                <div className="modal-footer">
+                  <button className="btn btn-primary" onClick={() => setShowSyncModal(false)} style={{ width: '100%' }}>
+                    {lang === 'id' ? 'Saya Mengerti' : 'I Understand'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="modal-header">
+                  <h3 className="modal-title">☁️ {lang === 'id' ? 'Sinkronisasi Presensi Personel' : 'Employee Attendance Synchronization'}</h3>
+                  <button className="btn btn-sm btn-secondary btn-icon" onClick={() => !isSyncing && setShowSyncModal(false)}><X size={14} /></button>
+                </div>
+                <div className="modal-body">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: 'rgba(79,158,248,0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(79,158,248,0.2)', marginBottom: '14px' }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,var(--accent-blue),var(--accent-purple))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                      {selectedEmp.EMP_NM.charAt(0)}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>{selectedEmp.EMP_NM}</div>
+                      <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                        NIK: <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-primary)' }}>{selectedEmp.EMP_CD}</span>
+                        {selectedEmp.SEC_DESC ? ` · ${selectedEmp.SEC_DESC}` : ''}
+                        {selectedEmp.JOB_DESC ? ` · ${selectedEmp.JOB_DESC}` : ''}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '12px', background: 'rgba(59,130,246,0.08)', borderRadius: 'var(--radius-md)', marginBottom: '16px', border: '1px solid rgba(59,130,246,0.2)', fontSize: '13px', lineHeight: '1.5' }}>
+                    {['1', 'Y', 'TRUE'].includes(String(selectedEmp.ALL_IN).toUpperCase()) ? (
+                      lang === 'id'
+                        ? `Personel ini memiliki status paket kerja ALL IN. Proses ini akan menyelaraskan catatan kehadiran dengan data jam kerja riil (rekaman asli mesin presensi) untuk ${selectedEmp.EMP_NM} (NIK: ${selectedEmp.EMP_CD}) tanpa pengacakan toleransi jam kantor reguler, serta mengkalkulasi lembur secara normal berdasarkan jam kerja riil tersebut. Seluruh catatan penyesuaian yang telah disetujui akan tetap terlindungi.`
+                        : `This employee has an ALL IN status. This process will synchronize attendance records with authentic real working hours for ${selectedEmp.EMP_NM} (NIK: ${selectedEmp.EMP_CD}) without artificial office tolerance adjustments, and calculate overtime normally based on real working hours. All verified manual adjustments will remain securely protected.`
+                    ) : (
+                      lang === 'id'
+                        ? `Proses ini akan menyelaraskan rekaman kehadiran, menstandarisasi toleransi jam kerja, dan memperbarui kalkulasi lembur secara otomatis untuk personel ${selectedEmp.EMP_NM} (NIK: ${selectedEmp.EMP_CD}) pada periode yang ditentukan. Seluruh catatan penyesuaian yang telah disetujui akan tetap terlindungi.`
+                        : `This process will synchronize attendance records, standardize working hours, and update overtime calculations automatically for ${selectedEmp.EMP_NM} (NIK: ${selectedEmp.EMP_CD}) over the selected period. All verified manual adjustments will remain securely protected.`
+                    )}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">{lang === 'id' ? 'Tanggal Mulai' : 'Start Date'}</label>
+                      <input type="date" className="form-input" value={syncStart} onChange={e => setSyncStart(e.target.value)} disabled={isSyncing} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">{lang === 'id' ? 'Tanggal Selesai' : 'End Date'}</label>
+                      <input type="date" className="form-input" value={syncEnd} onChange={e => setSyncEnd(e.target.value)} disabled={isSyncing} />
+                    </div>
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button className="btn btn-secondary" onClick={() => setShowSyncModal(false)} disabled={isSyncing}>{t(lang, 'batal')}</button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={async () => {
+                      if (!syncStart || !syncEnd) return showToast(lang === 'id' ? 'Silakan tentukan rentang tanggal periode presensi.' : 'Please select the date range.', 'warning');
+                      setIsSyncing(true);
+                      try {
+                        const res = await fetch('/api/absensi/sync-finger', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ startDate: syncStart, endDate: syncEnd, empCd: selectedEmp.EMP_CD })
+                        });
+                        const result = await res.json();
+                        if (result.success) {
+                          showToast(
+                            ['1', 'Y', 'TRUE'].includes(String(selectedEmp.ALL_IN).toUpperCase())
+                              ? (lang === 'id' 
+                                  ? `Sinkronisasi data riil presensi untuk ${selectedEmp.EMP_NM} (NIK: ${selectedEmp.EMP_CD}) berhasil diselesaikan.` 
+                                  : `Real attendance synchronization for ${selectedEmp.EMP_NM} (NIK: ${selectedEmp.EMP_CD}) completed successfully.`)
+                              : (lang === 'id' 
+                                  ? `Sinkronisasi presensi untuk ${selectedEmp.EMP_NM} (NIK: ${selectedEmp.EMP_CD}) berhasil diselesaikan.` 
+                                  : `Attendance synchronization for ${selectedEmp.EMP_NM} (NIK: ${selectedEmp.EMP_CD}) completed successfully.`), 
+                            'success'
+                          );
+                          setShowSyncModal(false);
+                          handleLoadAbsensi();
+                        } else {
+                          showToast((lang === 'id' ? 'Kendala sinkronisasi: ' : 'Sync issue: ') + (result.error || 'Terjadi kendala pada sistem'), 'warning');
+                        }
+                      } catch (e) {
+                        showToast(lang === 'id' ? 'Terjadi kendala koneksi sistem' : 'Connection error occurred', 'warning');
+                      } finally {
+                        setIsSyncing(false);
+                      }
+                    }}
+                    disabled={isSyncing}
+                  >
+                    {isSyncing 
+                      ? (lang === 'id' ? 'Memproses Sinkronisasi...' : 'Synchronizing...') 
+                      : (['1', 'Y', 'TRUE'].includes(String(selectedEmp.ALL_IN).toUpperCase())
+                          ? (lang === 'id' ? 'Mulai Sinkronisasi Data Riil' : 'Start Real Attendance Sync')
+                          : (lang === 'id' ? 'Mulai Sinkronisasi Presensi' : 'Start Synchronization'))}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

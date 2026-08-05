@@ -39,14 +39,15 @@ export async function POST(request: Request) {
           
           -- Target Jadwal Masuk & Pulang
           CAST(CONVERT(varchar(10), t.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), t.JAM_MASUK, 108) AS DATETIME) AS SCH_IN,
-          CAST(CONVERT(varchar(10), t.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), t.JAM_PULANG, 108) AS DATETIME) AS SCH_OUT
+          CAST(CONVERT(varchar(10), t.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), t.JAM_PULANG, 108) AS DATETIME) AS SCH_OUT,
+          CASE WHEN UPPER(ISNULL(RTRIM(e.ALL_IN),'0')) IN ('1', 'Y', 'TRUE') THEN 1 ELSE 0 END AS IS_ALL_IN
         FROM TR_ABSEN t
         JOIN EMP_TABLE e ON RTRIM(t.EMP_CD) = RTRIM(e.EMP_CD)
         LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
         LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
         WHERE ${whereClause}
-          AND ISNULL(RTRIM(j.JOB_DESC),'') <> 'SECURITY'
-          AND ISNULL(RTRIM(s.SEC_DESC),'') <> 'SECURITY'
+          AND UPPER(ISNULL(RTRIM(j.JOB_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
+          AND UPPER(ISNULL(RTRIM(s.SEC_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
       ),
       CTE_Calculated AS (
         SELECT 
@@ -62,19 +63,27 @@ export async function POST(request: Request) {
       CTE_Final AS (
         SELECT 
           c.*,
-          -- WORK_IN dikoreksi jika kepagian (> 10 mnt sebelum jadwal)
+          -- WORK_IN dikoreksi jika bukan ALL IN:
+          -- 1. Kepagian (> 10 mnt sebelum jadwal, yaitu < 06:50)
+          -- 2. Telat ringan (0 s.d. 15 mnt sesudah jadwal, yaitu 07:00 s.d. 07:15)
+          -- Keduanya dinormalisasi ke rentang 06:50:00 s.d. 06:59:59
+          -- Untuk ALL IN: Tetap jam kerja riil c.WORK_IN
           CASE 
-            WHEN DATEDIFF(minute, c.WORK_IN, c.SCH_IN) > 10
-              THEN DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 540 as int), DATEADD(minute, -10, c.SCH_IN))
+            WHEN c.IS_ALL_IN = 1 THEN c.WORK_IN
+            WHEN DATEDIFF(minute, c.WORK_IN, c.SCH_IN) > 10 
+              OR (c.WORK_IN >= c.SCH_IN AND c.WORK_IN <= DATEADD(minute, 15, c.SCH_IN))
+              THEN DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 599 as int), DATEADD(minute, -10, c.SCH_IN))
             ELSE c.WORK_IN
           END AS PROPOSED_WORK_IN,
           
-          -- WORK_OUT dikoreksi ke jendela aman +1..+15 menit sesudah jadwal + K_OT
+          -- WORK_OUT dikoreksi ke jendela aman 0..14 menit sesudah jadwal + K_OT (16:00:00 s.d. 16:14:59) jika bukan ALL IN
+          -- Untuk ALL IN: Tetap jam pulang riil c.WORK_OUT
           CASE 
+            WHEN c.IS_ALL_IN = 1 THEN c.WORK_OUT
             WHEN c.K_OT > 0 
-              THEN DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 840 as int) + 60, DATEADD(hour, c.K_OT, c.SCH_OUT))
+              THEN DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 899 as int), DATEADD(hour, c.K_OT, c.SCH_OUT))
             ELSE 
-              DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 840 as int) + 60, c.SCH_OUT)
+              DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 899 as int), c.SCH_OUT)
           END AS PROPOSED_WORK_OUT,
           
           -- OT & JAM_KERJA Bersih (8 jam kerja normal + T_OT)

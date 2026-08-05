@@ -162,14 +162,14 @@ export default function KaryawanBaruPage() {
               <div className="form-group">
                 <label className="form-label">{t(lang, 'jabatan')}</label>
                 <select className="form-select" value={form.JOB_CD || ''} onChange={e => set('JOB_CD', e.target.value)}>
-                  <option value="">-- Pilih --</option>
+                  <option value="">-- {lang === 'id' ? 'Pilih' : 'Select'} --</option>
                   {masterJob.map(j => <option key={j.JOB_CD} value={j.JOB_CD}>{j.JOB_DESC}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label className="form-label">Divisi</label>
+                <label className="form-label">{lang === 'id' ? 'Divisi' : 'Division'}</label>
                 <select className="form-select" value={form.DIV_CD || ''} onChange={e => set('DIV_CD', e.target.value)}>
-                  <option value="">-- Pilih --</option>
+                  <option value="">-- {lang === 'id' ? 'Pilih' : 'Select'} --</option>
                   {masterDiv.map(d => <option key={d.DIV_CD} value={d.DIV_CD}>{d.DIV_DESC}</option>)}
                 </select>
               </div>
@@ -177,7 +177,7 @@ export default function KaryawanBaruPage() {
               <div className="form-group">
                 <label className="form-label">{t(lang, 'jenisKaryawan')}</label>
                 <select className="form-select" value={form.JNS_KRY || ''} onChange={e => set('JNS_KRY', e.target.value)}>
-                  <option value="">-- Pilih --</option>
+                  <option value="">-- {lang === 'id' ? 'Pilih' : 'Select'} --</option>
                   {masterJns.map(j => <option key={j.JNS_CODE} value={j.JNS_CODE}>{j.JNS_DESC}</option>)}
                 </select>
               </div>
@@ -193,18 +193,18 @@ export default function KaryawanBaruPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Flag OT</label>
+                <label className="form-label">{lang === 'id' ? 'Hak Lembur' : 'Overtime Eligibility'}</label>
                 <select className="form-select" value={form.FLAG_OT || '0'} onChange={e => set('FLAG_OT', e.target.value)}>
-                  <option value="0">0 - Tidak Berhak / No OT</option>
-                  <option value="1">1 - Berhak Lembur / OT Eligible</option>
+                  <option value="0">0 - {lang === 'id' ? 'Tidak Lembur' : 'No OT'}</option>
+                  <option value="1">1 - {lang === 'id' ? 'Berhak Lembur' : 'OT Eligible'}</option>
                 </select>
               </div>
               
               <div className="form-group">
-                <label className="form-label">ALL IN (Gaji Tetap)</label>
+                <label className="form-label">{lang === 'id' ? 'Paket Lembur (ALL IN)' : 'Overtime Package (ALL IN)'}</label>
                 <select className="form-select" value={form.ALL_IN || '0'} onChange={e => set('ALL_IN', e.target.value)}>
-                  <option value="0">0 - Tidak / No</option>
-                  <option value="1">1 - Ya / Yes</option>
+                  <option value="0">0 - {lang === 'id' ? 'Reguler (Non-ALL IN)' : 'Regular (Non-ALL IN)'}</option>
+                  <option value="1">1 - {lang === 'id' ? 'Paket ALL IN' : 'ALL IN Package'}</option>
                 </select>
               </div>
             </div>
@@ -271,12 +271,12 @@ export default function KaryawanBaruPage() {
 
               <div className="form-group">
                 <label className="form-label">{t(lang, 'noRek')}</label>
-                <input className="form-input" value={form.ACC_NO || ''} onChange={e => set('ACC_NO', e.target.value)} placeholder="Contoh: BCA 1234567890" />
+                <input className="form-input" value={form.ACC_NO || ''} onChange={e => set('ACC_NO', e.target.value)} placeholder={lang === 'id' ? 'Contoh: BCA 1234567890' : 'Example: BCA 1234567890'} />
               </div>
               <div className="form-group">
-                <label className="form-label">Status PTKP</label>
+                <label className="form-label">{lang === 'id' ? 'Status PTKP' : 'Tax Status (PTKP)'}</label>
                 <select className="form-select" value={form.PTKP_ST || ''} onChange={e => set('PTKP_ST', e.target.value)}>
-                  <option value="">-- Pilih --</option>
+                  <option value="">-- {lang === 'id' ? 'Pilih' : 'Select'} --</option>
                   <option value="TK/0">TK/0</option>
                   <option value="TK/1">TK/1</option>
                   <option value="TK/2">TK/2</option>

@@ -44,7 +44,7 @@ export default function CutiPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<LeaveRequest | null>(null);
 
-  // MENTOK CUTI: Anda bisa mengubah angka 12 di bawah ini jika peraturannya berbeda
+  // Batas maksimal hak cuti tahunan per karyawan
   const BATAS_CUTI = 12;
 
   useEffect(() => {
@@ -390,7 +390,7 @@ export default function CutiPage() {
       <ConfirmModal
         isOpen={!!confirmTarget}
         title={lang === 'id' ? 'Hapus Data Cuti' : 'Delete Leave Record'}
-        description={confirmTarget ? `Apakah Anda yakin ingin menghapus data ${confirmTarget.type} untuk ${confirmTarget.EMP_NM}? (${confirmTarget.startDate} s.d. ${confirmTarget.endDate}, ${confirmTarget.days} hari)` : ''}
+        description={confirmTarget ? (lang === 'id' ? `Apakah Anda yakin ingin menghapus data ${confirmTarget.type} untuk ${confirmTarget.EMP_NM}? (${confirmTarget.startDate} s.d. ${confirmTarget.endDate}, ${confirmTarget.days} hari)` : `Are you sure you want to delete ${confirmTarget.type} for ${confirmTarget.EMP_NM}? (${confirmTarget.startDate} to ${confirmTarget.endDate}, ${confirmTarget.days} days)`) : ''}
         confirmText={lang === 'id' ? 'Hapus' : 'Delete'}
         cancelText={lang === 'id' ? 'Batal' : 'Cancel'}
         onConfirm={confirmDelete}

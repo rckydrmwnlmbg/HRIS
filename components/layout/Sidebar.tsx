@@ -95,8 +95,8 @@ export default function Sidebar() {
           <Shield size={20} />
         </div>
         <div>
-          <div className={styles.brandName}>HRIS</div>
-          <div className={styles.brandSub}>Kelola data karyawan tanpa ribet</div>
+          <div className={styles.brandName}>HRIS TMNB</div>
+          <div className={styles.brandSub}>{lang === 'id' ? 'Manajemen SDM Terintegrasi' : 'Integrated HR Management'}</div>
         </div>
       </div>
 

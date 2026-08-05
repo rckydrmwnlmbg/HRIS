@@ -205,7 +205,7 @@ export default function SplPlanningPage() {
 
   const handleApproveAttendance = () => {
     if (!isAttendanceApproved) {
-      alert("Harap centang kotak persetujuan terlebih dahulu!");
+      alert(lang === 'id' ? 'Harap konfirmasi verifikasi data kehadiran terlebih dahulu!' : 'Please confirm attendance data verification first!');
       return;
     }
     setActiveTab('plan');
@@ -257,19 +257,19 @@ export default function SplPlanningPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">{lang === 'id' ? 'Surat Perintah Lembur (SPL)' : 'Overtime Order (SPL)'}</h1>
-          <p className="page-subtitle">Modul Manajemen Perencanaan Lembur Pabrik (Agregat)</p>
+          <p className="page-subtitle">{lang === 'id' ? 'Pengelolaan dan perencanaan surat perintah lembur terintegrasi' : 'Integrated overtime order management and planning'}</p>
         </div>
       </div>
 
       <div className="no-print" style={{ display: 'flex', background: 'var(--bg-subtle)', borderRadius: '12px', padding: '6px', marginBottom: '20px', pointerEvents: 'none', border: '1px solid var(--border)' }}>
         <div style={{ flex: 1, padding: '10px', textAlign: 'center', background: activeTab === 'attendance' ? 'var(--bg-card)' : 'transparent', borderRadius: '8px', boxShadow: activeTab === 'attendance' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none', fontWeight: activeTab === 'attendance' ? 600 : 400, opacity: highestStep >= 1 ? 1 : 0.5, transition: 'all 0.3s' }}>
-          1. Daily Attendance {highestStep > 1 && '✓'}
+          1. {lang === 'id' ? 'Kehadiran Harian' : 'Daily Attendance'} {highestStep > 1 && '✓'}
         </div>
         <div style={{ flex: 1, padding: '10px', textAlign: 'center', background: activeTab === 'plan' ? 'var(--bg-card)' : 'transparent', borderRadius: '8px', boxShadow: activeTab === 'plan' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none', fontWeight: activeTab === 'plan' ? 600 : 400, opacity: highestStep >= 2 ? 1 : 0.5, transition: 'all 0.3s' }}>
-          2. Plan Overtime {highestStep > 2 && '✓'}
+          2. {lang === 'id' ? 'Perencanaan Lembur' : 'Plan Overtime'} {highestStep > 2 && '✓'}
         </div>
         <div style={{ flex: 1, padding: '10px', textAlign: 'center', background: activeTab === 'finance' ? 'var(--bg-card)' : 'transparent', borderRadius: '8px', boxShadow: activeTab === 'finance' ? '0 2px 4px rgba(0,0,0,0.05)' : 'none', fontWeight: activeTab === 'finance' ? 600 : 400, opacity: highestStep >= 3 ? 1 : 0.5, transition: 'all 0.3s' }}>
-          3. SPL Fix (Budget)
+          3. {lang === 'id' ? 'Otorisasi & Anggaran' : 'SPL Authorization & Budget'}
         </div>
       </div>
 
@@ -279,7 +279,7 @@ export default function SplPlanningPage() {
         <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
           <div style={{ display: 'flex', gap: '15px' }}>
             <div className="form-group" style={{ margin: 0 }}>
-              <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Tanggal Transaksi</label>
+              <label style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{lang === 'id' ? 'Tanggal Transaksi' : 'Transaction Date'}</label>
               <input 
                 type="date" 
                 className="form-input" 
@@ -293,13 +293,13 @@ export default function SplPlanningPage() {
             </div>
             {highestStep > 1 && (
               <button className="btn btn-secondary" onClick={() => { setActiveTab('attendance'); setHighestStep(1); setIsAttendanceApproved(false); }} style={{ alignSelf: 'flex-end' }}>
-                Ubah Tanggal (Reset)
+                {lang === 'id' ? 'Ubah Tanggal' : 'Change Date'}
               </button>
             )}
           </div>
           {activeTab === 'plan' && (
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', alignSelf: 'flex-end', paddingBottom: '8px' }}>
-              *Pastikan inputan sesuai dengan coretan tim Produksi
+              *{lang === 'id' ? 'Pastikan alokasi jam lembur sesuai dengan rencana operasional' : 'Ensure overtime allocation matches operational plans'}
             </div>
           )}
         </div>
@@ -314,9 +314,9 @@ export default function SplPlanningPage() {
                   <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
                     <ClipboardList size={40} style={{ opacity: 0.5 }} />
                   </div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '8px' }}>Belum Ada Data Kehadiran</h3>
-                  <p style={{ fontSize: '13px', textAlign: 'center', maxWidth: '300px' }}>
-                    Data Daily Attendance (SPL) untuk tanggal <strong>{dateStr}</strong> kosong atau belum diproses.
+                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '8px' }}>{lang === 'id' ? 'Belum Ada Catatan Kehadiran' : 'No Attendance Records'}</h3>
+                  <p style={{ fontSize: '13px', textAlign: 'center', maxWidth: '340px' }}>
+                    {lang === 'id' ? `Catatan kehadiran harian untuk tanggal ${dateStr} belum tersedia atau belum diproses.` : `Daily attendance records for ${dateStr} are not available or not yet processed.`}
                   </p>
                 </div>
               ) : (
@@ -348,7 +348,7 @@ export default function SplPlanningPage() {
                 </thead>
                 <tbody>
                   {isLoading ? (
-                    <tr><td colSpan={11} style={{ textAlign: 'center', padding: '40px' }}>Memuat...</td></tr>
+                    <tr><td colSpan={11} style={{ textAlign: 'center', padding: '40px' }}>{lang === 'id' ? 'Memuat data kehadiran...' : 'Loading attendance data...'}</td></tr>
                   ) : (
                     <>
                       {/* Direct Worker */}
@@ -450,8 +450,8 @@ export default function SplPlanningPage() {
           {activeTab === 'finance' && (
             <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>
               <Clock size={48} style={{ margin: '0 auto 16px', opacity: 0.2 }} />
-              <h3>Modul SPL FIX (Budgeting)</h3>
-              <p>Sistem sedang merekapitulasi Biaya Catering, Output Amount, dan Overtime Fee...</p>
+              <h3>{lang === 'id' ? 'Otorisasi & Rekapitulasi Anggaran SPL' : 'SPL Authorization & Budget Summary'}</h3>
+              <p>{lang === 'id' ? 'Sistem sedang memproses rekapitulasi estimasi kompensasi lembur dan operasional...' : 'System is compiling overtime compensation estimates and operations...'}</p>
             </div>
           )}
         </div>
@@ -467,14 +467,14 @@ export default function SplPlanningPage() {
                   onChange={(e) => setIsAttendanceApproved(e.target.checked)}
                   style={{ width: '18px', height: '18px', accentColor: 'var(--brand-primary)' }}
                 />
-                <span>Saya mengonfirmasi bahwa data Daily Attendance ini valid dan telah di-ACC.</span>
+                <span>{lang === 'id' ? 'Saya mengonfirmasi bahwa rekapitulasi kehadiran harian ini telah diverifikasi dan valid.' : 'I confirm that this daily attendance summary has been verified and is valid.'}</span>
               </label>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button className="btn btn-secondary" onClick={handleDownloadPdf} disabled={isGeneratingPdf}>
-                  <Printer size={15} /> {isGeneratingPdf ? 'Memproses...' : 'Cetak (PDF)'}
+                  <Printer size={15} /> {isGeneratingPdf ? (lang === 'id' ? 'Menyusun Dokumen...' : 'Generating Document...') : (lang === 'id' ? 'Cetak Berkas (PDF)' : 'Print Document (PDF)')}
                 </button>
                 <button className="btn btn-primary" onClick={handleApproveAttendance} disabled={!isAttendanceApproved}>
-                  <CheckSquare size={15} /> Setujui Kehadiran & Lanjut ke Plan <ChevronRight size={15} />
+                  <CheckSquare size={15} /> {lang === 'id' ? 'Verifikasi Kehadiran & Lanjut ke Perencanaan' : 'Verify Attendance & Proceed to Plan'} <ChevronRight size={15} />
                 </button>
               </div>
             </div>
@@ -486,15 +486,15 @@ export default function SplPlanningPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button className="btn btn-secondary" onClick={() => window.print()}>
-                  <Printer size={15} /> Cetak (PDF)
+                  <Printer size={15} /> {lang === 'id' ? 'Cetak Berkas (PDF)' : 'Print Document (PDF)'}
                 </button>
               </div>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <button className="btn btn-secondary" onClick={() => setActiveTab('attendance')}>
-                  Kembali
+                  {lang === 'id' ? 'Kembali' : 'Back'}
                 </button>
                 <button className="btn btn-primary" onClick={() => { setActiveTab('finance'); setHighestStep(Math.max(highestStep, 3)); }}>
-                  Kalkulasi SPL FIX (Budget) <ChevronRight size={15} />
+                  {lang === 'id' ? 'Lanjut ke Otorisasi Anggaran' : 'Proceed to Budget Authorization'} <ChevronRight size={15} />
                 </button>
               </div>
             </div>
@@ -505,10 +505,10 @@ export default function SplPlanningPage() {
           <div className="no-print" style={{ padding: '16px 20px', borderTop: '1px solid var(--border)', background: 'var(--glass-bg)', flexShrink: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <button className="btn btn-secondary" onClick={() => setActiveTab('plan')}>
-                Kembali Revisi Plan
+                {lang === 'id' ? 'Kembali ke Perencanaan' : 'Back to Planning'}
               </button>
               <button className="btn btn-primary">
-                <Save size={15} /> Simpan & Cetak SPL Final
+                <Save size={15} /> {lang === 'id' ? 'Simpan & Terbitkan Dokumen SPL' : 'Save & Finalize SPL Document'}
               </button>
             </div>
           </div>

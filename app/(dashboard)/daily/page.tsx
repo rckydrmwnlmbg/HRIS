@@ -55,7 +55,7 @@ export default function DailyAttendancePage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">{t(lang, 'daily')}</h1>
-          <p className="page-subtitle">{lang === 'id' ? 'Pantauan kehadiran karyawan per hari' : 'Daily employee attendance monitoring'}</p>
+          <p className="page-subtitle">{lang === 'id' ? 'Pemantauan kehadiran karyawan secara harian' : 'Daily employee attendance monitoring'}</p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
@@ -106,33 +106,33 @@ export default function DailyAttendancePage() {
                   <th>{t(lang, 'departemen')}</th>
                   <th>{t(lang, 'jamMasuk')}</th>
                   <th>{t(lang, 'jamPulang')}</th>
-                  <th>Status</th>
+                  <th>{t(lang, 'statusHari')}</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 ? (
                   <tr><td colSpan={6} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
-                    {lang === 'id' ? 'Tidak ada data absensi untuk tanggal ini' : 'No attendance data for this date'}
+                    {lang === 'id' ? 'Tidak ada catatan kehadiran untuk tanggal ini' : 'No attendance records for this date'}
                   </td></tr>
                 ) : filtered.slice(0, 100).map((r, i) => {
                   const isLate = r.Time_Late && r.Time_Late > 0;
                   const status = normalize(r.STATUS_HARI);
                   return (
                     <tr key={`${r.EMP_CD}-${i}`}>
-                      <td><span style={{ fontFamily: 'monospace', color: 'var(--accent-blue)', fontSize: '12px' }}>{r.EMP_CD}</span></td>
+                      <td><span style={{ color: 'var(--accent-blue)', fontSize: '12px', fontWeight: 500 }}>{r.EMP_CD}</span></td>
                       <td style={{ fontWeight: 500 }}>{r.EMP_NM}</td>
                       <td style={{ fontSize: '12px' }}>{r.DEP_DESC || r.DEP_CD || '-'}</td>
                       <td>
                         {r.WORK_IN ? (
-                          <span style={{ fontFamily: 'monospace', fontSize: '13px', color: isLate ? 'var(--warning)' : 'var(--success)' }}>
+                          <span style={{ fontSize: '13px', color: isLate ? 'var(--warning)' : 'var(--success)' }}>
                             {fmtTime(r.WORK_IN)}
-                            {isLate && <span style={{ marginLeft: '6px', fontSize: '10px' }}>⚠ Telat</span>}
+                            {isLate && <span style={{ marginLeft: '6px', fontSize: '10px' }}>⚠ {lang === 'id' ? 'Terlambat' : 'Late'}</span>}
                           </span>
                         ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                       </td>
                       <td>
                         {r.WORK_OUT ? (
-                          <span style={{ fontFamily: 'monospace', fontSize: '13px', color: 'var(--info)' }}>{fmtTime(r.WORK_OUT)}</span>
+                          <span style={{ fontSize: '13px', color: 'var(--info)' }}>{fmtTime(r.WORK_OUT)}</span>
                         ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                       </td>
                       <td>
