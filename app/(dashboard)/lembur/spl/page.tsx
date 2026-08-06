@@ -309,13 +309,12 @@ export default function SplPlanningPage() {
           {activeTab === 'attendance' && (
             <div className="table-responsive" id="attendance-table-container" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
               {data.reduce((sum, r) => sum + r.TOTAL_WORKERS, 0) === 0 && !isLoading ? (
-                /* EMPTY STATE UI */
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 20px', color: 'var(--text-secondary)' }}>
-                  <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                    <ClipboardList size={40} style={{ opacity: 0.5 }} />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 16px', color: 'var(--text-secondary)' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--bg-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '10px' }}>
+                    <ClipboardList size={20} style={{ opacity: 0.5 }} />
                   </div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: 'var(--text-primary)', marginBottom: '8px' }}>{lang === 'id' ? 'Belum Ada Catatan Kehadiran' : 'No Attendance Records'}</h3>
-                  <p style={{ fontSize: '13px', textAlign: 'center', maxWidth: '340px' }}>
+                  <h3 style={{ fontSize: '13px', fontWeight: 650, color: 'var(--text-primary)', marginBottom: '4px' }}>{lang === 'id' ? 'Belum Ada Catatan Kehadiran' : 'No Attendance Records'}</h3>
+                  <p style={{ fontSize: '11.5px', textAlign: 'center', maxWidth: '340px' }}>
                     {lang === 'id' ? `Catatan kehadiran harian untuk tanggal ${dateStr} belum tersedia atau belum diproses.` : `Daily attendance records for ${dateStr} are not available or not yet processed.`}
                   </p>
                 </div>

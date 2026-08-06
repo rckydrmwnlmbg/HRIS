@@ -1,0 +1,339 @@
+{
+  "version": 1,
+  "last_updated": "2026-08-06T17:31:11.075Z",
+  "glossary": [
+    {
+      "term": "anak gudang",
+      "meaning": "Bagian WAREHOUSE, FABRIC, ACCESSORIES, MATERIAL MGMT",
+      "added_at": "2026-08-06"
+    },
+    {
+      "term": "seksi jahit",
+      "meaning": "Bagian SEWING (Line 01 s/d Line 18, BUTTON, PATTERN SEAMER)",
+      "added_at": "2026-08-06"
+    },
+    {
+      "term": "seksi potong",
+      "meaning": "Bagian CUTTING (CUTTING, GELAR, MARKER, NUMBERING, RELAX, BANDLELING)",
+      "added_at": "2026-08-06"
+    },
+    {
+      "term": "spv",
+      "meaning": "Supervisor / Kepala Bagian (kategori ALL IN tunjangan tetap)",
+      "added_at": "2026-08-06"
+    },
+    {
+      "term": "mekanik",
+      "meaning": "Bagian MEKANIK / Maintenance mesin pabrik",
+      "added_at": "2026-08-06"
+    }
+  ],
+  "learned_patterns": [
+    {
+      "id": "perf-allin-harian",
+      "keywords": [
+        "performa",
+        "terbaik",
+        "all in",
+        "harian",
+        "rajin"
+      ],
+      "intent": "Ranking berimbang karyawan terbaik kategori ALL IN (kehadiran 23 hari) dan Harian (lembur tertinggi) menggunakan CTE ROW_NUMBER() PARTITION BY KATEGORI",
+      "sql_snippet": "WITH PerfRank AS (...) SELECT NIK, NAMA, BAGIAN, KATEGORI, TOTAL_HADIR, TOTAL_TERLAMBAT_MENIT, TOTAL_JAM_LEMBUR FROM PerfRank WHERE RANK_KATEGORI <= 15",
+      "usage_count": 5,
+      "likes": 3,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "lembur-mingguan-full",
+      "keywords": [
+        "lembur",
+        "minggu",
+        "rekap lembur",
+        "data lembur"
+      ],
+      "intent": "Tarik seluruh karyawan yang lembur pada periode tanggal tanpa limit SELECT TOP 100 agar user dapat mengunduh seluruh data (misal 1.640 karyawan) ke Excel",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, ... SUM(OT_1+OT_2+OT_3+OT_4) AS TOTAL_JAM_LEMBUR FROM TR_ABSEN a JOIN EMP_TABLE e ... WHERE DATE_TRANS BETWEEN ... GROUP BY ... ORDER BY TOTAL_JAM_LEMBUR DESC",
+      "usage_count": 5,
+      "likes": 7,
+      "dislikes": 1,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786028819943",
+      "keywords": [
+        "berapa",
+        "total",
+        "karyawan",
+        "aktif",
+        "saat"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa total karyawan aktif saat ini?\"",
+      "sql_snippet": "SELECT COUNT(*) AS TOTAL_AKTIF FROM EMP_TABLE e WHERE e.Act_NonAct = 1 AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= CONVERT(varchar",
+      "usage_count": 2,
+      "likes": 3,
+      "dislikes": 1,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786028957138",
+      "keywords": [
+        "tolong",
+        "list",
+        "karyawan",
+        "dengan",
+        "performa"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"tolong list karyawan dengan performa terbaik, baik itu ALL I\"",
+      "sql_snippet": "WITH PerfRank AS ( SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, CASE WHEN RTRIM(e.ALL_IN) = '1' OR RTRIM(e.ALL",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786029025518",
+      "keywords": [
+        "tolong",
+        "buatkan",
+        "data",
+        "lembur",
+        "minggu"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"tolong buatkan data lembur di minggu ke tiga bulan juni 2026\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, CASE WHEN RTRIM(e.ALL_IN) = '1' OR RTRIM(e.ALL_IN) = 'Y' THEN 'AL",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786029548021",
+      "keywords": [
+        "tolong",
+        "buatkan",
+        "data",
+        "lembur",
+        "minggu"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"tolong buatkan data lembur di minggu ke tiga bulan juni 2026\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, CASE WHEN RTRIM(e.ALL_IN) = '1' OR RTRIM(e.ALL_IN) = 'Y' THEN 'AL",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786029873760",
+      "keywords": [
+        "tolong",
+        "buatkan",
+        "data",
+        "lembur",
+        "minggu"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"tolong buatkan data lembur di minggu ke tiga bulan juni 2026\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, CASE WHEN RTRIM(e.ALL_IN) = '1' OR RTRIM(e.ALL_IN) = 'Y' THEN 'AL",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786030692479",
+      "keywords": [
+        "tolong",
+        "buatkan",
+        "data",
+        "analysis",
+        "minggu"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"tolong buatkan data Analysis OT di minggu ke tiga bulan juni\"",
+      "sql_snippet": "WITH DailyOT AS ( SELECT RTRIM(a.EMP_CD) AS EMP_CD, a.DATE_TRANS, a.WORK_IN, a.WORK_OUT, DATEDIFF(MINUTE, a.WORK_IN, a.WORK_OUT) / 60.0 AS DURASI_JAM,",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786034086472",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "karyawan",
+        "widya",
+        "etika"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa gaji karyawan Widya Etika dibulan Juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, e.BS_SLR AS GAJI_POKOK, ISNULL(e.T1",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786034350354",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "karyawan",
+        "widya",
+        "etika"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa gaji karyawan Widya Etika dibulan Juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, e.BS_SLR AS GAJI_POKOK, ISNULL(e.T1",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786034404631",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "karyawan",
+        "widya",
+        "etika"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa gaji karyawan Widya Etika dibulan Juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, e.BS_SLR AS GAJI_POKOK, ISNULL(e.T1",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786036256806",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "karyawan",
+        "widya",
+        "etika"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa gaji karyawan Widya Etika dibulan Juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, e.BS_SLR AS GAJI_POKOK, ISNULL(e.T1",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786036390860",
+      "keywords": [
+        "karyawan",
+        "dengan",
+        "lembur",
+        "terbanyak",
+        "bulan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Karyawan dengan Lembur terbanyak di bulan Juni-juli \"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, CASE WHEN RTRIM(e.ALL_IN) = '1' OR RTRIM(e.ALL_IN) = 'Y' THEN 'AL",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786036654541",
+      "keywords": [
+        "ingin",
+        "laporan",
+        "absensi",
+        "bulan",
+        "juni"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Aku ingin laporan Absensi Bulan Juni untuk karyawan Widya Et\"",
+      "sql_snippet": "SELECT CONVERT(varchar(10), a.DATE_TRANS, 120) AS TANGGAL, RTRIM(a.STATUS_HARI) AS STATUS_HARI, CONVERT(varchar(5), a.WORK_IN, 108) AS JAM_MASUK, CONV",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786037431795",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "karyawan",
+        "widya",
+        "etika"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa gaji karyawan Widya Etika dibulan Juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, e.BS_SLR AS GAJI_POKOK, ISNULL(e.T1",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786037471075",
+      "keywords": [
+        "tolong",
+        "list",
+        "karyawan",
+        "dengan",
+        "performa"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"tolong list karyawan dengan performa terbaik, baik itu ALL I\"",
+      "sql_snippet": "WITH PerfRank AS ( SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, CASE WHEN RTRIM(e.ALL_IN) = '1' OR RTRIM(e.ALL",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    }
+  ],
+  "user_corrections": [
+    {
+      "id": "corr-act-nonact",
+      "topic": "Filter Karyawan Aktif",
+      "correction": "Wajib gunakan: e.Act_NonAct = 1 AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= CONVERT(varchar(10), GETDATE(), 120)) karena ada 1.270 mantan karyawan dengan DT_RSG lampau.",
+      "source": "user_correction",
+      "created_at": "2026-08-06"
+    },
+    {
+      "id": "corr-sunday-not-alpha",
+      "topic": "Hari Libur / Minggu di TR_ABSEN",
+      "correction": "Hari Minggu/libur tercatat di TR_ABSEN dengan WORK_IN IS NULL. JANGAN gunakan HAVING SUM(alpha) = 0 untuk filter sebulan penuh, melainkan ORDER BY COUNT(WORK_IN) DESC.",
+      "source": "user_correction",
+      "created_at": "2026-08-06"
+    },
+    {
+      "id": "corr-no-tables-in-chat",
+      "topic": "Tampilan Obrolan",
+      "correction": "Jangan tampilkan tabel di dalam chat bubble karena sempit. Terangkan temuan secara naratif dan serahkan data tabel lengkap ke tombol Unduh Laporan Lengkap Excel.",
+      "source": "user_correction",
+      "created_at": "2026-08-06"
+    },
+    {
+      "id": "corr-1786028804330",
+      "topic": "Koreksi untuk \"data lembur minggu 3\"",
+      "correction": "Format data narasi dan tombol Excel sudah sangat rapi.",
+      "source": "user_feedback_ui",
+      "created_at": "2026-08-06"
+    },
+    {
+      "id": "corr-1786029271905",
+      "topic": "Koreksi untuk \"data lembur minggu 3\"",
+      "correction": "Format data narasi dan tombol Excel sudah sangat rapi.",
+      "source": "user_feedback_ui",
+      "created_at": "2026-08-06"
+    },
+    {
+      "id": "corr-1786030652012",
+      "topic": "Koreksi untuk \"tolong buatkan data Analysis OT di mingg\"",
+      "correction": "Konteks terpotong",
+      "source": "user_feedback_ui",
+      "created_at": "2026-08-06"
+    },
+    {
+      "id": "corr-1786034170419",
+      "topic": "Koreksi untuk \"Berapa gaji karyawan Widya Etika dibulan\"",
+      "correction": "data masih salah",
+      "source": "user_feedback_ui",
+      "created_at": "2026-08-06"
+    }
+  ]
+}

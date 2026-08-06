@@ -1,15 +1,15 @@
 'use client';
-import React, { useState, useEffect, useMemo } from 'react';
-import { ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import React, { useState, useEffect } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context';
 import { t } from '@/lib/i18n';
 import {
   Users, UserCheck, UserX, Clock, TrendingUp,
-  AlertTriangle, ClipboardList, BarChart3, Plus, FileText, Settings, Sun, Moon, Zap,
+  AlertTriangle, ClipboardList, BarChart3, Plus, Settings,
   CloudDownload, X, CheckCircle, AlertCircle
 } from 'lucide-react';
-import type { DashboardStats, TrendAbsensi, Karyawan, JamKosongRecord, PerluPerhatianRecord } from '@/types';
+import type { DashboardStats, TrendAbsensi, JamKosongRecord, PerluPerhatianRecord } from '@/types';
 import styles from './dashboard.module.css';
 import JamKosongModal from '@/components/dashboard/JamKosongModal';
 import PerluPerhatianModal from '@/components/dashboard/PerluPerhatianModal';
@@ -77,17 +77,17 @@ export default function DashboardPage() {
       }
     } catch (err) {
       console.error('Failed to load dashboard stats', err);
-      setStats({ 
-        totalKaryawan: 0, 
-        karyawanAktif: 0, 
-        hadirHariIni: 0, 
-        alphaHariIni: 0, 
-        izinHariIni: 0, 
-        cutiHariIni: 0, 
-        sakitHariIni: 0, 
-        jamKosongHariIni: 0, 
+      setStats({
+        totalKaryawan: 0,
+        karyawanAktif: 0,
+        hadirHariIni: 0,
+        alphaHariIni: 0,
+        izinHariIni: 0,
+        cutiHariIni: 0,
+        sakitHariIni: 0,
+        jamKosongHariIni: 0,
         perluPerhatianHariIni: 0,
-        lemburBulanIni: 0, 
+        lemburBulanIni: 0,
         jamKosongList: [],
         perluPerhatianList: []
       });
@@ -142,7 +142,7 @@ export default function DashboardPage() {
           </div>
           <Skeleton width={120} height={40} />
         </div>
-        
+
         <Skeleton width="100%" height={240} style={{ borderRadius: 'var(--radius-xl)' }} />
 
         <div className={styles.statsGrid}>
@@ -161,7 +161,7 @@ export default function DashboardPage() {
 
   if (stats?.totalKaryawan === 0) {
     return (
-      <EmptyState 
+      <EmptyState
         icon="user"
         title={lang === 'id' ? 'Belum Ada Data Karyawan' : 'No Employee Data Yet'}
         description={lang === 'id' ? 'Data karyawan belum tersedia. Mulai tambahkan karyawan baru untuk menampilkan ringkasan dasbor.' : 'No employee data available. Add a new employee to see dashboard statistics.'}
@@ -178,37 +178,32 @@ export default function DashboardPage() {
     <div className="animate-fadeIn">
       {/* ========== TOP BAR ========== */}
       <div className={styles.pageHeader}>
-        <div>
-          <h1 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0, lineHeight: 1.2 }}>
-            {dateStr}
-          </h1>
-
-        </div>
-
-
+        <h1 style={{ fontSize: '1.35rem', fontWeight: 700, letterSpacing: '-0.025em', margin: 0, lineHeight: 1.2 }}>
+          {dateStr}
+        </h1>
       </div>
 
-      {/* ========== HERO BANNER (Staffora-style) ========== */}
+      {/* ========== HERO BANNER ========== */}
       <div className={styles.heroBanner}>
         <div className={styles.heroBannerBg} />
         <div className={styles.heroContent}>
           <div className={styles.greeting}>
-            {greeting}, <strong>{userName}</strong>! 👋
+            {greeting}, <strong>{userName}</strong>!
           </div>
           <div className={styles.greetingDesc}>
             {lang === 'id'
-              ? (stats?.isFingerprintIntegrated 
-                  ? `Terdapat ${stats?.jamKosongHariIni || 0} catatan presensi yang memerlukan peninjauan hari ini. Semoga aktivitas kerja Anda berjalan lancar dan produktif.`
-                  : `Data kehadiran hari ini belum diperbarui. Silakan klik tombol 'Sinkronisasi Kehadiran' untuk memuat data terkini.`)
+              ? (stats?.isFingerprintIntegrated
+                ? `Terdapat ${stats?.jamKosongHariIni || 0} catatan presensi yang memerlukan peninjauan hari ini. Operasional pabrik & HR terkelola optimal.`
+                : `Data kehadiran hari ini belum disinkronkan dari mesin fingerprint. Klik tombol sinkronisasi untuk memuat data terkini.`)
               : (stats?.isFingerprintIntegrated
-                  ? `You have ${stats?.jamKosongHariIni || 0} attendance records requiring review today. Wishing you a productive and smooth workday.`
-                  : `Today's attendance records have not been synchronized. Please click 'Sync Attendance' to load the latest data.`)}
+                ? `You have ${stats?.jamKosongHariIni || 0} attendance records requiring review today. Factory and HR operations running optimally.`
+                : `Today's attendance records have not been synchronized. Please click 'Sync Attendance' to load the latest data.`)}
           </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className={`${styles.heroCta} ${styles.heroCtaPrimary}`} onClick={handleOpenSyncModal}>
+          <div className={styles.heroActions}>
+            <button className="btn btn-primary" onClick={handleOpenSyncModal}>
               <CloudDownload size={15} /> {lang === 'id' ? 'Sinkronisasi Kehadiran' : 'Sync Attendance'}
             </button>
-            <button className={`${styles.heroCta} ${styles.heroCtaSecondary}`} onClick={() => router.push('/karyawan/baru')}>
+            <button className="btn btn-secondary" onClick={() => router.push('/karyawan/baru')}>
               <Plus size={15} /> {lang === 'id' ? 'Tambah Karyawan' : 'Add Employee'}
             </button>
           </div>
@@ -229,7 +224,7 @@ export default function DashboardPage() {
       {/* ========== STAT CARDS (4 KPI CARDS) ========== */}
       <div className={`${styles.statsGrid} stagger-1`}>
         <StatCard
-          icon={<Users size={28} />}
+          icon={<Users size={18} />}
           label={t(lang, 'totalKaryawan')}
           value={stats?.karyawanAktif || 0}
           sub={lang === 'id' ? 'Karyawan Aktif' : 'Active Employees'}
@@ -238,30 +233,30 @@ export default function DashboardPage() {
           lang={lang}
         />
         <StatCard
-          icon={<UserCheck size={28} />}
+          icon={<UserCheck size={18} />}
           label={t(lang, 'hadirHariIni')}
           value={stats?.hadirHariIni || 0}
-          sub={`${stats?.karyawanAktif ? Math.round(((stats?.hadirHariIni || 0) / stats.karyawanAktif) * 100) : 0}% ${lang === 'id' ? 'tingkat kehadiran' : 'attendance rate'}`}
+          sub={`${stats?.karyawanAktif ? Math.round(((stats?.hadirHariIni || 0) / stats.karyawanAktif) * 100) : 0}% ${lang === 'id' ? 'kehadiran' : 'rate'}`}
           color="green"
           onClick={() => router.push('/absensi')}
           integrated={stats?.isFingerprintIntegrated ?? false}
           lang={lang}
         />
         <StatCard
-          icon={<UserX size={28} />}
-          label={lang === 'id' ? 'Ketidakhadiran (Alpha)' : 'Absences (Alpha)'}
+          icon={<UserX size={18} />}
+          label={lang === 'id' ? 'Ketidakhadiran' : 'Absences'}
           value={stats?.alphaHariIni || 0}
-          sub={`${stats?.izinHariIni || 0} ${lang === 'id' ? 'izin, cuti & sakit' : 'excused leave'}`}
+          sub={`${stats?.izinHariIni || 0} ${lang === 'id' ? 'izin & sakit' : 'leave & sick'}`}
           color="red"
           onClick={() => router.push('/absensi')}
           integrated={stats?.isFingerprintIntegrated ?? false}
           lang={lang}
         />
         <StatCard
-          icon={<Clock size={28} />}
+          icon={<Clock size={18} />}
           label={t(lang, 'jamKosong')}
           value={stats?.jamKosongHariIni || 0}
-          sub={lang === 'id' ? 'Presensi belum lengkap' : 'Incomplete clock in/out'}
+          sub={lang === 'id' ? 'Perlu konfirmasi' : 'Needs review'}
           color="orange"
           onClick={() => setShowJamKosongModal(true)}
           highlight={(stats?.isFingerprintIntegrated ?? false) && (stats?.jamKosongHariIni || 0) > 0}
@@ -301,56 +296,28 @@ export default function DashboardPage() {
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="gradAlpha" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="var(--status-alpha)" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="var(--status-alpha)" stopOpacity={1} />
-                    </linearGradient>
-                    <linearGradient id="gradSakit" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="var(--status-sakit)" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="var(--status-sakit)" stopOpacity={1} />
-                    </linearGradient>
-                    <linearGradient id="gradIzin" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="var(--status-izin)" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="var(--status-izin)" stopOpacity={1} />
-                    </linearGradient>
-                    <linearGradient id="gradCuti" x1="0" y1="0" x2="1" y2="0">
-                      <stop offset="0%" stopColor="var(--status-cuti)" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="var(--status-cuti)" stopOpacity={1} />
-                    </linearGradient>
-
-                    <linearGradient id="fillAlpha" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--status-alpha)" stopOpacity={0.15} />
-                      <stop offset="100%" stopColor="var(--status-alpha)" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="fillSakit" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--status-sakit)" stopOpacity={0.15} />
-                      <stop offset="100%" stopColor="var(--status-sakit)" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="fillIzin" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--status-izin)" stopOpacity={0.15} />
-                      <stop offset="100%" stopColor="var(--status-izin)" stopOpacity={0} />
-                    </linearGradient>
-                    <linearGradient id="fillCuti" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="var(--status-cuti)" stopOpacity={0.15} />
-                      <stop offset="100%" stopColor="var(--status-cuti)" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
-                  <CartesianGrid vertical={false} stroke="var(--border-color)" strokeDasharray="3 3" opacity={0.15} />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'var(--bg-card)', borderColor: 'var(--border-color)', borderRadius: 8, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-                    itemStyle={{ fontSize: 13, fontWeight: 600 }}
-                  />
-                  
-                  <Area type="monotone" dataKey="alpha" stroke="url(#gradAlpha)" strokeWidth={2} fill="url(#fillAlpha)" dot={false} activeDot={{ r: 6, strokeWidth: 2, fill: 'var(--bg-card)', stroke: 'var(--status-alpha)' }} name={lang === 'id' ? 'Alpha' : 'Absent'} />
-                  <Area type="monotone" dataKey="sakit" stroke="url(#gradSakit)" strokeWidth={2} fill="url(#fillSakit)" dot={false} activeDot={{ r: 6, strokeWidth: 2, fill: 'var(--bg-card)', stroke: 'var(--status-sakit)' }} name={lang === 'id' ? 'Sakit' : 'Sick'} />
-                  <Area type="monotone" dataKey="izin" stroke="url(#gradIzin)" strokeWidth={2} fill="url(#fillIzin)" dot={false} activeDot={{ r: 6, strokeWidth: 2, fill: 'var(--bg-card)', stroke: 'var(--status-izin)' }} name={lang === 'id' ? 'Izin' : 'Permit'} />
-                  <Area type="monotone" dataKey="cuti" stroke="url(#gradCuti)" strokeWidth={2} fill="url(#fillCuti)" dot={false} activeDot={{ r: 6, strokeWidth: 2, fill: 'var(--bg-card)', stroke: 'var(--status-cuti)' }} name={lang === 'id' ? 'Cuti' : 'Leave'} />
-                </ComposedChart>
-              </ResponsiveContainer>
+                              <LineChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--text-muted)' }} allowDecimals={false} />
+                                <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" opacity={0.4} />
+                                <Tooltip
+                                  contentStyle={{
+                                    background: 'var(--glass-bg)',
+                                    border: '1px solid var(--glass-border)',
+                                    borderRadius: 8,
+                                    fontSize: 12,
+                                    boxShadow: '0 0 0 1px var(--glass-edge-light), 0 0 0 2px var(--glass-edge-dark), 0 4px 16px rgba(0,0,0,0.1)',
+                                    backdropFilter: 'blur(40px) saturate(180%)',
+                                    WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+                                  }}
+                                  itemStyle={{ fontSize: 13, fontWeight: 600 }}
+                                />
+                                <Line type="monotone" dataKey="alpha" stroke="var(--status-alpha)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--bg-secondary)', stroke: 'var(--status-alpha)' }} name={lang === 'id' ? 'Alpha' : 'Absent'} />
+                                <Line type="monotone" dataKey="sakit" stroke="var(--status-sakit)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--bg-secondary)', stroke: 'var(--status-sakit)' }} name={lang === 'id' ? 'Sakit' : 'Sick'} />
+                                <Line type="monotone" dataKey="izin" stroke="var(--status-izin)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--bg-secondary)', stroke: 'var(--status-izin)' }} name={lang === 'id' ? 'Izin' : 'Permit'} />
+                                <Line type="monotone" dataKey="cuti" stroke="var(--status-cuti)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--bg-secondary)', stroke: 'var(--status-cuti)' }} name={lang === 'id' ? 'Cuti' : 'Leave'} />
+                              </LineChart>
+                            </ResponsiveContainer>
             )}
           </div>
         </div>
@@ -420,8 +387,8 @@ export default function DashboardPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
             <AlertTriangle size={18} color="var(--warning)" />
             <h3>{t(lang, 'perhatian')}</h3>
-            <span 
-              className="badge badge-warning" 
+            <span
+              className="badge badge-warning"
               style={{ marginLeft: 'auto', cursor: perluPerhatian.length > 0 ? 'pointer' : 'default' }}
               onClick={() => perluPerhatian.length > 0 && setShowPerluPerhatianModal(true)}
             >
@@ -429,8 +396,8 @@ export default function DashboardPage() {
             </span>
           </div>
           <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14 }}>
-            {lang === 'id' 
-              ? 'Daftar karyawan dengan penyesuaian jam kerja (pulang lebih awal, keterlambatan, atau durasi singkat).' 
+            {lang === 'id'
+              ? 'Daftar karyawan dengan penyesuaian jam kerja (pulang lebih awal, keterlambatan, atau durasi singkat).'
               : 'Employees with attendance anomalies (early departure, late arrival, or short duration).'}
           </p>
           {!(stats?.isFingerprintIntegrated ?? false) ? (
@@ -442,8 +409,8 @@ export default function DashboardPage() {
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14, maxWidth: 300, margin: '0 auto 14px' }}>
                 {lang === 'id' ? 'Silakan lakukan sinkronisasi kehadiran terlebih dahulu untuk meninjau data kehadiran.' : 'Please synchronize attendance first to review attendance records.'}
               </div>
-              <button 
-                className="btn btn-primary btn-sm" 
+              <button
+                className="btn btn-primary btn-sm"
                 style={{ fontSize: 12, padding: '6px 16px', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}
                 onClick={() => router.push('/absensi?sync=true')}
               >
@@ -469,14 +436,14 @@ export default function DashboardPage() {
                     <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.EMP_NM}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{k.EMP_CD} · {k.SEC_DESC || k.SEC_CD}</div>
                   </div>
-                  <span 
+                  <span
                     className={
-                      k.jenis_anomali === 'PULANG_CEPAT' 
-                        ? 'badge badge-warning' 
-                        : k.jenis_anomali === 'TERLAMBAT' 
-                          ? 'badge badge-danger' 
+                      k.jenis_anomali === 'PULANG_CEPAT'
+                        ? 'badge badge-warning'
+                        : k.jenis_anomali === 'TERLAMBAT'
+                          ? 'badge badge-danger'
                           : 'badge badge-info'
-                    } 
+                    }
                     style={{ fontSize: 10, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                   >
                     {k.keterangan || (k.jenis_anomali === 'PULANG_CEPAT' ? 'Pulang Lebih Awal' : k.jenis_anomali === 'TERLAMBAT' ? 'Terlambat Hadir' : 'Durasi Singkat')}
@@ -484,8 +451,8 @@ export default function DashboardPage() {
                 </div>
               ))}
               {perluPerhatian.length > 5 && (
-                <button 
-                  className="btn btn-secondary btn-sm" 
+                <button
+                  className="btn btn-secondary btn-sm"
                   style={{ width: '100%', marginTop: 6, fontSize: 12, padding: '6px 12px', borderRadius: 'var(--radius-md)', cursor: 'pointer' }}
                   onClick={() => setShowPerluPerhatianModal(true)}
                 >
@@ -576,9 +543,9 @@ export default function DashboardPage() {
                     const result = await res.json();
                     if (result.success) {
                       showToast(
-                        lang === 'id' 
-                          ? 'Sinkronisasi presensi untuk seluruh karyawan aktif berhasil diselesaikan.' 
-                          : 'Attendance synchronization for all active employees completed successfully.', 
+                        lang === 'id'
+                          ? 'Sinkronisasi presensi untuk seluruh karyawan aktif berhasil diselesaikan.'
+                          : 'Attendance synchronization for all active employees completed successfully.',
                         'success'
                       );
                       setShowSyncModal(false);
@@ -630,39 +597,55 @@ function StatCard({
   lang?: string;
 }) {
   const colors = {
-    blue: { accent: '#3b82f6', glow: 'rgba(59,130,246,0.12)' },
-    green: { accent: '#10b981', glow: 'rgba(16,185,129,0.12)' },
-    red: { accent: '#ef4444', glow: 'rgba(239,68,68,0.12)' },
-    yellow: { accent: '#ca8a04', glow: 'rgba(202,138,4,0.12)' },
-    orange: { accent: '#f59e0b', glow: 'rgba(245,158,11,0.12)' },
-    purple: { accent: '#8b5cf6', glow: 'rgba(139,92,246,0.12)' },
+    blue: { accent: '#2563eb', bg: 'rgba(37, 99, 235, 0.1)', border: 'rgba(37, 99, 235, 0.22)' },
+    green: { accent: '#059669', bg: 'rgba(5, 150, 105, 0.1)', border: 'rgba(5, 150, 105, 0.22)' },
+    red: { accent: '#dc2626', bg: 'rgba(220, 38, 38, 0.1)', border: 'rgba(220, 38, 38, 0.22)' },
+    yellow: { accent: '#d97706', bg: 'rgba(217, 119, 6, 0.1)', border: 'rgba(217, 119, 6, 0.22)' },
+    orange: { accent: '#ea580c', bg: 'rgba(234, 88, 12, 0.1)', border: 'rgba(234, 88, 12, 0.22)' },
+    purple: { accent: '#7c3aed', bg: 'rgba(124, 58, 237, 0.1)', border: 'rgba(124, 58, 237, 0.22)' },
   };
   const c = colors[color];
 
   return (
     <div
-      className={`glass-card stat-card ${highlight ? styles.highlighted : ''}`}
+      className={`glass-card ${styles.statCardModern} ${highlight ? styles.highlighted : ''}`}
       style={{
         cursor: onClick ? 'pointer' : 'default',
-        borderColor: highlight ? `${c.accent}4d` : undefined,
+        borderColor: highlight ? `${c.accent}66` : undefined,
       }}
       onClick={onClick}
     >
-      <div className="stat-label">{label}</div>
+      <div className={styles.statTopRow}>
+        <span className={styles.statLabelModern}>{label}</span>
+        <div
+          className={styles.statIconBox}
+          style={{
+            background: c.bg,
+            color: c.accent,
+            border: `1px solid ${c.border}`
+          }}
+        >
+          {icon}
+        </div>
+      </div>
+
       {integrated ? (
         <>
-          <div className="stat-value" style={{ color: c.accent }}>{value}</div>
-          <div className="stat-sub">{sub}</div>
+          <div className={styles.statValueModern} style={{ color: c.accent }}>
+            {value.toLocaleString()}
+          </div>
+          <div className={styles.statSubModern}>
+            {sub}
+          </div>
         </>
       ) : (
         <>
-          <div className="stat-value" style={{ color: 'var(--text-muted)' }}>–</div>
-          <div className="stat-sub" style={{ fontStyle: 'italic', color: 'var(--text-muted)', fontSize: 10 }}>{lang === 'id' ? 'Data belum tersinkron' : 'Data not synchronized'}</div>
+          <div className={styles.statValueModern} style={{ color: 'var(--text-muted)' }}>–</div>
+          <div className={styles.statSubModern} style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>
+            {lang === 'id' ? 'Data belum tersinkron' : 'Data not synchronized'}
+          </div>
         </>
       )}
-      <div className="stat-icon" style={{ color: c.accent }}>
-        {icon}
-      </div>
     </div>
   );
 }

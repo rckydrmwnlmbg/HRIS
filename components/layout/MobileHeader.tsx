@@ -42,15 +42,15 @@ export default function MobileHeader({ onMenuClick }: MobileHeaderProps) {
             cursor: 'pointer'
           }}
         >
-          <Menu size={24} />
+          <Menu size={18} />
         </button>
-        <div style={{ fontWeight: 800, fontSize: '18px', color: 'var(--accent-dark)', letterSpacing: '-0.5px' }}>
+        <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
           HRIS <span style={{ color: 'var(--accent)' }}>TMNB</span>
         </div>
       </div>
       
       {/* Profil Mini placeholder */}
-      <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--bg-card-hover)', border: '1px solid var(--border)' }} />
+      <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--bg-card-hover)', border: '1px solid var(--border)' }} />
     </div>
   );
 }

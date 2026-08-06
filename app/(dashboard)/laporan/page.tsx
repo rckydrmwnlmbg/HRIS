@@ -24,6 +24,8 @@ export default function LaporanPage() {
   const [endDate, setEndDate] = useState(today);
   
   const [otDate, setOtDate] = useState(today);
+  const [autoCorrection, setAutoCorrection] = useState(true);
+  const [applyToDb, setApplyToDb] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [previewData, setPreviewData] = useState<any[] | null>(null);
   
@@ -50,7 +52,7 @@ export default function LaporanPage() {
       if (tab === 'cuti' || tab === 'skorsing') {
         url += `&start=${startDate}&end=${endDate}`;
       } else if (tab === 'ot') {
-        url += `&date=${otDate}`;
+        url += `&date=${otDate}&autoCorrection=${autoCorrection}&applyToDb=${applyToDb}`;
       } else {
         url += `&bulan=${bulan}&tahun=${tahun}`;
         if (filterShift) url += `&shift=${filterShift}`;
@@ -75,7 +77,7 @@ export default function LaporanPage() {
       if (tab === 'cuti' || tab === 'skorsing') {
         url += `&start=${startDate}&end=${endDate}`;
       } else if (tab === 'ot') {
-        url += `&date=${otDate}`;
+        url += `&date=${otDate}&autoCorrection=${autoCorrection}&applyToDb=${applyToDb}`;
       } else {
         url += `&bulan=${bulan}&tahun=${tahun}`;
         if (filterShift) url += `&shift=${filterShift}`;
@@ -86,7 +88,29 @@ export default function LaporanPage() {
       const objUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objUrl;
-      a.download = `Laporan_${tab}_${tahun}${String(bulan).padStart(2, '0')}.xlsx`;
+
+      if (tab === 'ot') {
+        const parts = otDate.split('-');
+        const inputDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        const day = inputDate.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        const startD = new Date(inputDate);
+        startD.setDate(inputDate.getDate() + diff);
+        const endD = new Date(startD);
+        endD.setDate(startD.getDate() + 6);
+        
+        const fmt = (d: Date) => {
+          const dd = String(d.getDate()).padStart(2, '0');
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const yyyy = d.getFullYear();
+          return `${dd}-${mm}-${yyyy}`;
+        };
+        
+        a.download = `Laporan Analysis OT ${fmt(startD)} sd ${fmt(endD)}.xlsx`;
+      } else {
+        a.download = `Laporan_${tab}_${tahun}${String(bulan).padStart(2, '0')}.xlsx`;
+      }
+
       a.click();
       window.URL.revokeObjectURL(objUrl);
     } catch (e) {
@@ -107,55 +131,55 @@ export default function LaporanPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '24px', height: 'calc(100vh - 130px)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '290px minmax(0, 1fr)', gap: '20px', minHeight: 'calc(100vh - 150px)', height: 'calc(100vh - 150px)' }}>
         {/* Panel Filter */}
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
-          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-            <h3 style={{ margin: 0, fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Filter size={18} /> {lang === 'id' ? 'Parameter Laporan' : 'Report Parameters'}
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+            <h3 style={{ margin: 0, fontWeight: 650, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Filter size={17} /> {lang === 'id' ? 'Parameter Laporan' : 'Report Parameters'}
             </h3>
           </div>
-          <div style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div className="form-group">
               <label className="form-label">{lang === 'id' ? 'Jenis Laporan' : 'Report Type'}</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                 <button 
                   className={`btn ${tab === 'absensi' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => { setTab('absensi'); setPreviewData(null); }}
-                  style={{ display: 'flex', flexDirection: 'column', padding: '12px 8px', height: 'auto', gap: '6px' }}
+                  style={{ display: 'flex', flexDirection: 'column', padding: '10px 8px', height: 'auto', gap: '5px', fontSize: '12px' }}
                 >
-                  <FileText size={20} />
-                  <span>{lang === 'id' ? 'Rekap Presensi' : 'Attendance Summary'}</span>
+                  <FileText size={18} />
+                  <span>{lang === 'id' ? 'Rekap Presensi' : 'Attendance'}</span>
                 </button>
                 <button 
                   className={`btn ${tab === 'ot' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => { setTab('ot'); setPreviewData(null); }}
-                  style={{ display: 'flex', flexDirection: 'column', padding: '12px 8px', height: 'auto', gap: '6px' }}
+                  style={{ display: 'flex', flexDirection: 'column', padding: '10px 8px', height: 'auto', gap: '5px', fontSize: '12px' }}
                 >
-                  <BarChart3 size={20} />
-                  <span>{lang === 'id' ? 'Analisis Lembur' : 'OT Analysis'}</span>
+                  <BarChart3 size={18} />
+                  <span>{lang === 'id' ? 'Rekap Lembur' : 'Overtime'}</span>
                 </button>
                 <button 
                   className={`btn ${tab === 'cuti' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => { setTab('cuti'); setPreviewData(null); }}
-                  style={{ display: 'flex', flexDirection: 'column', padding: '12px 8px', height: 'auto', gap: '6px' }}
+                  style={{ display: 'flex', flexDirection: 'column', padding: '10px 8px', height: 'auto', gap: '5px', fontSize: '12px' }}
                 >
-                  <CalendarIcon size={20} />
-                  <span>{lang === 'id' ? 'Rekap Cuti' : 'Leave Summary'}</span>
+                  <CalendarIcon size={18} />
+                  <span>{lang === 'id' ? 'Rekap Cuti' : 'Leave'}</span>
                 </button>
                 <button 
                   className={`btn ${tab === 'skorsing' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => { setTab('skorsing'); setPreviewData(null); }}
-                  style={{ display: 'flex', flexDirection: 'column', padding: '12px 8px', height: 'auto', gap: '6px' }}
+                  style={{ display: 'flex', flexDirection: 'column', padding: '10px 8px', height: 'auto', gap: '5px', fontSize: '12px' }}
                 >
-                  <FileText size={20} />
-                  <span>{lang === 'id' ? 'Penegakan Disiplin' : 'Disciplinary Summary'}</span>
+                  <FileText size={18} />
+                  <span>{lang === 'id' ? 'Disiplin' : 'Disciplinary'}</span>
                 </button>
               </div>
             </div>
 
             {tab === 'cuti' || tab === 'skorsing' ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
                 <div className="form-group">
                   <label className="form-label">{lang === 'id' ? 'Dari Tanggal' : 'Start Date'}</label>
                   <input type="date" className="form-input" value={startDate} onChange={e => { setStartDate(e.target.value); setPreviewData(null); }} />
@@ -166,14 +190,127 @@ export default function LaporanPage() {
                 </div>
               </div>
             ) : tab === 'ot' ? (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group">
-                  <label className="form-label">{lang === 'id' ? 'Pilih Tanggal (Rentang 1 Pekan: Senin s/d Minggu)' : 'Select Date (Auto Full Week: Mon - Sun)'}</label>
+                  <label className="form-label">{lang === 'id' ? 'Pilih Tanggal (Rentang 1 Pekan)' : 'Select Date (1 Week)'}</label>
                   <input type="date" className="form-input" value={otDate} onChange={e => { setOtDate(e.target.value); setPreviewData(null); }} />
+                </div>
+
+                {/* Toggle Koreksi Otomatis Presensi & Lembur */}
+                <div style={{
+                  background: 'var(--table-row-hover, rgba(56, 189, 248, 0.04))',
+                  border: '1px solid var(--border)',
+                  borderRadius: '10px',
+                  padding: '12px 14px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 650, color: 'var(--text-primary)' }}>
+                      {lang === 'id' ? 'Koreksi Otomatis Presensi' : 'Auto Correction'}
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={autoCorrection}
+                      onClick={() => { setAutoCorrection(!autoCorrection); setPreviewData(null); }}
+                      style={{
+                        width: '40px',
+                        height: '22px',
+                        borderRadius: '12px',
+                        background: autoCorrection ? 'var(--primary, #0284c7)' : 'rgba(148, 163, 184, 0.3)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        position: 'relative',
+                        padding: '2px',
+                        transition: 'background-color 0.2s ease',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        flexShrink: 0
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: 'block',
+                          width: '18px',
+                          height: '18px',
+                          borderRadius: '50%',
+                          background: '#ffffff',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                          transform: autoCorrection ? 'translateX(18px)' : 'translateX(0px)',
+                          transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                        }}
+                      />
+                    </button>
+                  </div>
+                  <div style={{ fontSize: '11px', lineHeight: '1.4', color: autoCorrection ? 'var(--accent)' : 'var(--text-muted)' }}>
+                    {autoCorrection 
+                      ? (lang === 'id' ? '🟢 ON: Standar pembulatan audit (Compliance).' : '🟢 ON: Compliance audit rounding.')
+                      : (lang === 'id' ? '⚪ OFF: Real TR_ABSEN & desimal 0.5 asli INUS.' : '⚪ OFF: Real TR_ABSEN & native INUS 0.5 decimals.')
+                    }
+                  </div>
+
+                  {autoCorrection && (
+                    <div style={{
+                      marginTop: '6px',
+                      paddingTop: '10px',
+                      borderTop: '1px dashed var(--border)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}>
+                      <label style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '9px',
+                        cursor: 'pointer',
+                        userSelect: 'none'
+                      }}>
+                        <input 
+                          type="checkbox" 
+                          checked={applyToDb} 
+                          onChange={e => { setApplyToDb(e.target.checked); setPreviewData(null); }}
+                          style={{
+                            accentColor: 'var(--primary, #0284c7)',
+                            width: '16px',
+                            height: '16px',
+                            cursor: 'pointer',
+                            marginTop: '2px',
+                            flexShrink: 0
+                          }}
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                          <span style={{
+                            fontSize: '12px',
+                            fontWeight: 650,
+                            color: applyToDb ? 'var(--text-primary)' : 'var(--text-secondary)',
+                            lineHeight: '1.3'
+                          }}>
+                            {lang === 'id' ? 'Sinkronkan Jam Kerja ke Database Presensi' : 'Sync Working Hours to Attendance Database'}
+                          </span>
+                          <span style={{
+                            fontSize: '11px',
+                            lineHeight: '1.4',
+                            color: applyToDb ? 'var(--accent)' : 'var(--text-muted)'
+                          }}>
+                            {applyToDb 
+                              ? (lang === 'id' 
+                                  ? 'Data jam masuk, jam pulang, & durasi kerja di tabel presensi akan otomatis diperbarui mengikuti hasil koreksi ini.' 
+                                  : 'Clock-in, clock-out, & duration in attendance table will be automatically updated with these corrections.') 
+                              : (lang === 'id' 
+                                  ? 'Hanya terapkan pada berkas laporan; data jam kerja di database tetap mempertahankan catatan aslinya.' 
+                                  : 'Applied to the report file only; database attendance records will remain unchanged.')
+                            }
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                 <div className="form-group">
                   <label className="form-label">{t(lang, 'bulan')}</label>
                   <select className="form-select" value={bulan} onChange={e => { setBulan(Number(e.target.value)); setPreviewData(null); }}>
@@ -194,8 +331,8 @@ export default function LaporanPage() {
                 <label className="form-label">{lang === 'id' ? 'Jadwal Kerja' : 'Work Shift'}</label>
                 <select className="form-select" value={filterShift} onChange={e => { setFilterShift(e.target.value); setPreviewData(null); }}>
                   <option value="">{lang === 'id' ? 'Semua Jadwal Kerja' : 'All Work Shifts'}</option>
-                  <option value="pagi">{lang === 'id' ? 'Jadwal Pagi (Petugas Keamanan)' : 'Morning Shift (Security)'}</option>
-                  <option value="sore">{lang === 'id' ? 'Jadwal Sore / Malam (Petugas Keamanan)' : 'Afternoon/Night Shift (Security)'}</option>
+                  <option value="pagi">{lang === 'id' ? 'Jadwal Pagi (Security)' : 'Morning Shift (Security)'}</option>
+                  <option value="sore">{lang === 'id' ? 'Jadwal Sore / Malam (Security)' : 'Afternoon/Night Shift (Security)'}</option>
                 </select>
               </div>
             )}
@@ -216,23 +353,23 @@ export default function LaporanPage() {
               </select>
             </div>
 
-            <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <button className="btn btn-secondary" onClick={handleGenerate} disabled={generating}>
-                {generating ? <><Loader2 size={16} className="spinner" /> {lang === 'id' ? 'Memproses...' : 'Processing...'}</> : (lang === 'id' ? 'Tampilkan Pratinjau' : 'Show Preview')}
+                {generating ? <><Loader2 size={15} className="spinner" /> {lang === 'id' ? 'Memproses...' : 'Processing...'}</> : (lang === 'id' ? 'Tampilkan Pratinjau' : 'Show Preview')}
               </button>
               <button className="btn btn-primary" onClick={handleExport} disabled={generating}>
-                <Download size={16} /> {lang === 'id' ? 'Unduh Berkas Excel' : 'Export Excel'}
+                <Download size={15} /> {lang === 'id' ? 'Unduh Berkas Excel' : 'Export Excel'}
               </button>
             </div>
           </div>
         </div>
 
         {/* Panel Preview */}
-        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0, overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-            <h3 style={{ margin: 0, fontWeight: 600 }}>{lang === 'id' ? 'Pratinjau Data' : 'Data Preview'}</h3>
+            <h3 style={{ margin: 0, fontWeight: 650, fontSize: '15px' }}>{lang === 'id' ? 'Pratinjau Data' : 'Data Preview'}</h3>
           </div>
-          <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
+          <div style={{ padding: '16px', flex: 1, overflow: 'auto', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             {!previewData ? (
               <EmptyState 
                 icon="document"

@@ -5,6 +5,7 @@ import { useApp } from '@/lib/context';
 import Sidebar from '@/components/layout/Sidebar';
 import MobileHeader from '@/components/layout/MobileHeader';
 import Breadcrumb from '@/components/layout/Breadcrumb';
+import ChatAssistant from '@/components/chat/ChatAssistant';
 import styles from './layout.module.css';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -56,6 +57,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {children}
         </div>
       </main>
+      <ChatAssistant />
     </div>
   );
 }

@@ -120,42 +120,42 @@ export default function IDCardModal({ karyawan, onClose }: Props) {
         </filter>
       </svg>
       <div className="liquid-glass-modal" onClick={(e) => e.stopPropagation()} style={{ cursor: 'default' }}>
-        <button onClick={onClose} className="liquid-glass-close" style={{ position: 'absolute', right: '16px', top: '16px', cursor: 'pointer', zIndex: 10 }}>
-          <X size={24} />
+        <button onClick={onClose} className="liquid-glass-close" style={{ position: 'absolute', right: '12px', top: '12px', cursor: 'pointer', zIndex: 10 }}>
+          <X size={16} />
         </button>
 
-        <h2 className="liquid-glass-modal-title" style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 10, position: 'relative' }}>
-          <ImageIcon size={24} color="currentColor" />
+        <h2 className="liquid-glass-modal-title" style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 10, position: 'relative', fontSize: '14.5px', fontWeight: 700 }}>
+          <ImageIcon size={18} color="currentColor" />
           {lang === 'id' ? 'Generate ID Card' : 'Generate ID Card'}
         </h2>
-        <p className="liquid-glass-modal-desc" style={{ marginBottom: '24px', zIndex: 10, position: 'relative', fontSize: 12 }}>
+        <p className="liquid-glass-modal-desc" style={{ marginBottom: '16px', zIndex: 10, position: 'relative', fontSize: '11.5px' }}>
           {lang === 'id' ? 'Unggah foto karyawan. Sistem akan otomatis menghapus latar belakang dan memasukkannya ke template.' : 'Upload employee photo. The system will automatically remove the background and place it into the template.'}
         </p>
 
         {error && (
-          <div style={{ padding: '12px', backgroundColor: 'var(--danger-light)', color: 'var(--danger)', borderRadius: '8px', marginBottom: '16px', fontSize: '13px', zIndex: 10, position: 'relative' }}>
+          <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-light)', color: 'var(--danger)', borderRadius: 'var(--radius-sm)', marginBottom: '12px', fontSize: '11.5px', zIndex: 10, position: 'relative' }}>
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '20px', flexDirection: 'column', zIndex: 10, position: 'relative' }}>
+        <div style={{ display: 'flex', gap: '14px', flexDirection: 'column', zIndex: 10, position: 'relative' }}>
 
           {/* Upload Section */}
           {!resultImg && (
             <div
               style={{
-                border: '2px dashed var(--border-color)', borderRadius: '12px', padding: '32px',
-                textAlign: 'center', cursor: 'pointer', backgroundColor: 'var(--bg-card)'
+                border: '1.5px dashed var(--border)', borderRadius: 'var(--radius-md)', padding: '20px',
+                textAlign: 'center', cursor: 'pointer', backgroundColor: 'var(--bg-subtle)'
               }}
               onClick={() => fileInputRef.current?.click()}
             >
               <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" style={{ display: 'none' }} />
               {preview ? (
-                <img src={preview} alt="Preview" style={{ maxWidth: '200px', maxHeight: '200px', borderRadius: '8px', margin: '0 auto' }} />
+                <img src={preview} alt="Preview" style={{ maxWidth: '160px', maxHeight: '160px', borderRadius: 'var(--radius-sm)', margin: '0 auto' }} />
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: 'var(--text-muted)' }}>
-                  <Upload size={32} />
-                  <span>{lang === 'id' ? 'Klik untuk memilih foto (Pas Foto)' : 'Click to select photo (Portrait)'}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: 'var(--text-muted)' }}>
+                  <Upload size={24} />
+                  <span style={{ fontSize: '12px' }}>{lang === 'id' ? 'Klik untuk memilih foto (Pas Foto)' : 'Click to select photo (Portrait)'}</span>
                 </div>
               )}
             </div>

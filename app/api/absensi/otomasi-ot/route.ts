@@ -25,15 +25,12 @@ export async function POST(request: Request) {
       whereClause += ` AND RTRIM(t.EMP_CD) IN (${empList})`;
     }
 
-    // CTE for calculating bounds, OT and proposed times
+    // CTE for calculating bounds, OT, normalized times, and exact JAM_KERJA
     const baseQuery = `
       WITH CTE_Base AS (
         SELECT 
           t.ID, t.EMP_CD, t.DATE_TRANS, t.WORK_IN, t.WORK_OUT, 
           t.JAM_KERJA AS CURRENT_JAM_KERJA,
-          t.OT_1 AS CURRENT_OT_1,
-          t.OT_2 AS CURRENT_OT_2,
-          t.T_OT AS CURRENT_T_OT,
           t.JAM_MASUK,
           t.JAM_PULANG,
           
@@ -60,7 +57,7 @@ export async function POST(request: Request) {
           END AS K_OT
         FROM CTE_Base b
       ),
-      CTE_Final AS (
+      CTE_Proposed_Times AS (
         SELECT 
           c.*,
           -- WORK_IN dikoreksi jika bukan ALL IN:
@@ -84,14 +81,24 @@ export async function POST(request: Request) {
               THEN DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 899 as int), DATEADD(hour, c.K_OT, c.SCH_OUT))
             ELSE 
               DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 899 as int), c.SCH_OUT)
-          END AS PROPOSED_WORK_OUT,
-          
-          -- OT & JAM_KERJA Bersih (8 jam kerja normal + T_OT)
-          CASE WHEN c.K_OT >= 1 THEN 1.0 ELSE 0.0 END AS PROPOSED_OT_1,
-          CASE WHEN c.K_OT > 1 THEN CAST(c.K_OT - 1 AS NUMERIC(18,2)) ELSE 0.0 END AS PROPOSED_OT_2,
-          CASE WHEN c.K_OT > 0 THEN c.K_OT ELSE 0 END AS PROPOSED_T_OT,
-          CASE WHEN c.K_OT > 0 THEN 8 + c.K_OT ELSE 8 END AS PROPOSED_JAM_KERJA
+          END AS PROPOSED_WORK_OUT
         FROM CTE_Calculated c
+      ),
+      CTE_Final AS (
+        SELECT 
+          p.*,
+          -- RUMUS JAM_KERJA DESIMAL SEJATI (+0.50) Dihitung Langsung dari PROPOSED_WORK_IN & PROPOSED_WORK_OUT
+          CASE 
+            WHEN p.PROPOSED_WORK_IN IS NOT NULL AND p.PROPOSED_WORK_OUT IS NOT NULL AND p.PROPOSED_WORK_OUT > p.PROPOSED_WORK_IN
+            THEN 
+              CASE 
+                WHEN (DATEDIFF(minute, p.PROPOSED_WORK_IN, p.PROPOSED_WORK_OUT) / 60.0) - FLOOR(DATEDIFF(minute, p.PROPOSED_WORK_IN, p.PROPOSED_WORK_OUT) / 60.0) < 0.50 
+                THEN FLOOR(DATEDIFF(minute, p.PROPOSED_WORK_IN, p.PROPOSED_WORK_OUT) / 60.0) 
+                ELSE FLOOR(DATEDIFF(minute, p.PROPOSED_WORK_IN, p.PROPOSED_WORK_OUT) / 60.0) + 0.50 
+              END
+            ELSE 0
+          END AS PROPOSED_JAM_KERJA
+        FROM CTE_Proposed_Times p
       )
     `;
 
@@ -103,7 +110,6 @@ export async function POST(request: Request) {
         WHERE WORK_IN <> PROPOSED_WORK_IN 
            OR WORK_OUT <> PROPOSED_WORK_OUT
            OR CURRENT_JAM_KERJA <> PROPOSED_JAM_KERJA
-           OR ISNULL(CURRENT_T_OT, 0) <> PROPOSED_T_OT
         ORDER BY DATE_TRANS, EMP_CD
       `;
 
@@ -112,49 +118,41 @@ export async function POST(request: Request) {
     }
 
     if (action === 'apply') {
-      // Execute Atomic Transaction to AUDIT and UPDATE
+      // Execute Atomic Transaction to AUDIT and UPDATE (strictly WORK_IN, WORK_OUT, JAM_KERJA)
       const applySql = `
         ${baseQuery}
         BEGIN TRY
           BEGIN TRAN;
           
-          -- 1. Insert ke Tabel Audit (Hanya yang akan berubah)
-          INSERT INTO TR_AUDIT_ABSEN (
-            EMP_CD, DATE_TRANS, 
-            OLD_WORK_IN, OLD_WORK_OUT, OLD_JAM_KERJA,
-            NEW_WORK_IN, NEW_WORK_OUT, NEW_JAM_KERJA,
-            MODIFIED_BY, MODIFIED_DATE, REASON
-          )
-          SELECT 
-            c.EMP_CD, c.DATE_TRANS,
-            c.WORK_IN, c.WORK_OUT, c.CURRENT_JAM_KERJA,
-            c.PROPOSED_WORK_IN, c.PROPOSED_WORK_OUT, c.PROPOSED_JAM_KERJA,
-            'SYSTEM_OT_AUTO', GETDATE(), 'Otomasi Pembulatan Target OT (Integer Rounding)'
-          FROM CTE_Final c
-          WHERE c.WORK_IN <> c.PROPOSED_WORK_IN 
-             OR c.WORK_OUT <> c.PROPOSED_WORK_OUT
-             OR c.CURRENT_JAM_KERJA <> c.PROPOSED_JAM_KERJA
-             OR ISNULL(c.CURRENT_T_OT, 0) <> c.PROPOSED_T_OT;
+          -- 1. Insert ke Tabel Audit jika tabel ada
+          IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'TR_AUDIT_ABSEN')
+          BEGIN
+            INSERT INTO TR_AUDIT_ABSEN (
+              EMP_CD, DATE_TRANS, ACTION_TYPE,
+              OLD_VALUE, NEW_VALUE, REASON
+            )
+            SELECT 
+              c.EMP_CD, c.DATE_TRANS, 'OTOMASI_JAM_KERJA',
+              CONCAT('IN:', CONVERT(varchar(19), c.WORK_IN, 120), ' OUT:', CONVERT(varchar(19), c.WORK_OUT, 120), ' JK:', c.CURRENT_JAM_KERJA),
+              CONCAT('IN:', CONVERT(varchar(19), c.PROPOSED_WORK_IN, 120), ' OUT:', CONVERT(varchar(19), c.PROPOSED_WORK_OUT, 120), ' JK:', c.PROPOSED_JAM_KERJA),
+              'Otomasi Jam Kerja & Normalisasi Pendaratan Waktu'
+            FROM CTE_Final c
+            WHERE c.WORK_IN <> c.PROPOSED_WORK_IN 
+               OR c.WORK_OUT <> c.PROPOSED_WORK_OUT
+               OR c.CURRENT_JAM_KERJA <> c.PROPOSED_JAM_KERJA;
+          END;
 
-          -- 2. Update TR_ABSEN (Hanya yang akan berubah)
+          -- 2. Update TR_ABSEN (MURNI HANYA WORK_IN, WORK_OUT, JAM_KERJA - TIDAK MENYENTUH OT)
           UPDATE t
           SET 
             t.WORK_IN = c.PROPOSED_WORK_IN,
             t.WORK_OUT = c.PROPOSED_WORK_OUT,
-            t.OT_1 = c.PROPOSED_OT_1,
-            t.OT_2 = c.PROPOSED_OT_2,
-            t.OT_3 = 0.0,
-            t.OT_4 = 0.0,
-            t.OT_5 = 0.0,
-            t.OT_6 = 0.0,
-            t.T_OT = c.PROPOSED_T_OT,
             t.JAM_KERJA = c.PROPOSED_JAM_KERJA
           FROM TR_ABSEN t
           INNER JOIN CTE_Final c ON t.ID = c.ID
           WHERE c.WORK_IN <> c.PROPOSED_WORK_IN 
              OR c.WORK_OUT <> c.PROPOSED_WORK_OUT
-             OR c.CURRENT_JAM_KERJA <> c.PROPOSED_JAM_KERJA
-             OR ISNULL(c.CURRENT_T_OT, 0) <> c.PROPOSED_T_OT;
+             OR c.CURRENT_JAM_KERJA <> c.PROPOSED_JAM_KERJA;
           
           COMMIT TRAN;
         END TRY
@@ -170,7 +168,7 @@ export async function POST(request: Request) {
       `;
 
       await query(applySql, { startDate, endDate });
-      return NextResponse.json({ success: true, message: 'Otomasi OT berhasil diterapkan secara atomic.' });
+      return NextResponse.json({ success: true, message: 'Otomasi jam kerja & normalisasi berhasil diterapkan secara atomic.' });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

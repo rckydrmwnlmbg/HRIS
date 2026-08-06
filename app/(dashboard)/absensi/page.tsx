@@ -411,7 +411,7 @@ function AbsensiContent() {
 
         {selectedEmp && (
           <div style={{ marginTop: '12px', padding: '10px 14px', background: 'rgba(79,158,248,0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(79,158,248,0.2)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,var(--accent-blue),var(--accent-purple))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff', flexShrink: 0 }}>{selectedEmp.EMP_NM.charAt(0)}</div>
+            <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,var(--accent-blue),var(--accent-dark))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff', flexShrink: 0 }}>{selectedEmp.EMP_NM.charAt(0)}</div>
             <div>
               <div style={{ fontWeight: 600 }}>{selectedEmp.EMP_NM}</div>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{selectedEmp.EMP_CD} · {['1', 'Y', 'TRUE'].includes(String(selectedEmp.ALL_IN).toUpperCase()) ? 'ALL IN' : 'HARIAN'} · {selectedEmp.TEAM || selectedEmp.JOB_DESC || selectedEmp.JOB_CD} · {selectedEmp.SEC_DESC || selectedEmp.SEC_CD}</div>
@@ -767,7 +767,7 @@ function AbsensiContent() {
                 </div>
                 <div className="modal-body">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: 'rgba(79,158,248,0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(79,158,248,0.2)', marginBottom: '14px' }}>
-                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,var(--accent-blue),var(--accent-purple))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,var(--accent-blue),var(--accent-dark))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
                       {selectedEmp.EMP_NM.charAt(0)}
                     </div>
                     <div>

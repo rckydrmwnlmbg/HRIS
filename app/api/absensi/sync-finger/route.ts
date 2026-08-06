@@ -2,12 +2,14 @@ import { NextResponse } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
 
 /**
- * MESIN SINKRONISASI FINGERPRINT 1-KLIK (REVOLUSI ABSENSI)
- * Fitur:
- * 1. One-Way Sync (Murni SELECT dari Mesin Finger DataSolution)
- * 2. Pemisahan Fakta Skorsing vs Kosmetik OT
- * 3. Toleransi Pengacakan -10m & +15m
- * 4. Perhitungan ALL IN murni (Pembulatan FLOOR tanpa desimal recehan)
+ * MESIN SINKRONISASI FINGERPRINT 1-KLIK (HRIS WIDY)
+ * Fitur Utama:
+ * 1. MERGE WITH (HOLDLOCK) untuk memastikan baris TR_ABSEN yang belum ada dibuat secara atomic tanpa race-condition.
+ * 2. Normalisasi Waktu Masuk (06:50 - 06:59) dan Pulang Aman ([k*60, k*60+14] mnt) untuk Karyawan Harian Reguler.
+ * 3. Karyawan ALL IN tetap menggunakan data riil (WORK_IN1 / WORK_OUT1).
+ * 4. PENGECUALIAN TOTAL (Total Exclusion) untuk Divisi SECURITY / SATPAM.
+ * 5. Perhitungan JAM_KERJA murni dihitung dari DATEDIFF(WORK_IN, WORK_OUT) dengan rumus desimal (+0.50).
+ * 6. TIDAK MENYENTUH kolom lembur (OT_1..OT_4, T_OT, STDJAM) agar 100% dihitung oleh modul INUS.
  */
 
 export async function POST(request: Request) {
@@ -20,16 +22,95 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Rentang tanggal (startDate & endDate) wajib ditentukan.' }, { status: 400 });
     }
 
-    let queryRes = null;
+    // Pengecekan jika targetEmpCd adalah SECURITY, tolak segera dengan pesan proteksi
+    if (targetEmpCd) {
+      const empCheck = await query<any>(`
+        SELECT 
+          RTRIM(e.EMP_CD) AS EMP_CD, 
+          RTRIM(e.EMP_NM) AS EMP_NM, 
+          RTRIM(ISNULL(j.JOB_DESC, '')) AS JOB_DESC, 
+          RTRIM(ISNULL(s.SEC_DESC, '')) AS SEC_DESC
+        FROM EMP_TABLE e
+        LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+        LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+        WHERE RTRIM(e.EMP_CD) = @targetEmpCd
+      `, { targetEmpCd });
+
+      if (empCheck && empCheck.length > 0) {
+        const jobDesc = (empCheck[0].JOB_DESC || '').toUpperCase();
+        const secDesc = (empCheck[0].SEC_DESC || '').toUpperCase();
+        if (jobDesc.includes('SECURITY') || jobDesc.includes('SATPAM') || secDesc.includes('SECURITY') || secDesc.includes('SATPAM')) {
+          return NextResponse.json({ 
+            error: `Sinkronisasi untuk ${empCheck[0].EMP_NM} (Divisi SECURITY/SATPAM) dinonaktifkan demi perlindungan data (menunggu modul Import Jadwal Resmi).` 
+          }, { status: 403 });
+        }
+      }
+    }
 
     await withTransaction(async (tx) => {
       const empCondition = targetEmpCd 
         ? `AND (a.EMP_CD = @targetEmpCd OR RTRIM(a.EMP_CD) = @targetEmpCd)` 
         : `AND (e.Act_NonAct = 1 OR e.Act_NonAct IS NULL)`;
 
+      const mergeEmpFilter = targetEmpCd
+        ? `AND (e.EMP_CD = @targetEmpCd OR RTRIM(e.EMP_CD) = @targetEmpCd)`
+        : `AND (e.Act_NonAct = 1 OR e.Act_NonAct IS NULL)`;
+
       const sqlUpdate = `
         BEGIN TRY
-          -- A. KOREKSI WORK_IN (MASUK KEPAGIAN < 06:50 ATAU TELAT RINGAN 07:00-07:15) -> RANDOMIZE KE 06:50 s.d 06:59 (NON-ALL IN & NON-SECURITY)
+          -- =========================================================================
+          -- TAHAP 0: GENERASI / MERGE BARIS TR_ABSEN (MERGE WITH HOLDLOCK)
+          --          Membuat baris TR_ABSEN jika belum ada untuk tanggal terkait
+          -- =========================================================================
+          ;WITH DateRange AS (
+            SELECT CAST(@startDate AS DATETIME) AS dt
+            UNION ALL
+            SELECT DATEADD(day, 1, dt)
+            FROM DateRange
+            WHERE dt < CAST(@endDate AS DATETIME)
+          ),
+          EmpDates AS (
+            SELECT 
+              d.dt AS DATE_TRANS,
+              e.EMP_CD,
+              e.EMP_NM,
+              e.SEC_CD,
+              e.JOB_CD,
+              e.EMP_JNS,
+              e.SHIFT,
+              CASE 
+                WHEN DATENAME(dw, d.dt) IN ('Saturday', 'Sunday') THEN 'LIBUR'
+                ELSE 'KERJA'
+              END AS DEFAULT_STATUS_HARI,
+              CAST(CONVERT(varchar(10), d.dt, 120) + ' 07:00:00' AS DATETIME) AS DEFAULT_JAM_MASUK,
+              CAST(CONVERT(varchar(10), d.dt, 120) + ' 16:00:00' AS DATETIME) AS DEFAULT_JAM_PULANG
+            FROM DateRange d
+            CROSS JOIN EMP_TABLE e
+            LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+            LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+            WHERE 1=1
+              ${mergeEmpFilter}
+              AND UPPER(ISNULL(RTRIM(j.JOB_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
+              AND UPPER(ISNULL(RTRIM(s.SEC_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
+          )
+          MERGE TR_ABSEN WITH (HOLDLOCK) AS target
+          USING EmpDates AS source
+          ON (RTRIM(target.EMP_CD) = RTRIM(source.EMP_CD) AND target.DATE_TRANS = source.DATE_TRANS)
+          WHEN NOT MATCHED THEN
+            INSERT (
+              DATE_TRANS, EMP_CD, EMP_NM, SEC_CD, JOB_CD, EMP_JNS, SHIFT, 
+              STATUS_HARI, JAM_MASUK, JAM_PULANG, HADIR, flag_Absen
+            )
+            VALUES (
+              source.DATE_TRANS, source.EMP_CD, source.EMP_NM, source.SEC_CD, source.JOB_CD, source.EMP_JNS, source.SHIFT,
+              source.DEFAULT_STATUS_HARI, source.DEFAULT_JAM_MASUK, source.DEFAULT_JAM_PULANG, 1, 'H'
+            )
+          OPTION (MAXRECURSION 366);
+
+          -- =========================================================================
+          -- TAHAP 1: KOREKSI WORK_IN (MASUK KEPAGIAN < 06:50 ATAU TELAT RINGAN 07:00-07:15)
+          --          -> RANDOMIZE KE 06:50 s.d 06:59:59 (REGULER NON-ALL IN & NON-SECURITY)
+          -- =========================================================================
           UPDATE a
           SET a.WORK_IN = DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 599 as int), 
                             DATEADD(minute, -10, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_MASUK, 108) AS DATETIME)))
@@ -55,19 +136,13 @@ export async function POST(request: Request) {
                 CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), COALESCE(a.WORK_IN1, a.WORK_IN), 108) AS DATETIME) <= DATEADD(minute, 15, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_MASUK, 108) AS DATETIME))
               )
             );
-            
-          -- B. KOREKSI WORK_OUT (PULANG NANGGUNG & KOREKSI OT BULAT) — REGULER (NON-ALL IN & NON-SECURITY)
+
+          -- =========================================================================
+          -- TAHAP 2: KOREKSI WORK_OUT (PULANG NANGGUNG & PENDARATAN AMAN) — REGULER
+          -- =========================================================================
           WITH CalcRegOT AS (
             SELECT 
               a.WORK_OUT,
-              a.OT_1,
-              a.OT_2,
-              a.OT_3,
-              a.OT_4,
-              a.OT_5,
-              a.OT_6,
-              a.T_OT,
-              a.JAM_KERJA,
               CASE 
                 WHEN DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), COALESCE(a.WORK_OUT1, a.WORK_OUT)) >= 50
                   THEN CAST(FLOOR((DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), COALESCE(a.WORK_OUT1, a.WORK_OUT)) + 10) / 60.0) AS INT)
@@ -94,102 +169,48 @@ export async function POST(request: Request) {
                 DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 899 as int), DATEADD(hour, K_OT, TARGET_SCH_OUT))
               ELSE 
                 DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 899 as int), TARGET_SCH_OUT)
-            END,
-            OT_1 = CASE WHEN K_OT >= 1 THEN 1.0 ELSE 0.0 END,
-            OT_2 = CASE WHEN K_OT > 1 THEN CAST(K_OT - 1 AS NUMERIC(18,2)) ELSE 0.0 END,
-            OT_3 = 0.0,
-            OT_4 = 0.0,
-            OT_5 = 0.0,
-            OT_6 = 0.0,
-            T_OT = CASE WHEN K_OT > 0 THEN K_OT ELSE 0 END,
-            JAM_KERJA = CASE WHEN K_OT > 0 THEN 8 + K_OT ELSE 8 END;
+            END;
 
-          -- C. KOREKSI OT HARI LIBUR / WEEKEND (DISTRIBUSI OT_2, OT_3, OT_4) (NON-SECURITY)
-          WITH CalcWeekendOT AS (
-            SELECT 
-              a.OT_1,
-              a.OT_2,
-              a.OT_3,
-              a.OT_4,
-              a.OT_5,
-              a.OT_6,
-              a.T_OT,
-              a.JAM_KERJA,
-              CASE 
-                WHEN DATEDIFF(minute, COALESCE(a.WORK_IN1, a.WORK_IN), COALESCE(a.WORK_OUT1, a.WORK_OUT)) >= 300
-                  THEN CAST(FLOOR((DATEDIFF(minute, COALESCE(a.WORK_IN1, a.WORK_IN), COALESCE(a.WORK_OUT1, a.WORK_OUT)) - 60 + 10) / 60.0) AS INT)
-                WHEN DATEDIFF(minute, COALESCE(a.WORK_IN1, a.WORK_IN), COALESCE(a.WORK_OUT1, a.WORK_OUT)) >= 50
-                  THEN CAST(FLOOR((DATEDIFF(minute, COALESCE(a.WORK_IN1, a.WORK_IN), COALESCE(a.WORK_OUT1, a.WORK_OUT)) + 10) / 60.0) AS INT)
-                ELSE 0
-              END AS K_OT
-            FROM TR_ABSEN a
-            LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-            LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-            LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-            WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS <= @endDate
-              ${empCondition}
-              AND COALESCE(a.WORK_OUT1, a.WORK_OUT) IS NOT NULL 
-              AND COALESCE(a.WORK_IN1, a.WORK_IN) IS NOT NULL
-              AND (RTRIM(a.STATUS_HARI) IN ('LIBUR', 'OFF', 'H') OR DATENAME(dw, a.DATE_TRANS) IN ('Saturday', 'Sunday'))
-              AND UPPER(ISNULL(RTRIM(j.JOB_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-              AND UPPER(ISNULL(RTRIM(s.SEC_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-          )
-          UPDATE CalcWeekendOT
+          -- =========================================================================
+          -- TAHAP 3: KARYAWAN ALL IN -> KEMBALIKAN KE DATA RIIL RAW FINGERPRINT
+          -- =========================================================================
+          UPDATE a
           SET 
-            OT_1 = 0.0,
-            OT_2 = CASE WHEN K_OT > 8 THEN 8.0 ELSE CAST(K_OT AS NUMERIC(18,2)) END,
-            OT_3 = CASE WHEN K_OT >= 9 THEN 1.0 ELSE 0.0 END,
-            OT_4 = CASE WHEN K_OT >= 10 THEN CAST(K_OT - 9 AS NUMERIC(18,2)) ELSE 0.0 END,
-            OT_5 = 0.0,
-            OT_6 = 0.0,
-            T_OT = K_OT,
-            JAM_KERJA = K_OT;
+            a.WORK_IN = COALESCE(a.WORK_IN1, a.WORK_IN),
+            a.WORK_OUT = COALESCE(a.WORK_OUT1, a.WORK_OUT)
+          FROM TR_ABSEN a
+          LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
+          LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+          LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+          WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS <= @endDate
+            ${empCondition}
+            AND UPPER(ISNULL(RTRIM(e.ALL_IN),'0')) IN ('1', 'Y', 'TRUE')
+            AND UPPER(ISNULL(RTRIM(j.JOB_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
+            AND UPPER(ISNULL(RTRIM(s.SEC_DESC),'')) NOT IN ('SECURITY', 'SATPAM');
 
-          -- D. KARYAWAN ALL IN: KEMBALIKAN JAM MASUK & PULANG KE REKAMAN RIIL DAN HITUNG LEMBUR NORMAL
-          WITH CalcAllInOT AS (
-            SELECT 
-              a.WORK_IN,
-              a.WORK_OUT,
-              a.WORK_IN1,
-              a.WORK_OUT1,
-              a.OT_1,
-              a.OT_2,
-              a.OT_3,
-              a.OT_4,
-              a.OT_5,
-              a.OT_6,
-              a.T_OT,
-              a.JAM_KERJA,
+          -- =========================================================================
+          -- TAHAP 4: PERHITUNGAN ULANG JAM_KERJA DARI HASIL WORK_IN & WORK_OUT (RUMUS DESIMAL +0.50)
+          --          (TIDAK MENYENTUH OT_1..OT_4, T_OT, STDJAM)
+          -- =========================================================================
+          UPDATE a
+          SET a.JAM_KERJA = CASE 
+            WHEN a.WORK_IN IS NOT NULL AND a.WORK_OUT IS NOT NULL AND a.WORK_OUT > a.WORK_IN
+            THEN 
               CASE 
-                WHEN RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') 
-                     AND a.JAM_PULANG IS NOT NULL 
-                     AND COALESCE(a.WORK_OUT1, a.WORK_OUT) IS NOT NULL
-                     AND DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), COALESCE(a.WORK_OUT1, a.WORK_OUT)) >= 50
-                  THEN CAST(FLOOR((DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), COALESCE(a.WORK_OUT1, a.WORK_OUT)) + 10) / 60.0) AS INT)
-                ELSE 0
-              END AS K_OT
-            FROM TR_ABSEN a
-            LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-            LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-            LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-            WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS <= @endDate
-              ${empCondition}
-              AND UPPER(ISNULL(RTRIM(e.ALL_IN),'0')) IN ('1', 'Y', 'TRUE')
-              AND UPPER(ISNULL(RTRIM(j.JOB_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-              AND UPPER(ISNULL(RTRIM(s.SEC_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-          )
-          UPDATE CalcAllInOT
-          SET 
-            WORK_IN = COALESCE(WORK_IN1, WORK_IN),
-            WORK_OUT = COALESCE(WORK_OUT1, WORK_OUT),
-            OT_1 = CASE WHEN K_OT >= 1 THEN 1.0 ELSE 0.0 END,
-            OT_2 = CASE WHEN K_OT > 1 THEN CAST(K_OT - 1 AS NUMERIC(18,2)) ELSE 0.0 END,
-            OT_3 = 0.0,
-            OT_4 = 0.0,
-            OT_5 = 0.0,
-            OT_6 = 0.0,
-            T_OT = CASE WHEN K_OT > 0 THEN K_OT ELSE 0 END,
-            JAM_KERJA = CASE WHEN K_OT > 0 THEN 8 + K_OT ELSE 8 END;
+                WHEN (DATEDIFF(minute, a.WORK_IN, a.WORK_OUT) / 60.0) - FLOOR(DATEDIFF(minute, a.WORK_IN, a.WORK_OUT) / 60.0) < 0.50 
+                THEN FLOOR(DATEDIFF(minute, a.WORK_IN, a.WORK_OUT) / 60.0) 
+                ELSE FLOOR(DATEDIFF(minute, a.WORK_IN, a.WORK_OUT) / 60.0) + 0.50 
+              END
+            ELSE 0
+          END
+          FROM TR_ABSEN a
+          LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
+          LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+          LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+          WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS <= @endDate
+            ${empCondition}
+            AND UPPER(ISNULL(RTRIM(j.JOB_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
+            AND UPPER(ISNULL(RTRIM(s.SEC_DESC),'')) NOT IN ('SECURITY', 'SATPAM');
 
         END TRY
         BEGIN CATCH
@@ -202,7 +223,7 @@ export async function POST(request: Request) {
         params.targetEmpCd = targetEmpCd;
       }
 
-      queryRes = await tx(sqlUpdate, params);
+      await tx(sqlUpdate, params);
     });
 
     return NextResponse.json({ 

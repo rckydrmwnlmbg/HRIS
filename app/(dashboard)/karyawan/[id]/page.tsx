@@ -193,7 +193,7 @@ export default function KaryawanDetailPage({ params }: { params: Promise<{ id: s
           {activeTab === 'pribadi' && (
             <div className="glass-card" style={{ padding: '24px' }}>
           <div className={styles.sectionHeader}>
-            <User size={18} color="var(--accent-purple)" />
+            <User size={18} color="var(--accent-dark)" />
             <h3>{lang === 'id' ? 'Data Pribadi' : 'Personal Data'}</h3>
           </div>
           <div className={styles.infoList}>

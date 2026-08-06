@@ -204,20 +204,20 @@ export default function CutiPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '350px 1fr', gap: '24px', alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '22px', alignItems: 'stretch', minHeight: 'calc(100vh - 150px)' }}>
         {/* FORM PANEL */}
-        <div className="glass-card" style={{ overflow: 'visible', zIndex: 100, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ padding: '24px', borderBottom: '1px solid var(--border)' }}>
-            <h3 style={{ margin: 0, fontWeight: 600 }}>{lang === 'id' ? 'Formulir Pengajuan' : 'Request Form'}</h3>
+        <div className="glass-card" style={{ overflow: 'visible', zIndex: 10, display: 'flex', flexDirection: 'column', height: '100%' }}>
+          <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
+            <h3 style={{ margin: 0, fontWeight: 650, fontSize: '15px' }}>{lang === 'id' ? 'Formulir Pengajuan' : 'Request Form'}</h3>
           </div>
-          <form onSubmit={handleSubmit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-            <div className="form-group" style={{ position: 'relative', marginBottom: '16px' }}>
+          <form onSubmit={handleSubmit} style={{ padding: '22px', display: 'flex', flexDirection: 'column', flex: 1, gap: '14px' }}>
+            <div className="form-group" style={{ position: 'relative' }}>
               <label className="form-label">{lang === 'id' ? 'Karyawan' : 'Employee'}</label>
               {selectedEmp ? (
-                <div style={{ padding: '12px 16px', background: 'rgba(79,158,248,0.1)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ padding: '12px 14px', background: 'rgba(2, 132, 199, 0.06)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div>
-                    <div style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text)' }}>{selectedEmp.EMP_NM}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedEmp.EMP_CD}</div>
+                    <div style={{ fontWeight: 600, fontSize: '13.5px', color: 'var(--text-primary)' }}>{selectedEmp.EMP_NM}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px' }}>{selectedEmp.EMP_CD} · {selectedEmp.SEC_DESC || selectedEmp.SEC_CD || '-'}</div>
                   </div>
                   <button type="button" className="btn btn-sm btn-secondary" onClick={() => { setSelectedEmp(null); setSearchEmp(''); }}>{lang === 'id' ? 'Ganti' : 'Change'}</button>
                 </div>
@@ -228,10 +228,10 @@ export default function CutiPage() {
                 </div>
               )}
               {searchEmp && !selectedEmp && filteredEmp.length > 0 && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', zIndex: 10, marginTop: '4px', overflow: 'hidden', boxShadow: '0 10px 25px rgba(0,0,0,0.5)' }}>
+                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', zIndex: 50, marginTop: '4px', overflow: 'hidden', boxShadow: '0 10px 25px rgba(0,0,0,0.2)' }}>
                   {filteredEmp.map(k => (
-                    <div key={k.EMP_CD} onClick={() => { setSelectedEmp(k); setSearchEmp(''); }} style={{ padding: '10px 12px', cursor: 'pointer', display: 'flex', gap: '10px', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
-                      <span style={{ color: 'var(--accent-blue)', fontSize: '12px', minWidth: 60 }}>{k.EMP_CD}</span>
+                    <div key={k.EMP_CD} onClick={() => { setSelectedEmp(k); setSearchEmp(''); }} style={{ padding: '10px 12px', cursor: 'pointer', display: 'flex', gap: '10px', alignItems: 'center', borderBottom: '1px solid var(--border)', fontSize: '12.5px' }}>
+                      <span style={{ color: 'var(--accent)', fontWeight: 600, minWidth: 65 }}>{k.EMP_CD}</span>
                       <span>{k.EMP_NM}</span>
                     </div>
                   ))}
@@ -239,7 +239,31 @@ export default function CutiPage() {
               )}
             </div>
 
-            <div className="form-group" style={{ marginBottom: '16px' }}>
+            {selectedEmp && (
+              <div style={{ padding: '12px 14px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                  {lang === 'id' ? 'Status Kuota Cuti Tahunan' : 'Annual Leave Quota Status'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px', textAlign: 'center' }}>
+                  <div style={{ padding: '6px 4px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Hak Cuti</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{BATAS_CUTI}</div>
+                  </div>
+                  <div style={{ padding: '6px 4px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Terpakai</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--warning)' }}>{totalCutiTerpakai}</div>
+                  </div>
+                  <div style={{ padding: '6px 4px', background: 'var(--bg-card)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+                    <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Sisa</div>
+                    <div style={{ fontSize: '14px', fontWeight: 700, color: Math.max(0, BATAS_CUTI - totalCutiTerpakai) > 0 ? 'var(--success)' : 'var(--danger)' }}>
+                      {Math.max(0, BATAS_CUTI - totalCutiTerpakai)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="form-group">
               <label className="form-label">{lang === 'id' ? 'Jenis Cuti' : 'Leave Type'}</label>
               <select className="form-select" value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}>
                 {masterReasons.map(r => (
@@ -250,7 +274,7 @@ export default function CutiPage() {
               </select>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div className="form-group">
                 <label className="form-label">{lang === 'id' ? 'Mulai' : 'Start Date'}</label>
                 <input type="date" className="form-input" value={form.startDate} onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))} required />
@@ -261,19 +285,17 @@ export default function CutiPage() {
               </div>
             </div>
 
-
-
-            <div style={{ padding: '16px 20px', background: 'rgba(178, 178, 178, 0.05)', border: '1px solid rgba(79,158,248,0.2)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+            <div style={{ padding: '12px 14px', background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
               <div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '4px' }}>{lang === 'id' ? 'Total Hari Kerja :' : 'Total Working Days :'}</div>
-                <div style={{ fontSize: '24px', fontWeight: 700, color: isExceedingQuota ? 'var(--danger)' : 'var(--accent-blue)', lineHeight: 1 }}>{days} <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-secondary)' }}>{lang === 'id' ? 'hari' : 'days'}</span></div>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '2px' }}>{lang === 'id' ? 'Total Hari Kerja :' : 'Total Working Days :'}</div>
+                <div style={{ fontSize: '1.25rem', fontWeight: 700, color: isExceedingQuota ? 'var(--danger)' : 'var(--accent)', lineHeight: 1 }}>{days} <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-secondary)' }}>{lang === 'id' ? 'hari' : 'days'}</span></div>
                 {isExceedingQuota && (
-                  <div style={{ fontSize: '11px', color: 'var(--danger)', marginTop: '4px', fontWeight: 500 }}>
+                  <div style={{ fontSize: '10.5px', color: 'var(--danger)', marginTop: '3px', fontWeight: 500 }}>
                     ⚠ {lang === 'id' ? `Sisa jatah cuti tidak mencukupi (Maks: ${BATAS_CUTI} hari/tahun)` : `Leave quota exceeded (Max: ${BATAS_CUTI} days/year)`}
                   </div>
                 )}
               </div>
-              <button type="submit" className="btn btn-primary" style={{ padding: '10px 24px', fontWeight: 600 }} disabled={!selectedEmp || days <= 0 || isSubmitting || (isExceedingQuota as boolean)}>
+              <button type="submit" className="btn btn-primary" style={{ padding: '7px 18px', fontWeight: 600 }} disabled={!selectedEmp || days <= 0 || isSubmitting || (isExceedingQuota as boolean)}>
                 {isSubmitting ? (lang === 'id' ? 'Menyimpan...' : 'Saving...') : (lang === 'id' ? 'Ajukan Pengajuan' : 'Submit Request')}
               </button>
             </div>
@@ -281,28 +303,25 @@ export default function CutiPage() {
         </div>
 
         {/* List Riwayat */}
-        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 'calc(100vh - 140px)' }}>
-          <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ margin: 0, fontWeight: 600 }}>{lang === 'id' ? 'Riwayat Cuti' : 'Leave History'}</h3>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: '400px' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ margin: 0, fontWeight: 650, fontSize: '15px' }}>{lang === 'id' ? 'Riwayat Cuti' : 'Leave History'}</h3>
             {!isLoading && requests.length > 0 && selectedEmp && (
               <div style={{ 
-                fontSize: '13px', 
+                fontSize: '12px', 
                 fontWeight: 600, 
-                padding: '8px 16px', 
-                background: 'linear-gradient(135deg, rgba(79,158,248,0.2) 0%, rgba(79,158,248,0.05) 100%)', 
-                backdropFilter: 'blur(10px)',
-                WebkitBackdropFilter: 'blur(10px)',
-                border: '1px solid rgba(79,158,248,0.3)',
-                boxShadow: '0 4px 12px rgba(79,158,248,0.15)',
-                color: 'var(--accent-blue)', 
-                borderRadius: '20px',
+                padding: '6px 14px', 
+                background: 'rgba(2, 132, 199, 0.08)', 
+                border: '1px solid rgba(2, 132, 199, 0.25)', 
+                color: 'var(--accent)', 
+                borderRadius: '9999px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
+                gap: '6px'
               }}>
-                <span>{lang === 'id' ? 'Total Cuti Terpakai :' : 'Total Leave Used :'}</span>
-                <span style={{ fontSize: '15px', fontWeight: 800 }}>
-                  {totalCutiTerpakai} <span style={{fontSize: '12px', fontWeight: 500}}>{lang === 'id' ? 'hari' : 'days'}</span>
+                <span>{lang === 'id' ? 'Total Cuti Terpakai:' : 'Total Leave Used:'}</span>
+                <span style={{ fontSize: '14px', fontWeight: 800 }}>
+                  {totalCutiTerpakai} <span style={{fontSize: '11px', fontWeight: 500}}>{lang === 'id' ? 'hari' : 'days'}</span>
                 </span>
               </div>
             )}

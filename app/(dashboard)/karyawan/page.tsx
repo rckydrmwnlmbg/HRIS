@@ -167,18 +167,18 @@ export default function KaryawanPage() {
         </div>
       )}
 
-      <div className="glass-card" style={{ marginTop: '16px', minHeight: '400px' }}>
-        <DataTable wrapperClassName="karyawan-table">
+      <div className="glass-card" style={{ marginTop: '16px', minHeight: '400px', overflow: 'hidden' }}>
+        <DataTable wrapperClassName={styles.karyawanTable}>
             <thead>
               <tr>
-                <th>{t(lang, 'nik')}</th>
-                <th>{t(lang, 'nama')}</th>
-                <th>{t(lang, 'bagian')}</th>
-                <th>{t(lang, 'jabatan')}</th>
-                <th>{t(lang, 'jenisKaryawan')}</th>
-                <th>{t(lang, 'tanggalMasuk')}</th>
-                <th>{t(lang, 'status')}</th>
-                <th style={{ width: '50px' }}></th>
+                <th style={{ width: '90px' }}>{t(lang, 'nik')}</th>
+                <th style={{ minWidth: '160px' }}>{t(lang, 'nama')}</th>
+                <th style={{ minWidth: '120px' }}>{t(lang, 'bagian')}</th>
+                <th style={{ minWidth: '120px' }}>{t(lang, 'jabatan')}</th>
+                <th style={{ width: '90px' }}>{t(lang, 'jenisKaryawan')}</th>
+                <th style={{ width: '105px' }}>{t(lang, 'tanggalMasuk')}</th>
+                <th style={{ width: '90px', textAlign: 'center' }}>{t(lang, 'status')}</th>
+                <th style={{ width: '44px', textAlign: 'center' }}></th>
               </tr>
             </thead>
             <tbody>

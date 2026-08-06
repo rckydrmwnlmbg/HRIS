@@ -126,27 +126,27 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
           cursor: 'default', padding: 0
         }}
       >
-        <button onClick={onClose} className="liquid-glass-close" style={{ position: 'absolute', right: '16px', top: '16px', cursor: 'pointer', zIndex: 20 }}>
-          <X size={24} />
+        <button onClick={onClose} className="liquid-glass-close" style={{ position: 'absolute', right: '12px', top: '12px', cursor: 'pointer', zIndex: 20 }}>
+          <X size={16} />
         </button>
 
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '22px 32px', borderBottom: '1px solid var(--border)', position: 'relative', zIndex: 10
+          padding: '14px 20px', borderBottom: '1px solid var(--border)', position: 'relative', zIndex: 10
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ 
-              width: 44, height: 44, borderRadius: '12px', background: 'rgba(234, 179, 8, 0.15)', 
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#eab308', border: '1px solid rgba(234, 179, 8, 0.3)' 
+              width: 32, height: 32, borderRadius: 'var(--radius-sm)', background: 'rgba(234, 179, 8, 0.12)', 
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#eab308', border: '1px solid rgba(234, 179, 8, 0.25)' 
             }}>
-              <Clock size={22} />
+              <Clock size={16} />
             </div>
             <div>
-              <h2 className="liquid-glass-modal-title" style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>
+              <h2 className="liquid-glass-modal-title" style={{ margin: 0, fontSize: 14.5, fontWeight: 700 }}>
                 {lang === 'id' ? 'Daftar Presensi Belum Lengkap' : 'Incomplete Attendance Records'}
               </h2>
-              <p className="liquid-glass-modal-desc" style={{ margin: 0, fontSize: 13, marginTop: 4 }}>
+              <p className="liquid-glass-modal-desc" style={{ margin: 0, fontSize: 11.5, marginTop: 2 }}>
                 {localData.length} {lang === 'id' ? 'Karyawan terdeteksi hadir namun catatan waktu masuk/pulang belum lengkap.' : 'Employees with incomplete attendance records requiring review.'}
               </p>
             </div>
@@ -154,53 +154,51 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
         </div>
 
         {/* Toolbar */}
-        <div style={{ padding: '14px 32px', display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'var(--bg-subtle)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
-              <Calendar size={15} color="var(--text-secondary)" />
+        <div style={{ padding: '10px 20px', display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'var(--bg-subtle)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+              <Calendar size={13} color="var(--text-secondary)" />
               <input 
                 type="date" 
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
                 style={{
-                  border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, outline: 'none', cursor: 'pointer'
+                  border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 12, outline: 'none', cursor: 'pointer'
                 }}
               />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '6px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', width: 240 }}>
-              <Search size={14} color="var(--text-muted)" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', width: 220 }}>
+              <Search size={13} color="var(--text-muted)" />
               <input 
                 type="text" 
                 placeholder={lang === 'id' ? 'Cari nama, NIK, atau bagian...' : 'Search by name, ID, or section...'}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 style={{
-                  border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 13, outline: 'none', width: '100%'
+                  border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 12, outline: 'none', width: '100%'
                 }}
               />
               {search && (
                 <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)' }}>
-                  <X size={14} />
+                  <X size={12} />
                 </button>
               )}
             </div>
 
-            {loading && <Loader2 size={16} className="spin" color="var(--text-secondary)" />}
+            {loading && <Loader2 size={14} className="spin" color="var(--text-secondary)" />}
           </div>
           
           {filteredData.length > 0 && (
             <button
               onClick={handleExport}
               style={{
-                display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px',
-                background: '#10B981', color: 'white', border: 'none', borderRadius: 'var(--radius-md)',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.2)'
+                display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
+                background: '#10B981', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)',
+                fontSize: 11.5, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s'
               }}
-              onMouseOver={e => (e.currentTarget.style.transform = 'translateY(-1px)')}
-              onMouseOut={e => (e.currentTarget.style.transform = 'none')}
             >
-              <Download size={15} />
+              <Download size={13} />
               {lang === 'id' ? 'Unduh Excel' : 'Export Excel'}
             </button>
           )}
@@ -209,74 +207,74 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
         {/* Content (Table) */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '0' }}>
           {loading ? (
-            <div style={{ padding: '60px 40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <Loader2 size={24} className="spin" style={{ margin: '0 auto 12px' }} />
+            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
+              <Loader2 size={20} className="spin" style={{ margin: '0 auto 8px' }} />
               {lang === 'id' ? 'Memuat data presensi...' : 'Loading attendance data...'}
             </div>
           ) : notSynced ? (
-            <div style={{ padding: '60px 40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <AlertTriangle size={32} style={{ margin: '0 auto 12px', opacity: 0.7, color: '#eab308' }} />
-              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 4 }}>
+            <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+              <AlertTriangle size={24} style={{ margin: '0 auto 8px', opacity: 0.7, color: '#eab308' }} />
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)', marginBottom: 2, fontSize: 13 }}>
                 {lang === 'id' ? 'Data Kehadiran Belum Disinkronkan' : 'Attendance Data Not Synchronized'}
               </div>
-              <div style={{ fontSize: 12 }}>
+              <div style={{ fontSize: 11.5 }}>
                 {lang === 'id' ? 'Silakan lakukan sinkronisasi data kehadiran terlebih dahulu untuk meninjau status terkini.' : 'Please synchronize attendance records first to review the latest status.'}
               </div>
             </div>
           ) : filteredData.length > 0 ? (
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(10px)', backgroundColor: 'var(--bg-subtle)' }}>
                 <tr>
-                  <th style={{ padding: '12px 24px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{lang === 'id' ? 'Informasi Karyawan' : 'Employee'}</th>
-                  <th style={{ padding: '12px 18px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{lang === 'id' ? 'Unit Kerja & Tim' : 'Section & Team'}</th>
-                  <th style={{ padding: '12px 18px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{lang === 'id' ? 'Waktu Masuk' : 'Clock In'}</th>
-                  <th style={{ padding: '12px 18px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{lang === 'id' ? 'Waktu Pulang' : 'Clock Out'}</th>
-                  <th style={{ padding: '12px 24px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)' }}>{lang === 'id' ? 'Status Presensi' : 'Attendance Status'}</th>
+                  <th style={{ padding: '8px 16px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Informasi Karyawan' : 'Employee'}</th>
+                  <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Unit Kerja & Tim' : 'Section & Team'}</th>
+                  <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Waktu Masuk' : 'Clock In'}</th>
+                  <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Waktu Pulang' : 'Clock Out'}</th>
+                  <th style={{ padding: '8px 16px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Status Presensi' : 'Attendance Status'}</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredData.map((k, i) => (
                   <tr key={k.EMP_CD} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-subtle)' }}>
-                    <td style={{ padding: '14px 24px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--accent-glow)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 13 }}>
+                    <td style={{ padding: '8px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-glow)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11 }}>
                           {k.EMP_NM.charAt(0)}
                         </div>
                         <div>
-                          <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{k.EMP_NM}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{k.EMP_CD}</div>
+                          <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12 }}>{k.EMP_NM}</div>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{k.EMP_CD}</div>
                         </div>
                       </div>
                     </td>
-                    <td style={{ padding: '14px 18px', color: 'var(--text-secondary)' }}>
-                      <div style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{k.BAGIAN || '-'}</div>
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{k.TEAM || '-'}</div>
+                    <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>
+                      <div style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: 11.5 }}>{k.BAGIAN || '-'}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{k.TEAM || '-'}</div>
                     </td>
-                    <td style={{ padding: '14px 18px' }}>
+                    <td style={{ padding: '8px 12px', fontSize: 11 }}>
                       {k.WORK_IN ? (
                         <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{k.WORK_IN}</span>
                       ) : (
-                        <span style={{ color: '#ef4444', fontWeight: 600, background: 'rgba(239, 68, 68, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
+                        <span style={{ color: '#ef4444', fontWeight: 600, background: 'rgba(239, 68, 68, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
                           {lang === 'id' ? 'Belum Tercatat' : 'Missing'}
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: '14px 18px' }}>
+                    <td style={{ padding: '8px 12px', fontSize: 11 }}>
                       {k.WORK_OUT ? (
                         <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{k.WORK_OUT}</span>
                       ) : (
-                        <span style={{ color: '#ef4444', fontWeight: 600, background: 'rgba(239, 68, 68, 0.1)', padding: '2px 8px', borderRadius: '4px' }}>
+                        <span style={{ color: '#ef4444', fontWeight: 600, background: 'rgba(239, 68, 68, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
                           {lang === 'id' ? 'Belum Tercatat' : 'Missing'}
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: '14px 24px' }}>
+                    <td style={{ padding: '8px 16px' }}>
                       <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', borderRadius: '8px', fontSize: 11, fontWeight: 600,
-                        background: k.keterangan_kosong === 'Lupa Tap Masuk' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(249, 115, 22, 0.15)',
+                        display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: '4px', fontSize: 10.5, fontWeight: 550,
+                        background: k.keterangan_kosong === 'Lupa Tap Masuk' ? 'rgba(234, 179, 8, 0.12)' : 'rgba(249, 115, 22, 0.12)',
                         color: k.keterangan_kosong === 'Lupa Tap Masuk' ? '#ca8a04' : '#ea580c'
                       }}>
-                        <AlertTriangle size={12} />
+                        <AlertTriangle size={11} />
                         {k.keterangan_kosong === 'Lupa Tap Masuk' 
                           ? (lang === 'id' ? 'Presensi Masuk Belum Tercatat' : 'Missing Clock In') 
                           : (lang === 'id' ? 'Presensi Pulang Belum Tercatat' : 'Missing Clock Out')}

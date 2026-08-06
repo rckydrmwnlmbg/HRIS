@@ -43,11 +43,6 @@ export default function LoginPage() {
 
   return (
     <div className={styles.container}>
-      {/* Background orbs */}
-      <div className={styles.orb1} />
-      <div className={styles.orb2} />
-      <div className={styles.orb3} />
-
       <div className={styles.card}>
         {/* Logo / Brand */}
         <div className={styles.brand}>
