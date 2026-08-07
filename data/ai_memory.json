@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-08-07T06:25:22.464Z",
+  "last_updated": "2026-08-07T17:02:08.225Z",
   "glossary": [
     {
       "term": "anak gudang",
@@ -584,6 +584,227 @@
       ],
       "intent": "Pola kueri sukses untuk permintaan \"aku butuh laporan OT analysis minggu ke 2 juni \"",
       "sql_snippet": "WITH DailyOT AS ( SELECT RTRIM(a.EMP_CD) AS EMP_CD, a.DATE_TRANS, a.WORK_IN, a.WORK_OUT, UPPER(RTRIM(ISNULL(a.STATUS_HARI, ''))) AS STATUS_HARI, DATED",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120241429",
+      "keywords": [
+        "berapa",
+        "total",
+        "karyawan",
+        "aktif",
+        "saat"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa total karyawan aktif saat ini?\"",
+      "sql_snippet": "SELECT COUNT(*) AS TOTAL_AKTIF, SUM(CASE WHEN RTRIM(e.JNS_KRY) = '100' OR RTRIM(e.JNS_KRY) = 'T' THEN 1 ELSE 0 END) AS TETAP, SUM(CASE WHEN RTRIM(e.JN",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120268897",
+      "keywords": [
+        "berapa",
+        "jumlah",
+        "karyawan",
+        "aktif",
+        "bagian"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa jumlah karyawan aktif per bagian?\"",
+      "sql_snippet": "SELECT RTRIM(s.SEC_DESC) AS BAGIAN, COUNT(*) AS JUMLAH_KARYAWAN_AKTIF FROM EMP_TABLE e JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD) WHERE e.Act_",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120288006",
+      "keywords": [
+        "daftar",
+        "karyawan",
+        "aktif",
+        "bagian",
+        "warehouse"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Daftar karyawan aktif di bagian warehouse\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.JNS_KRY) = '100' ",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120355291",
+      "keywords": [
+        "siapa",
+        "saja",
+        "yang",
+        "sudah",
+        "hadir"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Siapa saja yang sudah hadir hari ini?\"",
+      "sql_snippet": "SELECT COUNT(DISTINCT RTRIM(a.EMP_CD)) AS TOTAL_HADIR FROM TR_ABSEN a JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD) WHERE a.DATE_TRANS = CAST(",
+      "usage_count": 2,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120536535",
+      "keywords": [
+        "berapa",
+        "total",
+        "lembur",
+        "resmi",
+        "bulan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa total lembur resmi bulan ini berdasarkan OT1 sampai O\"",
+      "sql_snippet": "SELECT SUM(ISNULL(a.OT_1, 0)) AS TOTAL_OT_1, SUM(ISNULL(a.OT_2, 0)) AS TOTAL_OT_2, SUM(ISNULL(a.OT_3, 0)) AS TOTAL_OT_3, SUM(ISNULL(a.OT_4, 0)) AS TOT",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120591352",
+      "keywords": [
+        "tampilkan",
+        "analysis",
+        "minggu"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Tampilkan analysis OT minggu ini\"",
+      "sql_snippet": "SELECT CONVERT(varchar(10), a.DATE_TRANS, 120) AS TANGGAL, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(j.JOB_D",
+      "usage_count": 2,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120624508",
+      "keywords": [
+        "rekap",
+        "lembur",
+        "minggu",
+        "ketiga",
+        "bulan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Rekap lembur minggu ketiga bulan Juni 2026\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, CASE WHEN RTRIM(e.ALL_IN) = '1' OR RTRIM(e.ALL_IN) = 'Y' THEN 'AL",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120651186",
+      "keywords": [
+        "siapa",
+        "karyawan",
+        "berapa",
+        "tunjangan",
+        "lemburnya"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Siapa karyawan ALL IN dan berapa tunjangan lemburnya?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, ISNULL(e.T5, 0) AS TUNJANGAN_LEMBUR",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120737873",
+      "keywords": [
+        "berapa",
+        "jumlah",
+        "karyawan",
+        "departemen"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa jumlah karyawan per departemen?\"",
+      "sql_snippet": "SELECT RTRIM(d.DEP_DESC) AS DEPARTEMEN, COUNT(*) AS JUMLAH_KARYAWAN_AKTIF FROM EMP_TABLE e JOIN MS_DEP d ON RTRIM(e.DEP_CD) = RTRIM(d.DEP_CD) WHERE e.",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120752481",
+      "keywords": [
+        "berapa",
+        "jumlah",
+        "karyawan",
+        "tetap",
+        "kontrak"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa jumlah karyawan tetap, kontrak, dan harian?\"",
+      "sql_snippet": "SELECT COUNT(*) AS TOTAL_AKTIF, SUM(CASE WHEN RTRIM(e.JNS_KRY) = '100' OR RTRIM(e.JNS_KRY) = 'T' THEN 1 ELSE 0 END) AS TETAP, SUM(CASE WHEN RTRIM(e.JN",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120797625",
+      "keywords": [
+        "berapa",
+        "jumlah",
+        "anak",
+        "gudang",
+        "yang"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa jumlah anak gudang yang aktif?\"",
+      "sql_snippet": "SELECT COUNT(*) AS TOTAL_ANAK_GUDANG FROM EMP_TABLE e JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD) WHERE e.Act_NonAct = 1 AND (e.DT_RSG IS NULL ",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120830327",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "widya",
+        "etika",
+        "bulan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa gaji Widya Etika bulan Juni?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, e.BS_SLR AS GAJI_POKOK, ISNULL(e.T1",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120847402",
+      "keywords": [
+        "tampilkan",
+        "profil",
+        "karyawan",
+        "dengan",
+        "26066995"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Tampilkan profil karyawan dengan NIK 26066995\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.JNS_KRY) = '100' ",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786122028942",
+      "keywords": [
+        "berapa",
+        "total",
+        "lembur",
+        "resmi",
+        "bulan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa total lembur resmi bulan ini berdasarkan OT1 sampai O\"",
+      "sql_snippet": "SELECT SUM(ISNULL(a.OT_1, 0)) AS TOTAL_OT_1, SUM(ISNULL(a.OT_2, 0)) AS TOTAL_OT_2, SUM(ISNULL(a.OT_3, 0)) AS TOTAL_OT_3, SUM(ISNULL(a.OT_4, 0)) AS TOT",
       "usage_count": 1,
       "likes": 1,
       "dislikes": 0,

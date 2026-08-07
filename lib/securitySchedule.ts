@@ -1,88 +1,86 @@
-import * as xlsx from 'xlsx';
-import * as fs from 'fs';
+export type SecurityShiftCode = '1' | '2S' | '3S' | '4S';
 
-// Path file excel dijaga sesuai instruksi, bisa diubah via ENV nantinya
-const EXCEL_PATH = 'D:\\Ricky not Kiki\\HRIS Widy\\JADWAL_SECURITY_2026.xlsx';
+export type SecurityShift = {
+  code: SecurityShiftCode;
+  startMinutes: number;
+  endMinutes: number;
+  standardHours: number;
+};
 
-let scheduleCache: any = null;
+export const SECURITY_SHIFTS: SecurityShift[] = [
+  { code: '1', startMinutes: 7 * 60, endMinutes: 16 * 60, standardHours: 8 },
+  { code: '2S', startMinutes: 11 * 60 + 30, endMinutes: 20 * 60 + 30, standardHours: 8 },
+  { code: '3S', startMinutes: 15 * 60, endMinutes: 24 * 60, standardHours: 8 },
+  { code: '4S', startMinutes: 23 * 60, endMinutes: 32 * 60, standardHours: 8 },
+];
 
-function loadSchedule() {
-  if (!fs.existsSync(EXCEL_PATH)) {
-    console.warn('File JADWAL_SECURITY_2026.xlsx tidak ditemukan di path:', EXCEL_PATH);
-    return null;
+const minutesSinceMidnight = (value: string | Date | null | undefined): number | null => {
+  if (!value) return null;
+  const match = String(value instanceof Date ? value.toTimeString() : value).match(/(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  return hour >= 0 && hour < 24 && minute >= 0 && minute < 60 ? hour * 60 + minute : null;
+};
+
+export function detectSecurityShift(workIn: string | Date | null | undefined, workOut?: string | Date | null): SecurityShift | null {
+  const inMinutes = minutesSinceMidnight(workIn);
+  if (inMinutes === null) return null;
+  const outMinutesRaw = minutesSinceMidnight(workOut);
+  let best: { shift: SecurityShift; score: number } | null = null;
+
+  for (const shift of SECURITY_SHIFTS) {
+    const startDistance = Math.abs(inMinutes - shift.startMinutes);
+    const normalizedOut = outMinutesRaw === null ? null : outMinutesRaw < shift.startMinutes ? outMinutesRaw + 1440 : outMinutesRaw;
+    const outDistance = normalizedOut === null ? 0 : Math.abs(normalizedOut - shift.endMinutes);
+    const score = startDistance + outDistance * 0.25;
+    if (startDistance <= 60 && (!best || score < best.score)) best = { shift, score };
   }
-  
-  try {
-    const workbook = xlsx.readFile(EXCEL_PATH);
-    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = xlsx.utils.sheet_to_json<any[]>(firstSheet, { header: 1 });
-    
-    // Header bulan ada di baris index 3 (data[3])
-    const rowBulan = data[3];
-    if (!rowBulan) return null;
-    
-    // Parse the entire schedule into memory: { "EMP_NM": { "YYYY-MM": ["P1", "P2", "X", ...] } }
-    const parsedSchedule: Record<string, Record<string, string[]>> = {};
-    
-    // Temukan semua blok bulan/tahun di baris ke-3
-    const monthBlocks: { name: string, startIdx: number }[] = [];
-    for (let i = 0; i < rowBulan.length; i++) {
-      if (typeof rowBulan[i] === 'string' && rowBulan[i].match(/(JANUARI|FEBRUARI|MARET|APRIL|MEI|JUNI|JULI|AGUSTUS|SEPTEMBER|OKTOBER|NOVEMBER|DESEMBER) 202/i)) {
-        monthBlocks.push({ name: rowBulan[i].trim().toUpperCase(), startIdx: i });
-      }
-    }
-    
-    // Populate data untuk setiap karyawan di baris ke-4 dan seterusnya
-    for (let r = 4; r < data.length; r++) {
-      const row = data[r];
-      const empName = row[1]; // Kolom N A M A
-      if (!empName || typeof empName !== 'string') continue;
-      
-      const cleanName = empName.trim().toUpperCase();
-      parsedSchedule[cleanName] = {};
-      
-      monthBlocks.forEach(block => {
-        // Ambil array shift (31 hari maksimal per bulan)
-        const shifts = row.slice(block.startIdx, block.startIdx + 31).map(s => s ? String(s).trim() : '');
-        parsedSchedule[cleanName][block.name] = shifts;
-      });
-    }
-    
-    scheduleCache = parsedSchedule;
-    return scheduleCache;
-  } catch (err) {
-    console.error("Gagal load jadwal security:", err);
-    return null;
-  }
+
+  return best?.shift || null;
 }
 
-const BULAN_INDO = ['JANUARI', 'FEBRUARI', 'MARET', 'APRIL', 'MEI', 'JUNI', 'JULI', 'AGUSTUS', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DESEMBER'];
+export function getSecurityShiftByCode(code: string | null | undefined): SecurityShift | null {
+  return SECURITY_SHIFTS.find((shift) => shift.code === String(code || '').trim().toUpperCase()) || null;
+}
 
-/**
- * Mengambil Shift Code untuk Security (misal 'P1', 'X', 'M') dari file Excel.
- * Mengembalikan 'X' jika tidak ditemukan (Default = Libur / Unknown).
- */
-export function getSecurityShift(empNm: string, targetDate: Date): string {
-  if (!scheduleCache) loadSchedule();
-  if (!scheduleCache) return 'X'; // Fallback aman
-  
-  const cleanName = empNm.trim().toUpperCase();
-  const scheduleData = scheduleCache[cleanName];
-  
-  if (!scheduleData) {
-    // Jika nama tidak ada di Excel, asumsikan bukan security shift atau salah nama
-    return 'X'; 
-  }
-  
-  const monthIdx = targetDate.getMonth();
-  const year = targetDate.getFullYear();
-  const monthName = `${BULAN_INDO[monthIdx]} ${year}`;
-  
-  const monthSchedule = scheduleData[monthName];
-  if (!monthSchedule) return 'X';
-  
-  const dayIdx = targetDate.getDate() - 1; // 0-indexed (tgl 1 = index 0)
-  const shift = monthSchedule[dayIdx];
-  
-  return shift || 'X';
+export function getDurationMinutes(workIn: Date, workOut: Date): number {
+  let end = workOut.getTime();
+  while (end <= workIn.getTime()) end += 24 * 60 * 60 * 1000;
+  return Math.max(0, (end - workIn.getTime()) / 60000);
+}
+
+export function isValidAttendancePair(
+  dateTrans: string,
+  workIn: Date | null,
+  workOut: Date | null,
+  securityShift: SecurityShift | null = null,
+): boolean {
+  if (!workIn || !workOut || Number.isNaN(workIn.getTime()) || Number.isNaN(workOut.getTime())) return false;
+  const transactionDate = new Date(`${dateTrans}T00:00:00`);
+  if (Number.isNaN(transactionDate.getTime())) return false;
+  if (workIn.getFullYear() !== transactionDate.getFullYear() || workIn.getMonth() !== transactionDate.getMonth() || workIn.getDate() !== transactionDate.getDate()) return false;
+
+  const sameDate = workOut.getFullYear() === workIn.getFullYear() && workOut.getMonth() === workIn.getMonth() && workOut.getDate() === workIn.getDate();
+  const nextDate = workOut.getTime() >= workIn.getTime() && getDurationMinutes(workIn, workOut) <= 16 * 60;
+  if (sameDate && workOut.getTime() >= workIn.getTime()) return true;
+  if (!sameDate && nextDate && getDurationMinutes(workIn, workOut) <= 16 * 60) return true;
+
+  const inMinutes = minutesSinceMidnight(workIn) ?? -1;
+  const outMinutes = minutesSinceMidnight(workOut) ?? -1;
+  const inferredOvernightMinutes = outMinutes >= 0 && inMinutes >= 0 ? outMinutes + 1440 - inMinutes : 0;
+  const nightStart = securityShift?.startMinutes === 15 * 60 || securityShift?.startMinutes === 23 * 60 || inMinutes >= 14 * 60;
+  return sameDate && workOut.getTime() < workIn.getTime() && nightStart && inferredOvernightMinutes >= 4 * 60 && inferredOvernightMinutes <= 16 * 60;
+}
+
+export function calculateSecurityOtHours(workIn: Date, workOut: Date, shift: SecurityShift | null): number {
+  const durationMinutes = getDurationMinutes(workIn, workOut);
+  const paidMinutes = Math.max(0, durationMinutes - 60);
+  if (!shift) return Math.max(0, Math.floor((paidMinutes / 60) * 2) / 2);
+  return Math.max(0, Math.floor(((paidMinutes / 60) - shift.standardHours) * 2) / 2);
+}
+
+export function isSecurityJob(jobDesc?: string | null, sectionDesc?: string | null): boolean {
+  const value = `${jobDesc || ''} ${sectionDesc || ''}`.toUpperCase();
+  return value.includes('SECURITY') || value.includes('SATPAM');
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbConnection } from '@/lib/db';
+import { calculateSecurityOtHours, getDurationMinutes, getSecurityShiftByCode, isSecurityJob, isValidAttendancePair } from '@/lib/securitySchedule';
 import ExcelJS from 'exceljs';
 
 const DANGEROUS_SQL = /(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|EXEC|EXECUTE|MERGE|GRANT|REVOKE)\s/i;
@@ -195,6 +196,7 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
       a.JAM_MASUK,
       a.JAM_PULANG,
       a.JAM_KERJA,
+      RTRIM(a.SHIFT) AS SHIFT,
       ISNULL(a.OT_1, 0) + ISNULL(a.OT_2, 0) + ISNULL(a.OT_3, 0) + ISNULL(a.OT_4, 0) AS dailyOt
     FROM EMP_TABLE e
     LEFT JOIN MS_DEP d ON e.DEP_CD = d.DEP_CD
@@ -242,56 +244,58 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
       const dayOfWeek = dObj.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
       const isHoliday = status === 'LIBUR' || status === 'OFF' || status === 'H';
+      const security = isSecurityJob(row.JOB_DESC, row.SEC_DESC);
+      const isSecurityWeekend = security && isWeekend;
+      const isHolidayCalculation = isHoliday && !isSecurityWeekend;
 
-      let isKerjaNormal = !isWeekend && !isHoliday && (status === 'KERJA' || status === 'O' || rg === 'O');
-      let isCuti = status === 'CUTI' || status === 'C' || status === 'H' || status === 'HAID' || rg === 'C' || rg === 'H';
+      let isKerjaNormal = !isHolidayCalculation && (status === 'KERJA' || status === 'O' || rg === 'O');
+      let isCuti = !isSecurityWeekend && (status === 'CUTI' || status === 'C' || status === 'H' || status === 'HAID' || rg === 'C' || rg === 'H');
 
       let kerjaHours = 0;
       let otHours = 0;
 
-      const dbOt = Number(row.dailyOt || 0);
-
-      let computedOt = 0;
-      if (row.WORK_OUT) {
-        let schOutHour = 16;
-        let schOutMin = 0;
-        if (row.JAM_PULANG) {
-          const pDate = new Date(row.JAM_PULANG);
-          if (!isNaN(pDate.getTime())) {
-            schOutHour = pDate.getHours();
-            schOutMin = pDate.getMinutes();
+      let computedOt: number | null = null;
+      const outDate = row.WORK_OUT ? new Date(row.WORK_OUT) : null;
+      const inDate = row.WORK_IN ? new Date(row.WORK_IN) : null;
+      const isSecurityHoliday = security && (status === 'LIBUR' || status === 'OFF') && !isSecurityWeekend;
+      const securityShift = security ? getSecurityShiftByCode(row.SHIFT) : null;
+      const attendanceValid = isValidAttendancePair(row.dateStr, inDate, outDate, securityShift);
+      if (attendanceValid && inDate && outDate) {
+        if (isSecurityHoliday) {
+          const workedMinutes = getDurationMinutes(inDate, outDate);
+          computedOt = Math.max(0, Math.floor(((workedMinutes - 60) / 60) * 2) / 2);
+        } else if (isHolidayCalculation) {
+          computedOt = Math.max(0, Math.floor((getDurationMinutes(inDate, outDate) / 60) * 2) / 2);
+        } else if (security && securityShift) {
+          computedOt = calculateSecurityOtHours(inDate, outDate, securityShift);
+        } else {
+          let schOutHour = 16;
+          let schOutMin = 0;
+          if (row.JAM_PULANG) {
+            const pDate = new Date(row.JAM_PULANG);
+            if (!isNaN(pDate.getTime())) {
+              schOutHour = pDate.getHours();
+              schOutMin = pDate.getMinutes();
+            }
           }
-        }
-        const outDate = new Date(row.WORK_OUT);
-        if (!isNaN(outDate.getTime())) {
-          const outMinutesOfDay = outDate.getHours() * 60 + outDate.getMinutes();
-          const schMinutesOfDay = schOutHour * 60 + schOutMin;
-          const diffMin = outMinutesOfDay - schMinutesOfDay;
-          if (diffMin >= 50) {
-            computedOt = Math.floor((diffMin + 10) / 60);
-          }
+          const scheduleOut = new Date(outDate);
+          scheduleOut.setHours(schOutHour, schOutMin, 0, 0);
+          const diffMinutes = (outDate.getTime() - scheduleOut.getTime()) / 60000;
+          const breakMinutes = diffMinutes >= 210 ? 30 : 0;
+          computedOt = Math.max(0, Math.floor(((diffMinutes - breakMinutes) / 60) * 2) / 2);
         }
       }
 
       if (isWeekend || isHoliday) {
         kerjaHours = 0;
-        if (dbOt > 0) {
-          otHours = dbOt;
-        } else if (row.WORK_IN && row.WORK_OUT && new Date(row.WORK_OUT) > new Date(row.WORK_IN)) {
-          const diffMinutes = (new Date(row.WORK_OUT).getTime() - new Date(row.WORK_IN).getTime()) / 60000;
-          const floorH = Math.floor(diffMinutes / 60);
-          const remMin = diffMinutes % 60;
-          otHours = remMin < 30 ? floorH : (floorH + 0.5);
-        } else if (row.JAM_KERJA && !isNaN(Number(row.JAM_KERJA))) {
-          otHours = Number(row.JAM_KERJA);
-        }
+        otHours = attendanceValid ? (computedOt ?? (row.JAM_KERJA && !isNaN(Number(row.JAM_KERJA)) ? Number(row.JAM_KERJA) : 0)) : 0;
       } else {
         if (isCuti) {
           kerjaHours = 8;
           otHours = 0;
-        } else if (isKerjaNormal || (row.WORK_IN && row.WORK_OUT)) {
+        } else if (isKerjaNormal && attendanceValid) {
           kerjaHours = 8;
-          otHours = dbOt > 0 ? dbOt : computedOt;
+          otHours = computedOt ?? 0;
         } else {
           kerjaHours = 0;
           otHours = 0;

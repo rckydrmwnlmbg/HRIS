@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
-import { query, withTransaction } from '@/lib/db';
+import { query } from '@/lib/db';
+import { calculateSecurityOtHours, getDurationMinutes, getSecurityShiftByCode, isSecurityJob, isValidAttendancePair } from '@/lib/securitySchedule';
 
 const addTitleAndHeader = (sheet: any, columns: any[], title: string, subtitle: string, fgColor: string = 'FF00B050') => {
   sheet.columns = columns;
@@ -257,10 +258,7 @@ export async function GET(request: Request) {
       });
 
     } else if (type === 'ot') {
-      const autoCorrectionParam = searchParams.get('autoCorrection');
-      const isAutoCorrection = autoCorrectionParam !== 'false';
-
-      const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0]).split('-');
+const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0]).split('-');
       const inputDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
       const day = inputDate.getDay();
       const diff = day === 0 ? -6 : 1 - day;
@@ -285,117 +283,6 @@ export async function GET(request: Request) {
       };
 
       const fileNameTitle = `Laporan Analysis OT ${formatDate(startStr)} sd ${formatDate(endStr)}`;
-
-      const applyToDbParam = searchParams.get('applyToDb');
-      const isApplyToDb = isAutoCorrection && applyToDbParam === 'true';
-
-      if (isApplyToDb) {
-        await withTransaction(async (tx) => {
-          const sqlUpdate = `
-            BEGIN TRY
-              -- 1. Normalisasi WORK_IN (06:50 - 06:59:59)
-              UPDATE a
-              SET a.WORK_IN = DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 599 as int), 
-                                DATEADD(minute, -10, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_MASUK, 108) AS DATETIME)))
-              FROM TR_ABSEN a
-              LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-              LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-              LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-              WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS <= @endDate
-                AND (e.Act_NonAct = 1 OR e.Act_NonAct IS NULL)
-                AND COALESCE(a.WORK_IN1, a.WORK_IN) IS NOT NULL 
-                AND a.JAM_MASUK IS NOT NULL
-                AND UPPER(ISNULL(RTRIM(e.ALL_IN),'0')) NOT IN ('1', 'Y', 'TRUE')
-                AND UPPER(ISNULL(RTRIM(j.JOB_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-                AND UPPER(ISNULL(RTRIM(s.SEC_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-                AND (
-                  DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), COALESCE(a.WORK_IN1, a.WORK_IN), 108) AS DATETIME), CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_MASUK, 108) AS DATETIME)) > 10
-                  OR
-                  (
-                    CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), COALESCE(a.WORK_IN1, a.WORK_IN), 108) AS DATETIME) >= CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_MASUK, 108) AS DATETIME)
-                    AND
-                    CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), COALESCE(a.WORK_IN1, a.WORK_IN), 108) AS DATETIME) <= DATEADD(minute, 15, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_MASUK, 108) AS DATETIME))
-                  )
-                );
-
-              -- 2. Normalisasi WORK_OUT (Pulang Nanggung & Pendaratan Aman)
-              WITH CalcRegOT AS (
-                SELECT 
-                  a.WORK_OUT,
-                  CASE 
-                    WHEN DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), COALESCE(a.WORK_OUT1, a.WORK_OUT)) >= 50
-                      THEN CAST(FLOOR((DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), COALESCE(a.WORK_OUT1, a.WORK_OUT)) + 10) / 60.0) AS INT)
-                    ELSE 0
-                  END AS K_OT,
-                  CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME) AS TARGET_SCH_OUT
-                FROM TR_ABSEN a
-                LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-                LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-                LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-                WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS <= @endDate
-                  AND (e.Act_NonAct = 1 OR e.Act_NonAct IS NULL)
-                  AND COALESCE(a.WORK_OUT1, a.WORK_OUT) IS NOT NULL 
-                  AND a.JAM_PULANG IS NOT NULL
-                  AND RTRIM(a.STATUS_HARI) IN ('KERJA', 'O')
-                  AND UPPER(ISNULL(RTRIM(e.ALL_IN),'0')) NOT IN ('1', 'Y', 'TRUE')
-                  AND UPPER(ISNULL(RTRIM(j.JOB_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-                  AND UPPER(ISNULL(RTRIM(s.SEC_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-              )
-              UPDATE CalcRegOT
-              SET 
-                WORK_OUT = CASE 
-                  WHEN K_OT > 0 THEN 
-                    DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 899 as int), DATEADD(hour, K_OT, TARGET_SCH_OUT))
-                  ELSE 
-                    DATEADD(second, CAST(RAND(CHECKSUM(NEWID())) * 899 as int), TARGET_SCH_OUT)
-                END;
-
-              -- 3. Karyawan ALL IN -> Raw Fingerprint
-              UPDATE a
-              SET 
-                a.WORK_IN = COALESCE(a.WORK_IN1, a.WORK_IN),
-                a.WORK_OUT = COALESCE(a.WORK_OUT1, a.WORK_OUT)
-              FROM TR_ABSEN a
-              LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-              LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-              LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-              WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS <= @endDate
-                AND (e.Act_NonAct = 1 OR e.Act_NonAct IS NULL)
-                AND UPPER(ISNULL(RTRIM(e.ALL_IN),'0')) IN ('1', 'Y', 'TRUE')
-                AND UPPER(ISNULL(RTRIM(j.JOB_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-                AND UPPER(ISNULL(RTRIM(s.SEC_DESC),'')) NOT IN ('SECURITY', 'SATPAM');
-
-              -- 4. Hitung Ulang JAM_KERJA
-              UPDATE a
-              SET a.JAM_KERJA = CASE 
-                WHEN a.WORK_IN IS NOT NULL AND a.WORK_OUT IS NOT NULL AND a.WORK_OUT > a.WORK_IN
-                THEN 
-                  CASE 
-                    WHEN (DATEDIFF(minute, a.WORK_IN, a.WORK_OUT) / 60.0) - FLOOR(DATEDIFF(minute, a.WORK_IN, a.WORK_OUT) / 60.0) < 0.50 
-                    THEN FLOOR(DATEDIFF(minute, a.WORK_IN, a.WORK_OUT) / 60.0) 
-                    ELSE FLOOR(DATEDIFF(minute, a.WORK_IN, a.WORK_OUT) / 60.0) + 0.50 
-                  END
-                ELSE 0
-              END
-              FROM TR_ABSEN a
-              LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-              LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-              LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-              WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS <= @endDate
-                AND (e.Act_NonAct = 1 OR e.Act_NonAct IS NULL)
-                AND UPPER(ISNULL(RTRIM(j.JOB_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-                AND UPPER(ISNULL(RTRIM(s.SEC_DESC),'')) NOT IN ('SECURITY', 'SATPAM');
-
-            END TRY
-            BEGIN CATCH
-              THROW;
-            END CATCH
-          `;
-
-          await tx(sqlUpdate, { startDate: startStr, endDate: endStr });
-        });
-      }
-
       const otData = await query<any>(`
         SELECT 
           RTRIM(e.EMP_CD) AS EMP_CD,
@@ -416,6 +303,7 @@ export async function GET(request: Request) {
           a.JAM_MASUK,
           a.JAM_PULANG,
           a.JAM_KERJA,
+          RTRIM(a.SHIFT) AS SHIFT,
           ISNULL(a.OT_1, 0) + ISNULL(a.OT_2, 0) + ISNULL(a.OT_3, 0) + ISNULL(a.OT_4, 0) AS dailyOt
         FROM EMP_TABLE e
         LEFT JOIN MS_DEP d ON e.DEP_CD = d.DEP_CD
@@ -461,56 +349,58 @@ export async function GET(request: Request) {
           const dayOfWeek = dObj.getDay(); // 0 = Sunday, 6 = Saturday
           const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
           const isHoliday = status === 'LIBUR' || status === 'OFF' || status === 'H';
+          const security = isSecurityJob(row.JOB_DESC, row.SEC_DESC);
+          const isSecurityWeekend = security && isWeekend;
+          const isHolidayCalculation = isHoliday && !isSecurityWeekend;
 
-          let isKerjaNormal = !isWeekend && !isHoliday && (status === 'KERJA' || status === 'O' || rg === 'O');
-          let isCuti = status === 'CUTI' || status === 'C' || status === 'H' || status === 'HAID' || rg === 'C' || rg === 'H';
+          let isKerjaNormal = !isHolidayCalculation && (status === 'KERJA' || status === 'O' || rg === 'O');
+          let isCuti = !isSecurityWeekend && (status === 'CUTI' || status === 'C' || status === 'H' || status === 'HAID' || rg === 'C' || rg === 'H');
 
           let kerjaHours = 0;
           let otHours = 0;
 
-          const dbOt = Number(row.dailyOt || 0);
-
-          let computedOt = 0;
-          if (row.WORK_OUT) {
-            let schOutHour = 16;
-            let schOutMin = 0;
-            if (row.JAM_PULANG) {
-              const pDate = new Date(row.JAM_PULANG);
-              if (!isNaN(pDate.getTime())) {
-                schOutHour = pDate.getHours();
-                schOutMin = pDate.getMinutes();
+          let computedOt: number | null = null;
+          const outDate = row.WORK_OUT ? new Date(row.WORK_OUT) : null;
+          const inDate = row.WORK_IN ? new Date(row.WORK_IN) : null;
+          const isSecurityHoliday = security && (status === 'LIBUR' || status === 'OFF') && !isSecurityWeekend;
+          const securityShift = security ? getSecurityShiftByCode(row.SHIFT) : null;
+          const attendanceValid = isValidAttendancePair(row.dateStr, inDate, outDate, securityShift);
+          if (attendanceValid && inDate && outDate) {
+            if (isSecurityHoliday) {
+              const workedMinutes = getDurationMinutes(inDate, outDate);
+              computedOt = Math.max(0, Math.floor(((workedMinutes - 60) / 60) * 2) / 2);
+            } else if (isHolidayCalculation) {
+              computedOt = Math.max(0, Math.floor((getDurationMinutes(inDate, outDate) / 60) * 2) / 2);
+            } else if (security && securityShift) {
+              computedOt = calculateSecurityOtHours(inDate, outDate, securityShift);
+            } else {
+              let schOutHour = 16;
+              let schOutMin = 0;
+              if (row.JAM_PULANG) {
+                const pDate = new Date(row.JAM_PULANG);
+                if (!isNaN(pDate.getTime())) {
+                  schOutHour = pDate.getHours();
+                  schOutMin = pDate.getMinutes();
+                }
               }
-            }
-            const outDate = new Date(row.WORK_OUT);
-            if (!isNaN(outDate.getTime())) {
-              const outMinutesOfDay = outDate.getHours() * 60 + outDate.getMinutes();
-              const schMinutesOfDay = schOutHour * 60 + schOutMin;
-              const diffMin = outMinutesOfDay - schMinutesOfDay;
-              if (diffMin >= 50) {
-                computedOt = Math.floor((diffMin + 10) / 60);
-              }
+              const scheduleOut = new Date(outDate);
+              scheduleOut.setHours(schOutHour, schOutMin, 0, 0);
+              const diffMinutes = (outDate.getTime() - scheduleOut.getTime()) / 60000;
+              const breakMinutes = diffMinutes >= 210 ? 30 : 0;
+              computedOt = Math.max(0, Math.floor(((diffMinutes - breakMinutes) / 60) * 2) / 2);
             }
           }
 
-          if (isWeekend || isHoliday) {
+          if (isHolidayCalculation) {
             kerjaHours = 0;
-            if (dbOt > 0) {
-              otHours = dbOt;
-            } else if (row.WORK_IN && row.WORK_OUT && new Date(row.WORK_OUT) > new Date(row.WORK_IN)) {
-              const diffMinutes = (new Date(row.WORK_OUT).getTime() - new Date(row.WORK_IN).getTime()) / 60000;
-              const floorH = Math.floor(diffMinutes / 60);
-              const remMin = diffMinutes % 60;
-              otHours = remMin < 30 ? floorH : (floorH + 0.5);
-            } else if (row.JAM_KERJA && !isNaN(Number(row.JAM_KERJA))) {
-              otHours = Number(row.JAM_KERJA);
-            }
+            otHours = attendanceValid ? (computedOt ?? (row.JAM_KERJA && !isNaN(Number(row.JAM_KERJA)) ? Number(row.JAM_KERJA) : 0)) : 0;
           } else {
             if (isCuti) {
               kerjaHours = 8;
               otHours = 0;
-            } else if (isKerjaNormal || (row.WORK_IN && row.WORK_OUT)) {
+            } else if (isKerjaNormal && attendanceValid) {
               kerjaHours = 8;
-              otHours = dbOt > 0 ? dbOt : computedOt;
+              otHours = computedOt ?? 0;
             } else {
               kerjaHours = 0;
               otHours = 0;
@@ -1140,19 +1030,6 @@ export async function GET(request: Request) {
         
         let workIn = row.WORK_IN_STR;
         let workOut = row.WORK_OUT_STR;
-
-        // 1. Double tap morning correction
-        if (workIn && workOut) {
-          const inTime = workIn.substring(0, 5);
-          const outTime = workOut.substring(0, 5);
-          if (inTime < "12:00" && outTime < "12:00") {
-            const earliest = inTime < outTime ? workIn : workOut;
-            workIn = earliest;
-            workOut = null; // Reset Jam Pulang
-            row.WORK_IN_STR = workIn; // Update for excel display
-            row.WORK_OUT_STR = null;
-          }
-        }
 
         // Jam Masuk check (standard 06:50-07:15)
         if (workIn) {

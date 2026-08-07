@@ -14,121 +14,50 @@
   font-weight: 500;
 }
 
-/* ===== HERO BANNER ===== */
-.heroBanner {
+/* ===== Clean Dashboard Intro ===== */
+.dashboardIntro {
   display: flex;
-  justify-content: space-between;
   align-items: stretch;
-  padding: 0;
-  margin-top: 10px;
-  margin-bottom: 28px;
+  gap: 14px;
+  margin: 8px 0 26px;
+  padding: 4px 0 4px 2px;
   position: relative;
-  overflow: visible;
-  min-height: 180px;
 }
 
-.heroBannerBg {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: 20px;
-  overflow: hidden;
-  background: linear-gradient(120deg, rgba(14, 165, 233, 0.12), rgba(14, 165, 233, 0.28), rgba(99, 102, 241, 0.12), rgba(14, 165, 233, 0.2));
-  background-size: 300% 300%;
-  animation: liquidShift 12s ease infinite;
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow: 
-    0 8px 32px rgba(14, 165, 233, 0.12), 
-    inset 0 1px 0 rgba(255, 255, 255, 0.7),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.15),
-    inset 0 0 6px 3px rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(15px);
-  -webkit-backdrop-filter: blur(15px);
+.introAccent {
+  width: 3px;
+  align-self: stretch;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--accent), var(--accent-secondary, #6366f1));
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.24);
+  flex-shrink: 0;
 }
 
-:global([data-theme="dark"]) .heroBannerBg {
-  background: linear-gradient(120deg, rgba(14, 165, 233, 0.08), rgba(99, 102, 241, 0.18), rgba(6, 182, 212, 0.1), rgba(14, 165, 233, 0.08));
-  background-size: 300% 300%;
-  border: 1px solid rgba(56, 189, 248, 0.25);
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.4), 
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.4),
-    inset 0 0 6px 3px rgba(56, 189, 248, 0.03);
-}
-
-@keyframes liquidShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-
-.heroContent {
-  flex: 1;
-  padding: 30px 36px;
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  max-width: 60%;
-  color: var(--text-primary);
+.introEyebrow {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .greeting {
+  margin: 0 0 7px;
+  color: var(--text-primary);
   font-family: var(--font-display);
   font-size: 1.55rem;
   font-weight: 750;
-  line-height: 1.22;
-  margin-bottom: 7px;
   letter-spacing: -0.025em;
-  color: var(--text-primary);
+  line-height: 1.22;
 }
 
 .greetingDesc {
-  font-size: 12.5px;
+  max-width: 620px;
+  margin: 0;
   color: var(--text-secondary);
-  margin-bottom: 18px;
+  font-size: 12.5px;
   line-height: 1.55;
-  max-width: 500px;
-}
-
-.heroActions {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.heroImageContainer {
-  position: relative;
-  width: 240px;
-  height: 240px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  z-index: 3;
-  margin-right: 140px;
-  align-self: flex-end;
-  margin-top: -38px;
-  margin-bottom: 0;
-}
-
-.heroImage {
-  position: absolute;
-  bottom: 0;
-  height: 240px;
-  width: auto;
-  object-fit: contain;
-  object-position: bottom;
-  filter: drop-shadow(0 10px 24px rgba(0, 0, 0, 0.16));
-  opacity: 0;
-  transition: opacity 0.8s ease-in-out;
-}
-
-.heroImageActive {
-  opacity: 1;
 }
 
 /* ===== Stats Grid & Cards ===== */
@@ -326,51 +255,14 @@
   border-color: var(--glass-border-hover) !important;
 }
 
-/* ===== Responsive ===== */
 @media (max-width: 1024px) {
   .statsGrid {
     grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .heroBanner {
-    flex-direction: column;
-  }
-  
-  .heroContent {
-    max-width: 100%;
-    text-align: center;
-    padding: 20px 16px 0 16px;
-    align-items: center;
-  }
-
-  .heroActions {
-    justify-content: center;
-  }
-  
-  .heroImageContainer {
-    margin-right: 0;
-    align-self: center;
-    margin-top: 0;
-    width: 140px;
-    height: 150px;
-  }
-  
-  .heroImage {
-    height: 150px;
   }
 }
 
 @media (max-width: 768px) {
   .statsGrid {
     grid-template-columns: 1fr;
-  }
-  
-  .heroImageContainer {
-    width: 130px;
-    height: 130px;
-  }
-  
-  .heroImage {
-    height: 130px;
   }
 }

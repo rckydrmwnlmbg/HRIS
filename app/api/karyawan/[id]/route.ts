@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { clearCache } from '@/lib/cache';
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -64,44 +65,64 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
+    const employeeId = String(id || '').trim();
     const data = await request.json();
+    if (!employeeId) return NextResponse.json({ error: 'ID karyawan wajib diisi.' }, { status: 400 });
 
-    const updates = [];
-    if (data.EMP_NM !== undefined) updates.push(`EMP_NM = '${data.EMP_NM.replace(/'/g, "''")}'`);
-    if (data.DEP_CD !== undefined) updates.push(`DEP_CD = '${data.DEP_CD.replace(/'/g, "''")}'`);
-    if (data.SEC_CD !== undefined) updates.push(`SEC_CD = '${data.SEC_CD.replace(/'/g, "''")}'`);
-    if (data.JOB_CD !== undefined) updates.push(`JOB_CD = '${data.JOB_CD.replace(/'/g, "''")}'`);
-    if (data.JNS_KRY !== undefined) updates.push(`JNS_KRY = '${data.JNS_KRY.replace(/'/g, "''")}'`);
-    if (data.DIV_CD !== undefined) updates.push(`DIV_CD = '${data.DIV_CD.replace(/'/g, "''")}'`);
-    
-    if (data.Act_NonAct !== undefined) updates.push(`Act_NonAct = ${data.Act_NonAct ? 1 : 0}`);
-    
-    if (data.DT_ENTRY !== undefined) updates.push(data.DT_ENTRY ? `DT_ENTRY = '${data.DT_ENTRY}'` : `DT_ENTRY = NULL`);
-    if (data.DT_RSG !== undefined) updates.push(data.DT_RSG ? `DT_RSG = '${data.DT_RSG}'` : `DT_RSG = NULL`);
-    if (data.DT_BRT !== undefined) updates.push(data.DT_BRT ? `DT_BRT = '${data.DT_BRT}'` : `DT_BRT = NULL`);
-    
-    if (data.PLC_BRT !== undefined) updates.push(`PLC_BRT = '${data.PLC_BRT.replace(/'/g, "''")}'`);
-    if (data.ADRR !== undefined) updates.push(`ADRR = '${data.ADRR.replace(/'/g, "''")}'`);
-    if (data.CT !== undefined) updates.push(`CT = '${data.CT.replace(/'/g, "''")}'`);
-    if (data.SX !== undefined) updates.push(`SX = '${data.SX.replace(/'/g, "''")}'`);
-    if (data.agama !== undefined) updates.push(`agama = '${data.agama.replace(/'/g, "''")}'`);
-    if (data.noktp !== undefined) updates.push(`noktp = '${data.noktp.replace(/'/g, "''")}'`);
-    if (data.telepon !== undefined) updates.push(`telepon = '${data.telepon.replace(/'/g, "''")}'`);
-    if (data.NPWP !== undefined) updates.push(`NPWP = '${data.NPWP.replace(/'/g, "''")}'`);
-    if (data.PTKP_ST !== undefined) updates.push(`PTKP_ST = '${data.PTKP_ST.replace(/'/g, "''")}'`);
-    if (data.ACC_NO !== undefined) updates.push(`ACC_NO = '${data.ACC_NO.replace(/'/g, "''")}'`);
-    if (data.FLAG_OT !== undefined) updates.push(`FLAG_OT = '${data.FLAG_OT}'`);
-    if (data.ALL_IN !== undefined) updates.push(`ALL_IN = '${data.ALL_IN}'`);
-    
-    if (updates.length > 0) {
-      await query(`
-        UPDATE EMP_TABLE 
-        SET ${updates.join(', ')}
-        WHERE RTRIM(EMP_CD) = '${id.replace(/'/g, "''")}'
-      `);
+    const updates: string[] = [];
+    const values: Record<string, any> = { employeeId };
+    const stringFields = [
+      'EMP_NM', 'DEP_CD', 'SEC_CD', 'JOB_CD', 'JNS_KRY', 'DIV_CD', 'PLC_BRT', 'ADRR', 'CT',
+      'SX', 'agama', 'noktp', 'telepon', 'NPWP', 'PTKP_ST', 'ACC_NO', 'FLAG_OT', 'ALL_IN'
+    ];
+    const dateFields = ['DT_ENTRY', 'DT_RSG', 'DT_BRT'];
+
+    for (const field of stringFields) {
+      if (data[field] !== undefined) {
+        if (data[field] !== null && typeof data[field] !== 'string') {
+          return NextResponse.json({ error: `${field} harus berupa teks atau null.` }, { status: 400 });
+        }
+        if (typeof data[field] === 'string' && data[field].length > 255) {
+          return NextResponse.json({ error: `${field} terlalu panjang.` }, { status: 400 });
+        }
+        updates.push(`${field} = @${field}`);
+        values[field] = data[field];
+      }
     }
 
-    return NextResponse.json({ success: true });
+    for (const field of dateFields) {
+      if (data[field] !== undefined) {
+        if (data[field] !== null && (typeof data[field] !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data[field]))) {
+          return NextResponse.json({ error: `${field} harus berformat YYYY-MM-DD atau null.` }, { status: 400 });
+        }
+        updates.push(`${field} = @${field}`);
+        values[field] = data[field] || null;
+      }
+    }
+
+    if (data.Act_NonAct !== undefined) {
+      if (![0, 1, true, false].includes(data.Act_NonAct)) {
+        return NextResponse.json({ error: 'Act_NonAct harus bernilai 0, 1, true, atau false.' }, { status: 400 });
+      }
+      updates.push('Act_NonAct = @Act_NonAct');
+      values.Act_NonAct = data.Act_NonAct ? 1 : 0;
+    }
+
+    if (!updates.length) return NextResponse.json({ error: 'Tidak ada field yang dapat diubah.' }, { status: 400 });
+
+    const existing = await query<any>(
+      'SELECT TOP 1 EMP_CD FROM EMP_TABLE WHERE RTRIM(EMP_CD) = @employeeId',
+      { employeeId }
+    );
+    if (!existing.length) return NextResponse.json({ error: 'Karyawan tidak ditemukan.' }, { status: 404 });
+
+    await query(
+      `UPDATE EMP_TABLE SET ${updates.join(', ')} WHERE RTRIM(EMP_CD) = @employeeId`,
+      values
+    );
+    clearCache('karyawan_');
+
+    return NextResponse.json({ success: true, message: 'Data karyawan berhasil diperbarui.' });
   } catch (error: any) {
     console.error('API /karyawan/[id] PUT error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -604,15 +604,18 @@ function synthesizeRowsResponse(userPrompt: string, sql: string, rows: any[] | n
   if (!rows) return null;
   const p = userPrompt.toLowerCase();
 
-  // 1. If 0 rows returned for specific intents
   if (rows.length === 0) {
+    const periodLabel = /hari ini|today/i.test(p) ? 'hari ini' : /minggu ini|minggu ke|mingguan/i.test(p) ? 'periode minggu yang diminta' : /bulan ini|bulan lalu|bulanan|bulan/i.test(p) ? 'periode bulan yang diminta' : 'periode yang dipilih';
     if (/terlambat|telat|late/i.test(p)) {
-      return 'Tidak ada karyawan yang tercatat datang terlambat untuk hari/periode ini. Seluruh karyawan yang hadir tercatat tepat waktu.';
+      return `Tidak ada karyawan yang tercatat datang terlambat untuk ${periodLabel}.`;
     }
-    if (/alpha|absen|mangkir|tidak hadir|belum hadir/i.test(p)) {
-      return 'Tidak ada karyawan yang tercatat alpha (tanpa keterangan) untuk hari/periode yang dipilih.';
+    if (/alpha|mangkir|tidak hadir|belum hadir/i.test(p)) {
+      return `Tidak ada karyawan yang tercatat alpha (tanpa keterangan) untuk ${periodLabel}.`;
     }
-    if (/lembur|overtime|ot\b|spl/i.test(p)) {
+    if (/hadir|masuk|kehadiran|absensi/i.test(p)) {
+      return `Tidak ada catatan kehadiran yang ditemukan untuk ${periodLabel}.`;
+    }
+    if (/lembur|overtime|ot\\b|spl/i.test(p)) {
       return 'Tidak ditemukan catatan lembur untuk kriteria atau periode yang diminta.';
     }
     if (/cuti|ijin|izin|sakit/i.test(p)) {
@@ -621,7 +624,7 @@ function synthesizeRowsResponse(userPrompt: string, sql: string, rows: any[] | n
     return 'Tidak ada data yang ditemukan di sistem HRIS untuk kriteria pencarian tersebut.';
   }
 
-  // 2. Single Aggregate Value (e.g. Total Karyawan Aktif, Total Alpha)
+  // 2. Single Aggregate Value (e.g. total employees, attendance count)
   if (rows.length === 1) {
     const keys = Object.keys(rows[0]);
     if (keys.length === 1 || (keys.length === 2 && keys.some(k => /total|jumlah|count|avg|sum/i.test(k)))) {
@@ -632,10 +635,13 @@ function synthesizeRowsResponse(userPrompt: string, sql: string, rows: any[] | n
       if (/total.*aktif|jumlah.*aktif|karyawan.*aktif/i.test(p)) {
         return `Saat ini terdapat total **${formattedVal} karyawan aktif** di sistem HRIS PT TMNB.`;
       }
-      if (/alpha|absen/i.test(p)) {
+      if (/hadir|masuk|kehadiran/i.test(p)) {
+        return `Tercatat **${formattedVal} karyawan** hadir untuk periode yang diminta.`;
+      }
+      if (/alpha|mangkir|tidak hadir/i.test(p)) {
         return `Jumlah karyawan yang tercatat alpha pada periode ini adalah **${formattedVal} orang**.`;
       }
-      if (/lembur/i.test(p)) {
+      if (/lembur|overtime/i.test(p)) {
         return `Total akumulasi jam lembur pada periode tersebut adalah **${formattedVal} jam**.`;
       }
       return `Berdasarkan data di sistem HRIS, total **${mainKey.replace(/_/g, ' ')}** adalah **${formattedVal}**.`;
@@ -695,11 +701,11 @@ function synthesizeRowsResponse(userPrompt: string, sql: string, rows: any[] | n
 
   // 5. Lembur (Overtime)
   if (/lembur|overtime|ot\b|spl/i.test(p) || rows.some(r => 'TOTAL_JAM_LEMBUR' in r || 'OT_1' in r || 'T_OT' in r)) {
-    const count = rows.length;
-    const topRows = rows.slice(0, 10);
-    const totalJam = Math.round(
-      rows.reduce((acc, r) => acc + Number(r.TOTAL_JAM_LEMBUR || (Number(r.OT_1 || 0) + Number(r.OT_2 || 0) + Number(r.OT_3 || 0) + Number(r.OT_4 || 0))), 0)
-    );
+    const overtimeRows = rows.filter(r => Number(r.TOTAL_JAM_LEMBUR ?? (Number(r.OT_1 || 0) + Number(r.OT_2 || 0) + Number(r.OT_3 || 0) + Number(r.OT_4 || 0))) > 0);
+    if (overtimeRows.length === 0) return 'Tidak ditemukan catatan lembur dengan durasi lebih dari 0 jam untuk periode yang diminta.';
+    const count = overtimeRows.length;
+    const topRows = overtimeRows.slice(0, 10);
+    const totalJam = overtimeRows.reduce((acc, r) => acc + Number(r.TOTAL_JAM_LEMBUR ?? (Number(r.OT_1 || 0) + Number(r.OT_2 || 0) + Number(r.OT_3 || 0) + Number(r.OT_4 || 0))), 0);
 
     let text = `Tercatat sebanyak **${count.toLocaleString('id-ID')} karyawan** melakukan lembur dengan akumulasi total **${totalJam.toLocaleString('id-ID')} jam**.\n\n`;
     text += `**Karyawan dengan Jam Lembur Tertinggi:**\n`;
@@ -1123,6 +1129,10 @@ export async function POST(request: NextRequest) {
         aiContent = `Berikut rincian data karyawan untuk NIK ${nikCheck[1]}`;
       } else if (/terlambat|telat|late/i.test(message)) {
         aiContent = `Berikut daftar karyawan yang tercatat datang terlambat hari ini:\n\n${SQL_FENCE} SELECT RTRIM(a.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CONVERT(varchar(5), a.WORK_IN, 108) AS JAM_MASUK, a.Time_Late AS MENIT_TERLAMBAT FROM TR_ABSEN a JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD) LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD) LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD) WHERE CONVERT(varchar(10), a.DATE_TRANS, 120) = CONVERT(varchar(10), GETDATE(), 120) AND ISNULL(a.Time_Late, 0) > 0 AND e.Act_NonAct = 1 ORDER BY a.Time_Late DESC ${FENCE}`;
+      } else if (/spl|surat perintah lembur/i.test(message)) {
+        aiContent = `Berikut data SPL yang tercatat hari ini per line:\n\n${SQL_FENCE} SELECT RTRIM(LINE_ID) AS LINE_ID, RTRIM(JOB_DESC) AS JOB_DESC, JAM_17_OPR, JAM_18_OPR, JAM_19_OPR, JAM_20_OPR, RTRIM(STATUS_DOC) AS STATUS_DOC FROM TR_SPL_PLAN WHERE CONVERT(date, DATE_TRANS) = CONVERT(date, GETDATE()) ORDER BY LINE_ID ${FENCE}`;
+      } else if (/security.*(shift|pagi)|shift.*security|petugas security/i.test(message)) {
+        aiContent = `Berikut petugas security shift pagi yang tercatat hadir hari ini:\n\n${SQL_FENCE} SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, CONVERT(varchar(5), a.WORK_IN, 108) AS JAM_MASUK FROM TR_ABSEN a JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD) LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD) WHERE CONVERT(date, a.DATE_TRANS) = CONVERT(date, GETDATE()) AND UPPER(RTRIM(s.SEC_DESC)) = 'SECURITY' AND a.WORK_IN IS NOT NULL AND DATEPART(hour, a.WORK_IN) < 12 AND e.Act_NonAct = 1 ORDER BY a.WORK_IN, e.EMP_NM ${FENCE}`;
       } else if (/analysis\s+ot|lembur|overtime/i.test(message)) {
         aiContent = `Berikut laporan Analisis Lembur (Overtime / OT) berdasarkan catatan kehadiran di sistem HRIS:\n\n- Ringkasan data lembur disajikan secara transparan per bagian dan karyawan.\n\n${SQL_FENCE} SELECT CONVERT(varchar(10), a.DATE_TRANS, 120) AS TANGGAL, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(j.JOB_DESC) AS JABATAN, (ISNULL(a.OT_1, 0) + ISNULL(a.OT_2, 0) + ISNULL(a.OT_3, 0) + ISNULL(a.OT_4, 0)) AS TOTAL_JAM_LEMBUR, ISNULL(a.T_OT, 0) AS UPAH_LEMBUR FROM TR_ABSEN a JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD) LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD) LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD) WHERE (ISNULL(a.OT_1, 0) + ISNULL(a.OT_2, 0) + ISNULL(a.OT_3, 0) + ISNULL(a.OT_4, 0)) > 0 ORDER BY a.DATE_TRANS DESC, TOTAL_JAM_LEMBUR DESC ${FENCE}`;
       } else if (/total\s+karyawan|jumlah\s+karyawan/i.test(message)) {
@@ -1163,6 +1173,12 @@ FROM EMP_TABLE e
 LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
 LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
 WHERE RTRIM(e.EMP_CD) = '${nikMatch[1]}'`;
+    } else if (/spl|surat perintah lembur/i.test(message)) {
+      sql = `SELECT RTRIM(LINE_ID) AS LINE_ID, RTRIM(JOB_DESC) AS JOB_DESC, JAM_17_OPR, JAM_18_OPR, JAM_19_OPR, JAM_20_OPR, RTRIM(STATUS_DOC) AS STATUS_DOC FROM TR_SPL_PLAN WHERE CONVERT(date, DATE_TRANS) = CONVERT(date, GETDATE()) ORDER BY LINE_ID`;
+    } else if (/security.*(shift|pagi)|shift.*security|petugas security/i.test(message)) {
+      sql = `SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, CONVERT(varchar(5), a.WORK_IN, 108) AS JAM_MASUK FROM TR_ABSEN a JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD) LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD) WHERE CONVERT(date, a.DATE_TRANS) = CONVERT(date, GETDATE()) AND UPPER(RTRIM(s.SEC_DESC)) = 'SECURITY' AND a.WORK_IN IS NOT NULL AND DATEPART(hour, a.WORK_IN) < 12 AND e.Act_NonAct = 1 ORDER BY a.WORK_IN, e.EMP_NM`;
+    } else if (/\b(excel|unduh|download|export|ekspor|spreadsheet|format excel|file)\b/i.test(message) && /lembur|overtime|rekap/i.test(message)) {
+      sql = `SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, CONVERT(varchar(10), a.DATE_TRANS, 120) AS TANGGAL, ISNULL(a.OT_1,0) AS OT_1, ISNULL(a.OT_2,0) AS OT_2, ISNULL(a.OT_3,0) AS OT_3, ISNULL(a.OT_4,0) AS OT_4, (ISNULL(a.OT_1,0)+ISNULL(a.OT_2,0)+ISNULL(a.OT_3,0)+ISNULL(a.OT_4,0)) AS TOTAL_JAM_LEMBUR FROM TR_ABSEN a JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD) LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD) WHERE a.DATE_TRANS >= DATEADD(day, -7, CONVERT(date, GETDATE())) AND (ISNULL(a.OT_1,0)+ISNULL(a.OT_2,0)+ISNULL(a.OT_3,0)+ISNULL(a.OT_4,0)) > 0 ORDER BY TOTAL_JAM_LEMBUR DESC, a.DATE_TRANS DESC`;
     }
 
     if (sql) sql = autoFixSQL(sql);

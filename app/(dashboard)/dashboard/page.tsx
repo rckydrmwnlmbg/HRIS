@@ -7,7 +7,7 @@ import { t } from '@/lib/i18n';
 import {
   Users, UserCheck, UserX, Clock, TrendingUp,
   AlertTriangle, ClipboardList, BarChart3, Plus, Settings,
-  CloudDownload, X, CheckCircle, AlertCircle
+  X, CheckCircle, AlertCircle
 } from 'lucide-react';
 import type { DashboardStats, TrendAbsensi, JamKosongRecord, PerluPerhatianRecord } from '@/types';
 import styles from './dashboard.module.css';
@@ -32,11 +32,6 @@ export default function DashboardPage() {
 
   const [trendLoading, setTrendLoading] = useState(true);
 
-  // Global Sync States
-  const [showSyncModal, setShowSyncModal] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [syncStart, setSyncStart] = useState('');
-  const [syncEnd, setSyncEnd] = useState('');
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'warning' } | null>(null);
 
   const showToast = (msg: string, type: 'success' | 'warning') => {
@@ -44,24 +39,7 @@ export default function DashboardPage() {
     setTimeout(() => setToast(null), 3500);
   };
 
-  const handleOpenSyncModal = () => {
-    const hMin1 = new Date();
-    hMin1.setDate(hMin1.getDate() - 1);
-    const defaultDate = hMin1.toISOString().split('T')[0];
-    setSyncStart(defaultDate);
-    setSyncEnd(defaultDate);
-    setShowSyncModal(true);
-  };
 
-  const [currentHeroIndex, setCurrentHeroIndex] = useState(0);
-  const heroImages = ['/hero-hr.png', '/hero-hr1.png', '/hero-hr2.png', '/hero-hr3.png'];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentHeroIndex((prev) => (prev + 1) % heroImages.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [heroImages.length]);
 
   const loadDashboard = async () => {
     try {
@@ -176,50 +154,25 @@ export default function DashboardPage() {
 
   return (
     <div className="animate-fadeIn">
-      {/* ========== TOP BAR ========== */}
-      <div className={styles.pageHeader}>
-        <h1 style={{ fontSize: '1.35rem', fontWeight: 700, letterSpacing: '-0.025em', margin: 0, lineHeight: 1.2 }}>
-          {dateStr}
-        </h1>
-      </div>
-
-      {/* ========== HERO BANNER ========== */}
-      <div className={styles.heroBanner}>
-        <div className={styles.heroBannerBg} />
-        <div className={styles.heroContent}>
-          <div className={styles.greeting}>
-            {greeting}, <strong>{userName}</strong>!
-          </div>
-          <div className={styles.greetingDesc}>
+      {/* ========== DASHBOARD INTRO ========== */}
+      <section className={styles.dashboardIntro} aria-labelledby="dashboard-greeting">
+        <div className={styles.introAccent} aria-hidden="true" />
+        <div>
+          <p className={styles.introEyebrow}>{dateStr}</p>
+          <h1 id="dashboard-greeting" className={styles.greeting}>
+            {greeting}, <strong>{userName}</strong>
+          </h1>
+          <p className={styles.greetingDesc}>
             {lang === 'id'
               ? (stats?.isFingerprintIntegrated
-                ? `Terdapat ${stats?.jamKosongHariIni || 0} catatan presensi yang memerlukan peninjauan hari ini. Operasional pabrik & HR terkelola optimal.`
-                : `Data kehadiran hari ini belum disinkronkan dari mesin fingerprint. Klik tombol sinkronisasi untuk memuat data terkini.`)
+                ? `Terdapat ${stats?.jamKosongHariIni || 0} catatan presensi yang memerlukan peninjauan hari ini.`
+                : 'Data kehadiran hari ini belum disinkronkan dari mesin fingerprint.')
               : (stats?.isFingerprintIntegrated
-                ? `You have ${stats?.jamKosongHariIni || 0} attendance records requiring review today. Factory and HR operations running optimally.`
-                : `Today's attendance records have not been synchronized. Please click 'Sync Attendance' to load the latest data.`)}
-          </div>
-          <div className={styles.heroActions}>
-            <button className="btn btn-primary" onClick={handleOpenSyncModal}>
-              <CloudDownload size={15} /> {lang === 'id' ? 'Sinkronisasi Kehadiran' : 'Sync Attendance'}
-            </button>
-            <button className="btn btn-secondary" onClick={() => router.push('/karyawan/baru')}>
-              <Plus size={15} /> {lang === 'id' ? 'Tambah Karyawan' : 'Add Employee'}
-            </button>
-          </div>
+                ? `You have ${stats?.jamKosongHariIni || 0} attendance records requiring review today.`
+                : "Today's attendance records have not been synchronized.")}
+          </p>
         </div>
-        <div className={styles.heroImageContainer}>
-          {heroImages.map((src, idx) => (
-            <img
-              key={src}
-              src={src}
-              alt={`HR ${idx}`}
-              className={`${styles.heroImage} ${idx === currentHeroIndex ? styles.heroImageActive : ''}`}
-              onError={(e) => { e.currentTarget.style.display = 'none'; }}
-            />
-          ))}
-        </div>
-      </div>
+      </section>
 
       {/* ========== STAT CARDS (4 KPI CARDS) ========== */}
       <div className={`${styles.statsGrid} stagger-1`}>
@@ -501,75 +454,8 @@ export default function DashboardPage() {
         initialData={perluPerhatian}
         lang={lang}
       />
+      
 
-      {/* Global Sync Modal - Seluruh Karyawan Aktif */}
-      {showSyncModal && (
-        <div className="modal-overlay" onClick={() => !isSyncing && setShowSyncModal(false)}>
-          <div className="modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 className="modal-title">☁️ {lang === 'id' ? 'Sinkronisasi Presensi Seluruh Personel' : 'Global Attendance Synchronization'}</h3>
-              <button className="btn btn-sm btn-secondary btn-icon" onClick={() => !isSyncing && setShowSyncModal(false)}><X size={14} /></button>
-            </div>
-            <div className="modal-body">
-              <div style={{ padding: '12px', background: 'rgba(59,130,246,0.08)', borderRadius: 'var(--radius-md)', marginBottom: '16px', border: '1px solid rgba(59,130,246,0.2)', fontSize: '13px', lineHeight: '1.5' }}>
-                {lang === 'id'
-                  ? 'Proses ini akan menyelaraskan rekaman kehadiran, menstandarisasi toleransi jam kerja, dan memperbarui kalkulasi lembur secara otomatis untuk seluruh karyawan aktif pada periode yang ditentukan. Seluruh catatan penyesuaian yang telah disetujui akan tetap terlindungi.'
-                  : 'This process will synchronize attendance records, standardize working hours, and update overtime calculations automatically for all active employees over the selected period. All verified manual adjustments will remain securely protected.'}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div className="form-group">
-                  <label className="form-label">{lang === 'id' ? 'Tanggal Mulai' : 'Start Date'}</label>
-                  <input type="date" className="form-input" value={syncStart} onChange={e => setSyncStart(e.target.value)} disabled={isSyncing} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{lang === 'id' ? 'Tanggal Selesai' : 'End Date'}</label>
-                  <input type="date" className="form-input" value={syncEnd} onChange={e => setSyncEnd(e.target.value)} disabled={isSyncing} />
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowSyncModal(false)} disabled={isSyncing}>{t(lang, 'batal')}</button>
-              <button
-                className="btn btn-primary"
-                onClick={async () => {
-                  if (!syncStart || !syncEnd) return showToast(lang === 'id' ? 'Silakan tentukan rentang tanggal periode presensi.' : 'Please select the date range.', 'warning');
-                  setIsSyncing(true);
-                  try {
-                    const res = await fetch('/api/absensi/sync-finger', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ startDate: syncStart, endDate: syncEnd })
-                    });
-                    const result = await res.json();
-                    if (result.success) {
-                      showToast(
-                        lang === 'id'
-                          ? 'Sinkronisasi presensi untuk seluruh karyawan aktif berhasil diselesaikan.'
-                          : 'Attendance synchronization for all active employees completed successfully.',
-                        'success'
-                      );
-                      setShowSyncModal(false);
-                      loadDashboard();
-                      loadTrend();
-                    } else {
-                      showToast((lang === 'id' ? 'Kendala sinkronisasi: ' : 'Sync issue: ') + (result.error || 'Terjadi kendala pada sistem'), 'warning');
-                    }
-                  } catch (e) {
-                    showToast(lang === 'id' ? 'Terjadi kendala koneksi sistem' : 'Connection error occurred', 'warning');
-                  } finally {
-                    setIsSyncing(false);
-                  }
-                }}
-                disabled={isSyncing}
-              >
-                {isSyncing ? (lang === 'id' ? 'Memproses Sinkronisasi...' : 'Synchronizing...') : (lang === 'id' ? 'Mulai Sinkronisasi Presensi' : 'Start Synchronization')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toast Notification */}
       {toast && (
         <div className="toast-container">
           <div className={`toast toast-${toast.type}`}>

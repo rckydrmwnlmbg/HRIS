@@ -145,7 +145,7 @@ export default function ChatAssistant() {
 
       const promptLower = text.toLowerCase();
       const isSingleEmployee = /\b(\d{6,10})\b/.test(text) || /(siapa|profil|gaji\s+\w+|berapa gaji)/i.test(promptLower);
-      const asksForExport = /(excel|unduh|download|export|ekspor|laporan|rekap|tarik data|spreadsheet|format excel|file)/i.test(promptLower);
+      const asksForExport = /\b(excel|unduh|download|export|ekspor|spreadsheet|format excel|file)\b/i.test(promptLower);
       const isExportable = !isSingleEmployee && asksForExport && !!data.sql;
 
       const aiMsg: Message = {
