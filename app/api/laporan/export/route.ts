@@ -468,42 +468,52 @@ export async function GET(request: Request) {
           let kerjaHours = 0;
           let otHours = 0;
 
-          if (isAutoCorrection) {
-            // Mode ON: Koreksi Otomatis / Compliance Standard
-            if (isWeekend || isHoliday) {
-              kerjaHours = 0;
-              otHours = row.dailyOt || 0;
-            } else {
-              kerjaHours = isKerjaNormal ? 8 : (isCuti ? 8 : 0);
-              otHours = row.dailyOt || 0;
+          const dbOt = Number(row.dailyOt || 0);
+
+          let computedOt = 0;
+          if (row.WORK_OUT) {
+            let schOutHour = 16;
+            let schOutMin = 0;
+            if (row.JAM_PULANG) {
+              const pDate = new Date(row.JAM_PULANG);
+              if (!isNaN(pDate.getTime())) {
+                schOutHour = pDate.getHours();
+                schOutMin = pDate.getMinutes();
+              }
             }
-          } else {
-            // Mode OFF: Real TR_ABSEN (Hitungan Murni WORK_IN & WORK_OUT Tanpa Koreksi, Desimal 0.5 Asli INUS)
-            let realDurasiHours = 0;
-            if (row.WORK_IN && row.WORK_OUT && new Date(row.WORK_OUT) > new Date(row.WORK_IN)) {
+            const outDate = new Date(row.WORK_OUT);
+            if (!isNaN(outDate.getTime())) {
+              const outMinutesOfDay = outDate.getHours() * 60 + outDate.getMinutes();
+              const schMinutesOfDay = schOutHour * 60 + schOutMin;
+              const diffMin = outMinutesOfDay - schMinutesOfDay;
+              if (diffMin >= 50) {
+                computedOt = Math.floor((diffMin + 10) / 60);
+              }
+            }
+          }
+
+          if (isWeekend || isHoliday) {
+            kerjaHours = 0;
+            if (dbOt > 0) {
+              otHours = dbOt;
+            } else if (row.WORK_IN && row.WORK_OUT && new Date(row.WORK_OUT) > new Date(row.WORK_IN)) {
               const diffMinutes = (new Date(row.WORK_OUT).getTime() - new Date(row.WORK_IN).getTime()) / 60000;
               const floorH = Math.floor(diffMinutes / 60);
               const remMin = diffMinutes % 60;
-              // Rumus desimal 0.5 (setengah jam) asli INUS
-              realDurasiHours = remMin < 30 ? floorH : (floorH + 0.5);
+              otHours = remMin < 30 ? floorH : (floorH + 0.5);
             } else if (row.JAM_KERJA && !isNaN(Number(row.JAM_KERJA))) {
-              realDurasiHours = Number(row.JAM_KERJA);
+              otHours = Number(row.JAM_KERJA);
             }
-
-            if (isWeekend || isHoliday) {
-              kerjaHours = 0;
-              otHours = realDurasiHours > 0 ? realDurasiHours : (row.dailyOt || 0);
+          } else {
+            if (isCuti) {
+              kerjaHours = 8;
+              otHours = 0;
+            } else if (isKerjaNormal || (row.WORK_IN && row.WORK_OUT)) {
+              kerjaHours = 8;
+              otHours = dbOt > 0 ? dbOt : computedOt;
             } else {
-              if (isCuti) {
-                kerjaHours = 8;
-                otHours = 0;
-              } else if (isKerjaNormal || realDurasiHours > 0) {
-                kerjaHours = realDurasiHours >= 8 ? 8 : (realDurasiHours > 0 ? realDurasiHours : 8);
-                otHours = Math.max(0, Number((realDurasiHours - 8).toFixed(1)));
-              } else {
-                kerjaHours = 0;
-                otHours = 0;
-              }
+              kerjaHours = 0;
+              otHours = 0;
             }
           }
 

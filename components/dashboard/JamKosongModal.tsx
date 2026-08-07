@@ -154,9 +154,9 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
         </div>
 
         {/* Toolbar */}
-        <div style={{ padding: '10px 20px', display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'var(--bg-subtle)' }}>
+        <div style={{ padding: '10px 20px', display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'rgba(255, 255, 255, 0.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--glass-bg)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)' }}>
               <Calendar size={13} color="var(--text-secondary)" />
               <input 
                 type="date" 
@@ -168,7 +168,7 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
               />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', width: 220 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--glass-bg)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', width: 220 }}>
               <Search size={13} color="var(--text-muted)" />
               <input 
                 type="text" 
@@ -223,7 +223,7 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
             </div>
           ) : filteredData.length > 0 ? (
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(10px)', backgroundColor: 'var(--bg-subtle)' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(10px)', backgroundColor: 'rgba(255, 255, 255, 0.05)' }}>
                 <tr>
                   <th style={{ padding: '8px 16px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Informasi Karyawan' : 'Employee'}</th>
                   <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Unit Kerja & Tim' : 'Section & Team'}</th>

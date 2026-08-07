@@ -182,9 +182,9 @@ export default function PerluPerhatianModal({ isOpen, onClose, initialData = [],
         </div>
 
         {/* Filter Toolbar */}
-        <div style={{ padding: '10px 20px', display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'var(--bg-subtle)' }}>
+        <div style={{ padding: '10px 20px', display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'rgba(255, 255, 255, 0.04)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--glass-bg)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)' }}>
               <Calendar size={13} color="var(--text-secondary)" />
               <input 
                 type="date" 
@@ -196,7 +196,7 @@ export default function PerluPerhatianModal({ isOpen, onClose, initialData = [],
               />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--bg-card)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', width: 220 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--glass-bg)', padding: '4px 10px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)', width: 220 }}>
               <Search size={13} color="var(--text-muted)" />
               <input 
                 type="text" 
@@ -218,25 +218,25 @@ export default function PerluPerhatianModal({ isOpen, onClose, initialData = [],
           </div>
           
           {filteredData.length > 0 && (
-            <button
+            <button 
               onClick={handleExport}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px',
-                background: '#10B981', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)',
-                fontSize: 11.5, fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s'
+                background: '#10b981', color: 'white', border: 'none', borderRadius: 'var(--radius-sm)',
+                fontSize: 11.5, fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 6px rgba(16, 185, 129, 0.3)'
               }}
             >
               <Download size={13} />
-              {lang === 'id' ? 'Unduh Excel' : 'Export Excel'}
+              <span>{lang === 'id' ? 'Unduh Rekap' : 'Export Excel'}</span>
             </button>
           )}
         </div>
 
-        {/* Tab Pills */}
-        <div style={{ display: 'flex', gap: 6, padding: '8px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-card)' }}>
+        {/* Tab Selection */}
+        <div style={{ padding: '8px 20px', display: 'flex', gap: 6, borderBottom: '1px solid var(--border)', background: 'rgba(255, 255, 255, 0.02)', overflowX: 'auto' }}>
           {[
-            { id: 'ALL' as TabType, label: lang === 'id' ? 'Semua' : 'All', count: counts.all, color: 'var(--text-secondary)' },
-            { id: 'PULANG_CEPAT' as TabType, label: lang === 'id' ? 'Pulang Lebih Awal' : 'Early Leave', count: counts.pulangCepat, color: '#f59e0b' },
+            { id: 'ALL' as TabType, label: lang === 'id' ? 'Semua Masalah' : 'All Issues', count: counts.all, color: 'var(--accent)' },
+            { id: 'PULANG_CEPAT' as TabType, label: lang === 'id' ? 'Pulang Cepat' : 'Early Out', count: counts.pulangCepat, color: '#f59e0b' },
             { id: 'TERLAMBAT' as TabType, label: lang === 'id' ? 'Keterlambatan' : 'Late Arrival', count: counts.terlambat, color: '#ef4444' },
             { id: 'DURASI_SINGKAT' as TabType, label: lang === 'id' ? 'Durasi Singkat' : 'Short Duration', count: counts.durasiSingkat, color: '#8b5cf6' },
           ].map(tab => {
@@ -250,7 +250,7 @@ export default function PerluPerhatianModal({ isOpen, onClose, initialData = [],
                   border: isActive ? `1px solid ${tab.color}` : '1px solid var(--border)',
                   background: isActive ? (tab.id === 'ALL' ? 'var(--accent-glow)' : `${tab.color}18`) : 'transparent',
                   color: isActive ? (tab.id === 'ALL' ? 'var(--accent)' : tab.color) : 'var(--text-secondary)',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s'
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all 0.15s', whiteSpace: 'nowrap'
                 }}
               >
                 <span>{tab.label}</span>
@@ -275,7 +275,7 @@ export default function PerluPerhatianModal({ isOpen, onClose, initialData = [],
             </div>
           ) : filteredData.length > 0 ? (
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(10px)', backgroundColor: 'var(--bg-subtle)' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(10px)', backgroundColor: 'rgba(255, 255, 255, 0.05)' }}>
                 <tr>
                   <th style={{ padding: '8px 16px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Informasi Karyawan' : 'Employee'}</th>
                   <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Unit Kerja & Tim' : 'Section & Team'}</th>

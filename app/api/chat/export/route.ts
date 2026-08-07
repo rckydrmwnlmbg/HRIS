@@ -113,9 +113,24 @@ function extractAnalysisOTDates(sql: string, prompt?: string): { startStr: strin
   }
 
   // 2. Try week keywords in prompt
-  if (combined.includes('minggu ke-3') || combined.includes('minggu ke 3') || combined.includes('minggu ketiga')) {
-    if (combined.includes('juni 2026') || combined.includes('juni')) {
-      return { startStr: '2026-06-15', endStr: '2026-06-21' };
+  const hasJune = combined.includes('juni');
+  const year = combined.match(/\b(202[0-9])\b/)?.[1] || '2026';
+  
+  if (hasJune) {
+    if (combined.includes('minggu ke-1') || combined.includes('minggu ke 1') || combined.includes('minggu pertama') || combined.includes('minggu 1')) {
+      return { startStr: `${year}-06-01`, endStr: `${year}-06-07` };
+    }
+    if (combined.includes('minggu ke-2') || combined.includes('minggu ke 2') || combined.includes('minggu kedua') || combined.includes('minggu 2')) {
+      return { startStr: `${year}-06-08`, endStr: `${year}-06-14` };
+    }
+    if (combined.includes('minggu ke-3') || combined.includes('minggu ke 3') || combined.includes('minggu ketiga') || combined.includes('minggu 3')) {
+      return { startStr: `${year}-06-15`, endStr: `${year}-06-21` };
+    }
+    if (combined.includes('minggu ke-4') || combined.includes('minggu ke 4') || combined.includes('minggu keempat') || combined.includes('minggu 4')) {
+      return { startStr: `${year}-06-22`, endStr: `${year}-06-28` };
+    }
+    if (combined.includes('minggu ke-5') || combined.includes('minggu ke 5') || combined.includes('minggu kelima') || combined.includes('minggu 5')) {
+      return { startStr: `${year}-06-29`, endStr: `${year}-06-30` };
     }
   }
 
@@ -234,27 +249,49 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
       let kerjaHours = 0;
       let otHours = 0;
 
-      // Mode OFF: Real TR_ABSEN (Hitungan Murni Fingerprint Tanpa Koreksi, Desimal 0.5 Asli INUS)
-      let realDurasiHours = 0;
-      if (row.WORK_IN && row.WORK_OUT && new Date(row.WORK_OUT) > new Date(row.WORK_IN)) {
-        const diffMinutes = (new Date(row.WORK_OUT).getTime() - new Date(row.WORK_IN).getTime()) / 60000;
-        const floorH = Math.floor(diffMinutes / 60);
-        const remMin = diffMinutes % 60;
-        realDurasiHours = remMin < 30 ? floorH : (floorH + 0.5);
-      } else if (row.JAM_KERJA && !isNaN(Number(row.JAM_KERJA))) {
-        realDurasiHours = Number(row.JAM_KERJA);
+      const dbOt = Number(row.dailyOt || 0);
+
+      let computedOt = 0;
+      if (row.WORK_OUT) {
+        let schOutHour = 16;
+        let schOutMin = 0;
+        if (row.JAM_PULANG) {
+          const pDate = new Date(row.JAM_PULANG);
+          if (!isNaN(pDate.getTime())) {
+            schOutHour = pDate.getHours();
+            schOutMin = pDate.getMinutes();
+          }
+        }
+        const outDate = new Date(row.WORK_OUT);
+        if (!isNaN(outDate.getTime())) {
+          const outMinutesOfDay = outDate.getHours() * 60 + outDate.getMinutes();
+          const schMinutesOfDay = schOutHour * 60 + schOutMin;
+          const diffMin = outMinutesOfDay - schMinutesOfDay;
+          if (diffMin >= 50) {
+            computedOt = Math.floor((diffMin + 10) / 60);
+          }
+        }
       }
 
       if (isWeekend || isHoliday) {
         kerjaHours = 0;
-        otHours = realDurasiHours > 0 ? realDurasiHours : (row.dailyOt || 0);
+        if (dbOt > 0) {
+          otHours = dbOt;
+        } else if (row.WORK_IN && row.WORK_OUT && new Date(row.WORK_OUT) > new Date(row.WORK_IN)) {
+          const diffMinutes = (new Date(row.WORK_OUT).getTime() - new Date(row.WORK_IN).getTime()) / 60000;
+          const floorH = Math.floor(diffMinutes / 60);
+          const remMin = diffMinutes % 60;
+          otHours = remMin < 30 ? floorH : (floorH + 0.5);
+        } else if (row.JAM_KERJA && !isNaN(Number(row.JAM_KERJA))) {
+          otHours = Number(row.JAM_KERJA);
+        }
       } else {
         if (isCuti) {
           kerjaHours = 8;
           otHours = 0;
-        } else if (isKerjaNormal || realDurasiHours > 0) {
-          kerjaHours = realDurasiHours >= 8 ? 8 : (realDurasiHours > 0 ? realDurasiHours : 8);
-          otHours = Math.max(0, Number((realDurasiHours - 8).toFixed(1)));
+        } else if (isKerjaNormal || (row.WORK_IN && row.WORK_OUT)) {
+          kerjaHours = 8;
+          otHours = dbOt > 0 ? dbOt : computedOt;
         } else {
           kerjaHours = 0;
           otHours = 0;

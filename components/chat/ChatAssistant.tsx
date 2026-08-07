@@ -95,6 +95,7 @@ export default function ChatAssistant() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [exportingIndex, setExportingIndex] = useState<number | null>(null);
   const [ocrResult, setOcrResult] = useState<any>(null);
   const [ocrLoading, setOcrLoading] = useState(false);
   const [ocrError, setOcrError] = useState('');
@@ -133,18 +134,32 @@ export default function ChatAssistant() {
         body: JSON.stringify({ message: text, history }),
       });
       const data = await res.json();
+      let displayContent = data.text;
+      if (!displayContent) {
+        if (data.error && !data.error.includes('<!DOCTYPE') && !data.error.includes('http') && !data.error.includes('ODBC') && !data.error.includes('SQL')) {
+          displayContent = data.error;
+        } else {
+          displayContent = 'Maaf, sistem sedang memproses data. Silakan ulangi sesaat lagi atau gunakan menu **Karyawan** / **Laporan**.';
+        }
+      }
+
+      const promptLower = text.toLowerCase();
+      const isSingleEmployee = /\b(\d{6,10})\b/.test(text) || /(siapa|profil|gaji\s+\w+|berapa gaji)/i.test(promptLower);
+      const asksForExport = /(excel|unduh|download|export|ekspor|laporan|rekap|tarik data|spreadsheet|format excel|file)/i.test(promptLower);
+      const isExportable = !isSingleEmployee && asksForExport && !!data.sql;
+
       const aiMsg: Message = {
         role: 'assistant',
-        content: data.error || data.text || 'Maaf, tidak ada respons.',
+        content: displayContent,
         rows: data.rows || undefined,
         sql: data.sql || undefined,
-        isExportable: !!(data.rows && data.rows.length > 0),
+        isExportable,
         userPrompt: text,
       };
       setMessages(prev => [...prev, aiMsg]);
       if (data.suggestions?.length) setSuggestions(data.suggestions);
     } catch {
-      setMessages(prev => [...prev, { role: 'assistant', content: 'Gagal menghubungi AI. Coba lagi.' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Koneksi asisten sedang memuat. Silakan coba sesaat lagi.' }]);
     } finally {
       setLoading(false);
     }
@@ -174,7 +189,9 @@ export default function ChatAssistant() {
     }
   };
 
-  const handleExport = async (sql: string, prompt?: string) => {
+  const handleExport = async (sql: string, prompt?: string, index?: number) => {
+    if (!sql) return;
+    if (typeof index === 'number') setExportingIndex(index);
     try {
       const res = await fetch('/api/chat/export', {
         method: 'POST',
@@ -185,10 +202,19 @@ export default function ChatAssistant() {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = `Laporan_HRIS_${new Date().toISOString().slice(0, 10)}.xlsx`;
-        a.click(); URL.revokeObjectURL(url);
+        const filename = `Laporan_HRIS_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        alert('Gagal mengunduh file Excel.');
       }
-    } catch { alert('Gagal export'); }
+    } catch {
+      alert('Gagal mengekspor data ke Excel.');
+    } finally {
+      setExportingIndex(null);
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -251,8 +277,17 @@ export default function ChatAssistant() {
                   {m.role === 'assistant' && (
                     <div className={styles.bubbleFooter}>
                       {m.isExportable && m.sql && (
-                        <button className={styles.bubbleActionBtn} onClick={() => handleExport(m.sql!, m.userPrompt)}>
-                          <FileSpreadsheet size={14} /> Unduh Laporan Lengkap Excel ({m.rows ? `${m.rows.length.toLocaleString('id-ID')} Baris Data` : 'Download'})
+                        <button
+                          className={styles.bubbleActionBtn}
+                          disabled={exportingIndex === i}
+                          onClick={() => handleExport(m.sql!, m.userPrompt, i)}
+                        >
+                          <FileSpreadsheet size={15} />
+                          <span>
+                            {exportingIndex === i
+                              ? 'Menyiapkan File Excel...'
+                              : `Unduh Laporan Excel (.xlsx)${m.rows?.length ? ` (${m.rows.length.toLocaleString('id-ID')} Data)` : ''}`}
+                          </span>
                         </button>
                       )}
 

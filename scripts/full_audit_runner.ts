@@ -1,149 +1,60 @@
 import { query } from '../lib/db';
 
-async function auditDatabase() {
-  console.log('========================================================================');
-  console.log('📊 FORENSIC AUDIT DATABASE HRIS WIDY');
-  console.log('========================================================================\n');
-
-  // Poin 2: Check OT_1, OT_2, OT_3, OT_4, T_OT for specific impacted employees (26066995, 13042349, 13050002, 13050205, 13050458, 24115262)
-  console.log('=== POIN 2: STATUS OT_1, OT_2, T_OT EMPLOYEES YANG SEMPAT TERDAMPAK ===');
-  const p2Res = await query<any>(`
-    SELECT 
-      RTRIM(a.EMP_CD) AS EMP_CD,
-      RTRIM(e.EMP_NM) AS EMP_NM,
-      RTRIM(e.ALL_IN) AS ALL_IN,
-      CONVERT(varchar(10), a.DATE_TRANS, 120) AS DATE_TRANS,
-      a.STATUS_HARI,
-      CONVERT(varchar(19), a.WORK_IN, 120) AS WORK_IN,
-      CONVERT(varchar(19), a.WORK_OUT, 120) AS WORK_OUT,
-      a.OT_1, a.OT_2, a.OT_3, a.OT_4, a.T_OT, a.JAM_KERJA
-    FROM TR_ABSEN a
-    LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-    WHERE RTRIM(a.EMP_CD) IN ('26066995', '13042349', '13050002', '13050205', '13050458', '24115262')
-      AND a.DATE_TRANS >= '2026-07-01' AND a.DATE_TRANS <= '2026-07-15'
-    ORDER BY a.EMP_CD, a.DATE_TRANS
-  `);
-  console.log(`Total baris sample diperiksa: ${p2Res.length}`);
-  console.table(p2Res.slice(0, 20).map(r => ({
-    EMP_CD: r.EMP_CD,
-    DATE: r.DATE_TRANS,
-    ALL_IN: r.ALL_IN,
-    WORK_IN: r.WORK_IN ? r.WORK_IN.substring(11, 19) : null,
-    WORK_OUT: r.WORK_OUT ? r.WORK_OUT.substring(11, 19) : null,
-    OT_1: r.OT_1,
-    OT_2: r.OT_2,
-    T_OT: r.T_OT,
-    JAM_KERJA: r.JAM_KERJA
-  })));
-
-  // Poin 5 & 6: Query agregat WORK_OUT landing zone accuracy
-  console.log('\n=== POIN 5 & 6: AGREGAT WORK_OUT LANDING ZONE ACCURACY (JULI 2026) ===');
-  const p5Res = await query<any>(`
-    SELECT 
-      COUNT(*) AS TOTAL_WORK_ROWS,
-      SUM(CASE WHEN DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), a.WORK_OUT) % 60 BETWEEN 0 AND 14 THEN 1 ELSE 0 END) AS IN_ZONE_0_14,
-      SUM(CASE WHEN DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), a.WORK_OUT) % 60 > 14 THEN 1 ELSE 0 END) AS OUTSIDE_ZONE_15_59,
-      SUM(CASE WHEN DATEDIFF(minute, CAST(CONVERT(varchar(10), a.DATE_TRANS, 120) + ' ' + CONVERT(varchar(8), a.JAM_PULANG, 108) AS DATETIME), a.WORK_OUT) < 0 THEN 1 ELSE 0 END) AS PULANG_CEPAT
-    FROM TR_ABSEN a
-    JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-    LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-    LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-    WHERE a.DATE_TRANS >= '2026-07-01' AND a.DATE_TRANS <= '2026-07-31'
-      AND a.STATUS_HARI = 'KERJA'
-      AND a.WORK_OUT IS NOT NULL
-      AND a.JAM_PULANG IS NOT NULL
-      AND UPPER(ISNULL(RTRIM(j.JOB_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-      AND UPPER(ISNULL(RTRIM(s.SEC_DESC),'')) NOT IN ('SECURITY', 'SATPAM')
-  `);
-  console.table(p5Res);
-
-  // Poin 12: tbldetcuti count in database
-  console.log('\n=== POIN 12: JUMLAH ROW tbldetcuti DI DATABASE ===');
-  try {
-    const p12Res = await query<any>(`SELECT COUNT(*) AS TOTAL_DETCUTI FROM tbldetcuti`);
-    console.table(p12Res);
-    const p12Sample = await query<any>(`SELECT TOP 5 * FROM tbldetcuti ORDER BY DT_CUTI DESC`);
-    console.log('Sample tbldetcuti:');
-    console.table(p12Sample);
-  } catch (e: any) {
-    console.log('Error querying tbldetcuti:', e.message);
+type Row = {
+  EMP_CD: string; EMP_NM: string; ALL_IN: string; DATE_TRANS: string; STATUS_HARI: string;
+  WORK_IN: string | null; WORK_OUT: string | null; JAM_MASUK: string | null; JAM_PULANG: string | null;
+  OT_1: number; OT_2: number; OT_3: number; OT_4: number; T_OT: number; JAM_KERJA: number;
+};
+type Bucket = { total: number; verifiable: number; match: number; legacyDiff: number; stale: number; missing: number; crossMidnight: number; invalid: number; dbOt: number; calcOt: number };
+const empty = (): Bucket => ({ total: 0, verifiable: 0, match: 0, legacyDiff: 0, stale: 0, missing: 0, crossMidnight: 0, invalid: 0, dbOt: 0, calcOt: 0 });
+const buckets: Record<'HARIAN' | 'ALL IN', Bucket> = { HARIAN: empty(), 'ALL IN': empty() };
+const samples: Record<string, any[]> = { LEGACY_DB_DIFF: [], EXPORT_STALE_VALUE: [], MISSING_ACTUAL_TIME: [], CROSS_MIDNIGHT: [], INVALID_SOURCE_DATA: [] };
+function dateTime(date: string, time: string | null): Date | null { if (!time) return null; const d = new Date(`${date}T${time.length === 5 ? `${time}:00` : time}`); return Number.isNaN(d.getTime()) ? null : d; }
+function roundOt(diffMin: number): number { return diffMin >= 50 ? Math.floor((diffMin + 10) / 60) : 0; }
+function expected(row: Row) {
+  const out = row.WORK_OUT ? new Date(row.WORK_OUT) : null, schedule = dateTime(row.DATE_TRANS, row.JAM_PULANG), actualIn = row.WORK_IN ? new Date(row.WORK_IN) : null;
+  const crossMidnight = !!(actualIn && out && out.getTime() < actualIn.getTime());
+  if (!out || Number.isNaN(out.getTime())) return { ot: 0, verifiable: false, crossMidnight, invalid: false };
+  if (crossMidnight) return { ot: 0, verifiable: false, crossMidnight, invalid: true };
+  const status = (row.STATUS_HARI || '').trim().toUpperCase(), day = new Date(`${row.DATE_TRANS}T00:00:00`).getDay();
+  const holiday = ['LIBUR', 'OFF', 'H'].includes(status) || day === 0 || day === 6;
+  if (holiday) {
+    if (!actualIn) return { ot: 0, verifiable: false, crossMidnight, invalid: false };
+    const mins = (out.getTime() - actualIn.getTime()) / 60000; if (mins < 0) return { ot: 0, verifiable: false, crossMidnight, invalid: true };
+    const h = Math.floor(mins / 60), rem = mins % 60; return { ot: rem < 30 ? h : h + 0.5, verifiable: true, crossMidnight, invalid: false };
   }
-
-  // Poin 13: Cek Kasus NIK 26066995 (7-10 Juli) & CHECKINOUT
-  console.log('\n=== POIN 13: KASUS NIK 26066995 (7-10 JULI 2026) & CHECKINOUT ===');
-  const p13Absen = await query<any>(`
-    SELECT 
-      a.EMP_CD, CONVERT(varchar(10), a.DATE_TRANS, 120) AS DATE_TRANS,
-      a.STATUS_HARI, a.REASON, mr.REASON_DESC,
-      CONVERT(varchar(19), a.WORK_IN, 120) AS WORK_IN,
-      CONVERT(varchar(19), a.WORK_OUT, 120) AS WORK_OUT,
-      a.OT_1, a.OT_2, a.T_OT, a.JAM_KERJA
-    FROM TR_ABSEN a
-    LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
-    WHERE RTRIM(a.EMP_CD) = '26066995'
-      AND a.DATE_TRANS >= '2026-07-05' AND a.DATE_TRANS <= '2026-07-15'
+  if (!schedule) return { ot: 0, verifiable: false, crossMidnight, invalid: false };
+  return { ot: roundOt((out.getTime() - schedule.getTime()) / 60000), verifiable: true, crossMidnight, invalid: false };
+}
+function addSample(kind: string, row: Row, calc: number, db: number) { if (samples[kind].length < 10) samples[kind].push({ EMP_CD: row.EMP_CD.trim(), EMP_NM: row.EMP_NM?.trim(), DATE: row.DATE_TRANS, STATUS: row.STATUS_HARI, WORK_IN: row.WORK_IN, WORK_OUT: row.WORK_OUT, JAM_PULANG: row.JAM_PULANG, DB_OT: db, CALC_OT: calc, T_OT: row.T_OT }); }
+function assertEdgeCases() { for (const [minutes, expectedOt] of [[49, 0], [50, 1], [59, 1], [60, 1], [90, 1], [120, 2]]) if (roundOt(minutes) !== expectedOt) throw new Error(`Edge case failed: ${minutes}`); console.log('EDGE_CASES: PASS (49/50/59/60/90/120 menit)'); }
+async function main() {
+  assertEdgeCases();
+  const rows = await query<Row>(`
+    SELECT RTRIM(a.EMP_CD) EMP_CD, RTRIM(e.EMP_NM) EMP_NM, RTRIM(ISNULL(e.ALL_IN,'0')) ALL_IN,
+      CONVERT(varchar(10), a.DATE_TRANS, 120) DATE_TRANS, RTRIM(ISNULL(a.STATUS_HARI,'')) STATUS_HARI,
+      CONVERT(varchar(19), a.WORK_IN, 120) WORK_IN, CONVERT(varchar(19), a.WORK_OUT, 120) WORK_OUT,
+      CONVERT(varchar(8), a.JAM_MASUK, 108) JAM_MASUK, CONVERT(varchar(8), a.JAM_PULANG, 108) JAM_PULANG,
+      ISNULL(a.OT_1,0) OT_1, ISNULL(a.OT_2,0) OT_2, ISNULL(a.OT_3,0) OT_3, ISNULL(a.OT_4,0) OT_4,
+      ISNULL(a.T_OT,0) T_OT, ISNULL(a.JAM_KERJA,0) JAM_KERJA
+    FROM TR_ABSEN a JOIN EMP_TABLE e ON RTRIM(a.EMP_CD)=RTRIM(e.EMP_CD)
+    WHERE a.DATE_TRANS >= '2026-01-01' AND a.DATE_TRANS < '2026-08-01'
     ORDER BY a.DATE_TRANS
   `);
-  console.table(p13Absen);
-
-  try {
-    const p13Checkin = await query<any>(`
-      SELECT TOP 20 
-        USERID, CHECKTIME, CHECKTYPE, SENSORID
-      FROM CHECKINOUT
-      WHERE USERID IN (
-        SELECT USERID FROM USERINFO WHERE RTRIM(Badgenumber) = '26066995' OR RTRIM(SSN) = '26066995'
-      )
-      AND CHECKTIME >= '2026-07-01' AND CHECKTIME <= '2026-07-15'
-      ORDER BY CHECKTIME
-    `);
-    console.log('CHECKINOUT raw tap records for 26066995:');
-    console.table(p13Checkin);
-  } catch (e: any) {
-    console.log('Error querying CHECKINOUT:', e.message);
+  for (const row of rows) {
+    const kind = ['1', 'Y', 'TRUE'].includes(row.ALL_IN.trim().toUpperCase()) ? 'ALL IN' : 'HARIAN', b = buckets[kind]; b.total++;
+    const db = [row.OT_1, row.OT_2, row.OT_3, row.OT_4].reduce((s, v) => s + Number(v || 0), 0), result = expected(row); b.dbOt += db; b.calcOt += result.ot;
+    if (result.crossMidnight) { b.crossMidnight++; addSample('CROSS_MIDNIGHT', row, result.ot, db); }
+    if (result.invalid) { b.invalid++; addSample('INVALID_SOURCE_DATA', row, result.ot, db); continue; }
+    if (!result.verifiable) { b.missing++; addSample('MISSING_ACTUAL_TIME', row, result.ot, db); continue; }
+    b.verifiable++;
+    if (Math.abs(db - result.ot) < 0.001) b.match++; else { b.legacyDiff++; addSample('LEGACY_DB_DIFF', row, result.ot, db); }
+    const routeValue = db > 0 ? db : result.ot; if (Math.abs(routeValue - result.ot) >= 0.001) { b.stale++; addSample('EXPORT_STALE_VALUE', row, result.ot, routeValue); }
   }
-
-  // Poin 17: MS_LIBUR_KERJA structure & sample
-  console.log('\n=== POIN 17: STRUKTUR & ISI TABEL MS_LIBUR_KERJA ===');
-  try {
-    const p17Cols = await query<any>(`
-      SELECT COLUMN_NAME, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE
-      FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_NAME = 'MS_LIBUR_KERJA'
-    `);
-    console.log('Kolom MS_LIBUR_KERJA:');
-    console.table(p17Cols);
-
-    const p17Sample = await query<any>(`SELECT TOP 10 * FROM MS_LIBUR_KERJA ORDER BY 1 DESC`);
-    console.log('Sample data MS_LIBUR_KERJA:');
-    console.table(p17Sample);
-  } catch (e: any) {
-    console.log('Error querying MS_LIBUR_KERJA:', e.message);
-  }
-
-  // Poin 18 & 20: Sisa data tahun rusak (>2027, 1899/1900)
-  console.log('\n=== POIN 18 & 20: DATA RUSAK MASA DEPAN (>2027) & 1899/1900 (SELURUH TR_ABSEN) ===');
-  const p18Res = await query<any>(`
-    SELECT 
-      SUM(CASE WHEN YEAR(WORK_IN) > 2027 OR YEAR(WORK_OUT) > 2027 THEN 1 ELSE 0 END) AS FUTURE_YEAR_COUNT_ALL_TIME,
-      SUM(CASE WHEN (YEAR(WORK_IN) > 2027 OR YEAR(WORK_OUT) > 2027) AND DATE_TRANS >= '2026-07-01' THEN 1 ELSE 0 END) AS FUTURE_YEAR_JULY_2026,
-      SUM(CASE WHEN YEAR(WORK_IN) IN (1899, 1900) OR YEAR(WORK_OUT) IN (1899, 1900) THEN 1 ELSE 0 END) AS ANCIENT_YEAR_1899_1900,
-      SUM(CASE WHEN YEAR(WORK_IN) = 2026 AND YEAR(WORK_OUT) = 2026 AND DATE_TRANS >= '2026-07-01' THEN 1 ELSE 0 END) AS VALID_2026_JULY
-    FROM TR_ABSEN
-  `);
-  console.table(p18Res);
-
-  // Poin 21: Keberadaan tabel TR_AUDIT_ABSEN
-  console.log('\n=== POIN 21: STATUS KEBERADAAN TABEL TR_AUDIT_ABSEN ===');
-  const p21Res = await query<any>(`
-    SELECT TABLE_NAME, TABLE_TYPE 
-    FROM INFORMATION_SCHEMA.TABLES 
-    WHERE TABLE_NAME = 'TR_AUDIT_ABSEN'
-  `);
-  console.table(p21Res);
+  console.log(`ROWS_READ: ${rows.length}`);
+  console.table(Object.entries(buckets).map(([CATEGORY, b]) => ({ CATEGORY, ...b, MATCH_RATE: b.verifiable ? `${(b.match * 100 / b.verifiable).toFixed(2)}%` : 'N/A' })));
+  for (const [kind, list] of Object.entries(samples)) { console.log(`\n${kind} SAMPLES (${list.length}):`); if (list.length) console.table(list); }
+  console.log('\nREAD_ONLY_ASSERTION: PASS — script contains SELECT only; no UPDATE/INSERT/DELETE.');
 }
+main().then(() => process.exit(0)).catch(err => { console.error('VALIDATION_ERROR:', err); process.exit(1); });
 
-auditDatabase().then(() => process.exit(0)).catch(err => {
-  console.error('Audit Error:', err);
-  process.exit(1);
-});

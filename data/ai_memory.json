@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-08-06T17:31:11.075Z",
+  "last_updated": "2026-08-07T06:25:22.464Z",
   "glossary": [
     {
       "term": "anak gudang",
@@ -26,6 +26,11 @@
       "term": "mekanik",
       "meaning": "Bagian MEKANIK / Maintenance mesin pabrik",
       "added_at": "2026-08-06"
+    },
+    {
+      "term": "security shift",
+      "meaning": "Pola Shift Security PT TPINC: PRIA (Pagi: 07:00-16:00, Siang: 15:00-24:00, Malam: 23:00-08:00, X: Libur), WANITA (Pagi: 07:00-16:00, Siang: 11:30-20:30). Terdaftar di JADWAL_SECURITY_2026.xlsx",
+      "added_at": "2026-08-07"
     }
   ],
   "learned_patterns": [
@@ -57,7 +62,7 @@
       "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, ... SUM(OT_1+OT_2+OT_3+OT_4) AS TOTAL_JAM_LEMBUR FROM TR_ABSEN a JOIN EMP_TABLE e ... WHERE DATE_TRANS BETWEEN ... GROUP BY ... ORDER BY TOTAL_JAM_LEMBUR DESC",
       "usage_count": 5,
       "likes": 7,
-      "dislikes": 1,
+      "dislikes": 2,
       "last_used": "2026-08-06"
     },
     {
@@ -71,9 +76,9 @@
       ],
       "intent": "Pola kueri sukses untuk permintaan \"Berapa total karyawan aktif saat ini?\"",
       "sql_snippet": "SELECT COUNT(*) AS TOTAL_AKTIF FROM EMP_TABLE e WHERE e.Act_NonAct = 1 AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= CONVERT(varchar",
-      "usage_count": 2,
-      "likes": 3,
-      "dislikes": 1,
+      "usage_count": 3,
+      "likes": 8,
+      "dislikes": 7,
       "last_used": "2026-08-06"
     },
     {
@@ -247,10 +252,10 @@
       ],
       "intent": "Pola kueri sukses untuk permintaan \"Aku ingin laporan Absensi Bulan Juni untuk karyawan Widya Et\"",
       "sql_snippet": "SELECT CONVERT(varchar(10), a.DATE_TRANS, 120) AS TANGGAL, RTRIM(a.STATUS_HARI) AS STATUS_HARI, CONVERT(varchar(5), a.WORK_IN, 108) AS JAM_MASUK, CONV",
-      "usage_count": 1,
+      "usage_count": 4,
       "likes": 1,
       "dislikes": 0,
-      "last_used": "2026-08-06"
+      "last_used": "2026-08-07"
     },
     {
       "id": "pat-1786037431795",
@@ -283,6 +288,306 @@
       "likes": 1,
       "dislikes": 0,
       "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786038981940",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "widya",
+        "etika",
+        "pada"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"berapa gaji Widya Etika pada bulan Juni ? \"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.STATUS) = 'T' THE",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786039530378",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "widya",
+        "etika",
+        "bulan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa gaji Widya Etika di bulan Juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.STATUS) = 'T' THE",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786039608985",
+      "keywords": [
+        "ingin",
+        "laporan",
+        "analysis",
+        "minggu",
+        "ketiga"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"aku ingin laporan ot analysis minggu ketiga bulan Juni\"",
+      "sql_snippet": "WITH DailyOT AS ( SELECT RTRIM(a.EMP_CD) AS EMP_CD, a.DATE_TRANS, a.WORK_IN, a.WORK_OUT, UPPER(RTRIM(ISNULL(a.STATUS_HARI, ''))) AS STATUS_HARI, DATED",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786040231989",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "widya",
+        "etika",
+        "bulan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa gaji Widya etika di bulan juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.STATUS) = 'T' THE",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786040404823",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "widya",
+        "etika",
+        "bulan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa Gaji Widya Etika di bulan juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, e.BS_SLR AS GAJI_POKOK, ISNULL(e.T1",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786040426157",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "widya",
+        "etika",
+        "bulan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa gaji widya etika di bulan Juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, e.BS_SLR AS GAJI_POKOK, ISNULL(e.T1",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786040784983",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "widya",
+        "etika",
+        "bulan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa Gaji Widya Etika di bulan juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, e.BS_SLR AS GAJI_POKOK, ISNULL(e.T1",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786041040605",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "widya",
+        "etika",
+        "bulan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa gaji widya etika di bulan Juni ? \"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, e.BS_SLR AS GAJI_POKOK, ISNULL(e.T1",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786041280797",
+      "keywords": [
+        "apakah",
+        "tidak",
+        "menemukan",
+        "karyawan",
+        "dengan"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"apakah kau tidak menemukan karyawan dengan NIK 24115262 ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.STATUS) = 'T' THE",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786041346898",
+      "keywords": [
+        "adalah",
+        "dari",
+        "karyawan",
+        "atas",
+        "nama"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"itu adalah NIK dari karyawan atas nama A.ROFIQ\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.STATUS) = 'T' THE",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786064287397",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "24115262",
+        "bulan",
+        "juni"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"berapa gaji 24115262 di Bulan Juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS EMP_CD, RTRIM(e.EMP_NM) AS EMP_NM, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JOB_DESC, CASE WHEN RTRIM(e.STATUS) = '",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786068784157",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "24115262",
+        "bulan",
+        "juni"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"berapa gaji 24115262 di bulan juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.JNS_KRY) = '100' ",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786068801122",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "24074435",
+        "bulan",
+        "juni"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"berapa gaji 24074435 di bulan juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.JNS_KRY) = '100' ",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786068884522",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "24074435",
+        "bulan",
+        "juni"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"berapa gaji 24074435 di bulan Juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.JNS_KRY) = '100' ",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786068930903",
+      "keywords": [
+        "berapa",
+        "gaji",
+        "24115262",
+        "bulan",
+        "juni"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Berapa gaji 24115262 di bulan Juni ?\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.JNS_KRY) = '100' ",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786068972890",
+      "keywords": [
+        "tampilkan",
+        "data",
+        "karyawan",
+        "25015706"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"tampilkan data karyawan 25015706\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.JNS_KRY) = '100' ",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786082864387",
+      "keywords": [
+        "cari",
+        "data",
+        "24063834"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"cari data 24063834\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.JNS_KRY) = '100' ",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786083713050",
+      "keywords": [
+        "tampilkam",
+        "data",
+        "karyawan",
+        "24063834"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"tampilkam data karyawan 24063834\"",
+      "sql_snippet": "SELECT RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, CASE WHEN RTRIM(e.JNS_KRY) = '100' ",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786083922464",
+      "keywords": [
+        "butuh",
+        "laporan",
+        "analysis",
+        "minggu",
+        "juni"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"aku butuh laporan OT analysis minggu ke 2 juni \"",
+      "sql_snippet": "WITH DailyOT AS ( SELECT RTRIM(a.EMP_CD) AS EMP_CD, a.DATE_TRANS, a.WORK_IN, a.WORK_OUT, UPPER(RTRIM(ISNULL(a.STATUS_HARI, ''))) AS STATUS_HARI, DATED",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
     }
   ],
   "user_corrections": [
@@ -334,6 +639,34 @@
       "correction": "data masih salah",
       "source": "user_feedback_ui",
       "created_at": "2026-08-06"
+    },
+    {
+      "id": "corr-1786041285904",
+      "topic": "Koreksi untuk \"berapa gaji 24115262 di Bulan Juni ? \"",
+      "correction": "harus kebih intar lagi mencari NIK tanpa diterangkan bahwa itu NIK",
+      "source": "user_feedback_ui",
+      "created_at": "2026-08-06"
+    },
+    {
+      "id": "corr-1786041383635",
+      "topic": "Koreksi untuk \"itu adalah NIK dari karyawan atas nama A\"",
+      "correction": "masih salah menemukan data",
+      "source": "user_feedback_ui",
+      "created_at": "2026-08-06"
+    },
+    {
+      "id": "corr-1786065634269",
+      "topic": "Koreksi untuk \"berapa gaji 25076118 di bulan juni ?\"",
+      "correction": "Datanya masih tidak sesuai dengan NIK yang kuberikan.",
+      "source": "user_feedback_ui",
+      "created_at": "2026-08-07"
+    },
+    {
+      "id": "corr-1786069065002",
+      "topic": "Koreksi untuk \"aku ingin download laporan OT Analysis d\"",
+      "correction": "terpotong",
+      "source": "user_feedback_ui",
+      "created_at": "2026-08-07"
     }
   ]
 }

@@ -18,17 +18,17 @@ export default function LaporanPage() {
   const [filterSec, setFilterSec] = useState('');
   const [filterJob, setFilterJob] = useState('');
   const [filterShift, setFilterShift] = useState('');
-  
+
   const today = new Date().toISOString().split('T')[0];
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
-  
+
   const [otDate, setOtDate] = useState(today);
   const [autoCorrection, setAutoCorrection] = useState(true);
   const [applyToDb, setApplyToDb] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [previewData, setPreviewData] = useState<any[] | null>(null);
-  
+
   const [masterSec, setMasterSec] = useState<Seksi[]>([]);
   const [masterJob, setMasterJob] = useState<Jabatan[]>([]);
 
@@ -98,14 +98,14 @@ export default function LaporanPage() {
         startD.setDate(inputDate.getDate() + diff);
         const endD = new Date(startD);
         endD.setDate(startD.getDate() + 6);
-        
+
         const fmt = (d: Date) => {
           const dd = String(d.getDate()).padStart(2, '0');
           const mm = String(d.getMonth() + 1).padStart(2, '0');
           const yyyy = d.getFullYear();
           return `${dd}-${mm}-${yyyy}`;
         };
-        
+
         a.download = `Laporan Analysis OT ${fmt(startD)} sd ${fmt(endD)}.xlsx`;
       } else {
         a.download = `Laporan_${tab}_${tahun}${String(bulan).padStart(2, '0')}.xlsx`;
@@ -143,7 +143,7 @@ export default function LaporanPage() {
             <div className="form-group">
               <label className="form-label">{lang === 'id' ? 'Jenis Laporan' : 'Report Type'}</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                <button 
+                <button
                   className={`btn ${tab === 'absensi' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => { setTab('absensi'); setPreviewData(null); }}
                   style={{ display: 'flex', flexDirection: 'column', padding: '10px 8px', height: 'auto', gap: '5px', fontSize: '12px' }}
@@ -151,7 +151,7 @@ export default function LaporanPage() {
                   <FileText size={18} />
                   <span>{lang === 'id' ? 'Rekap Presensi' : 'Attendance'}</span>
                 </button>
-                <button 
+                <button
                   className={`btn ${tab === 'ot' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => { setTab('ot'); setPreviewData(null); }}
                   style={{ display: 'flex', flexDirection: 'column', padding: '10px 8px', height: 'auto', gap: '5px', fontSize: '12px' }}
@@ -159,7 +159,7 @@ export default function LaporanPage() {
                   <BarChart3 size={18} />
                   <span>{lang === 'id' ? 'Rekap Lembur' : 'Overtime'}</span>
                 </button>
-                <button 
+                <button
                   className={`btn ${tab === 'cuti' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => { setTab('cuti'); setPreviewData(null); }}
                   style={{ display: 'flex', flexDirection: 'column', padding: '10px 8px', height: 'auto', gap: '5px', fontSize: '12px' }}
@@ -167,7 +167,7 @@ export default function LaporanPage() {
                   <CalendarIcon size={18} />
                   <span>{lang === 'id' ? 'Rekap Cuti' : 'Leave'}</span>
                 </button>
-                <button 
+                <button
                   className={`btn ${tab === 'skorsing' ? 'btn-primary' : 'btn-secondary'}`}
                   onClick={() => { setTab('skorsing'); setPreviewData(null); }}
                   style={{ display: 'flex', flexDirection: 'column', padding: '10px 8px', height: 'auto', gap: '5px', fontSize: '12px' }}
@@ -245,9 +245,9 @@ export default function LaporanPage() {
                     </button>
                   </div>
                   <div style={{ fontSize: '11px', lineHeight: '1.4', color: autoCorrection ? 'var(--accent)' : 'var(--text-muted)' }}>
-                    {autoCorrection 
+                    {autoCorrection
                       ? (lang === 'id' ? '🟢 ON: Standar pembulatan audit (Compliance).' : '🟢 ON: Compliance audit rounding.')
-                      : (lang === 'id' ? '⚪ OFF: Real TR_ABSEN & desimal 0.5 asli INUS.' : '⚪ OFF: Real TR_ABSEN & native INUS 0.5 decimals.')
+                      : (lang === 'id' ? '⚪ OFF: Menampilkan data real tanpa koreksi otomatis.' : '⚪ OFF: Real TR_ABSEN & native INUS 0.5 decimals.')
                     }
                   </div>
 
@@ -267,9 +267,9 @@ export default function LaporanPage() {
                         cursor: 'pointer',
                         userSelect: 'none'
                       }}>
-                        <input 
-                          type="checkbox" 
-                          checked={applyToDb} 
+                        <input
+                          type="checkbox"
+                          checked={applyToDb}
                           onChange={e => { setApplyToDb(e.target.checked); setPreviewData(null); }}
                           style={{
                             accentColor: 'var(--primary, #0284c7)',
@@ -287,20 +287,20 @@ export default function LaporanPage() {
                             color: applyToDb ? 'var(--text-primary)' : 'var(--text-secondary)',
                             lineHeight: '1.3'
                           }}>
-                            {lang === 'id' ? 'Sinkronkan Jam Kerja ke Database Presensi' : 'Sync Working Hours to Attendance Database'}
+                            {lang === 'id' ? 'Sinkronkan Jam Kerja ke Database Absensi' : 'Sync Working Hours to Attendance Database'}
                           </span>
                           <span style={{
                             fontSize: '11px',
                             lineHeight: '1.4',
                             color: applyToDb ? 'var(--accent)' : 'var(--text-muted)'
                           }}>
-                            {applyToDb 
-                              ? (lang === 'id' 
-                                  ? 'Data jam masuk, jam pulang, & durasi kerja di tabel presensi akan otomatis diperbarui mengikuti hasil koreksi ini.' 
-                                  : 'Clock-in, clock-out, & duration in attendance table will be automatically updated with these corrections.') 
-                              : (lang === 'id' 
-                                  ? 'Hanya terapkan pada berkas laporan; data jam kerja di database tetap mempertahankan catatan aslinya.' 
-                                  : 'Applied to the report file only; database attendance records will remain unchanged.')
+                            {applyToDb
+                              ? (lang === 'id'
+                                ? 'Data jam masuk, jam pulang, & durasi kerja di tabel presensi akan otomatis diperbarui mengikuti hasil koreksi ini.'
+                                : 'Clock-in, clock-out, & duration in attendance table will be automatically updated with these corrections.')
+                              : (lang === 'id'
+                                ? 'Hanya terapkan pada berkas laporan; data jam kerja di database tetap mempertahankan catatan aslinya.'
+                                : 'Applied to the report file only; database attendance records will remain unchanged.')
                             }
                           </span>
                         </div>
@@ -371,7 +371,7 @@ export default function LaporanPage() {
           </div>
           <div style={{ padding: '16px', flex: 1, overflow: 'auto', minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             {!previewData ? (
-              <EmptyState 
+              <EmptyState
                 icon="document"
                 title={lang === 'id' ? 'Belum Ada Pratinjau' : 'No Preview Available'}
                 description={lang === 'id' ? 'Klik tombol Tampilkan Pratinjau di panel parameter sebelah kiri untuk melihat rangkuman data laporan sebelum mengunduh berkas Excel.' : 'Click Show Preview button to view the report summary before downloading it to Excel.'}

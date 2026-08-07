@@ -62,18 +62,23 @@ Jika bukan surat sakit/izin/cuti, return: {"error": "Bukan dokumen yang dikenali
       }),
     });
 
-    const data = await aiResponse.json();
+    const rawText = await aiResponse.text();
+    let data: any = null;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      return NextResponse.json({ error: 'Gagal memproses dokumen. Pastikan gambar jelas dan dalam format JPG/PNG.' }, { status: 422 });
+    }
 
     if (!aiResponse.ok || data.error) {
-      const msg = data?.error?.message || `Error API AI (${aiResponse.status})`;
-      return NextResponse.json({ error: msg }, { status: 422 });
+      return NextResponse.json({ error: 'Layanan pembacaan dokumen sedang sibuk. Silakan coba kembali.' }, { status: 422 });
     }
 
     const content = data.choices?.[0]?.message?.content || '';
 
     // Extract JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return NextResponse.json({ error: 'Gagal membaca isi dokumen' }, { status: 422 });
+    if (!jsonMatch) return NextResponse.json({ error: 'Dokumen tidak terbaca dengan jelas. Pastikan foto tegak dan tulisan terbaca.' }, { status: 422 });
 
     const result = JSON.parse(jsonMatch[0]);
     if (result.error) return NextResponse.json({ error: result.error }, { status: 422 });
@@ -81,6 +86,6 @@ Jika bukan surat sakit/izin/cuti, return: {"error": "Bukan dokumen yang dikenali
     return NextResponse.json(result);
   } catch (err: any) {
     console.error('[OCR ERROR]', err);
-    return NextResponse.json({ error: `Gagal memproses dokumen: ${err.message}` }, { status: 500 });
+    return NextResponse.json({ error: 'Gagal memproses dokumen. Silakan coba kembali.' }, { status: 500 });
   }
 }
