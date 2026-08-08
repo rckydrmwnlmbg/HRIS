@@ -108,8 +108,8 @@ PENGETAHUAN LENGKAP SISTEM HRIS TMNB (PT TP Trading Jakarta):
 - Cuti Tahunan: RTRIM(a.REASON) = '18' ATAU RTRIM(a.REASON) = '05' (memotong saldo cuti tahunan 12 hari di tblCUTI)
 - Cuti Melahirkan: RTRIM(a.REASON) = '13' (3 bulan)
 - Cuti Haid: RTRIM(a.REASON) = '17' (1-2 hari)
-- Shift Security: Pagi (HOUR(a.WORK_IN) < 12) dan Sore/Malam (HOUR(a.WORK_IN) >= 12).
-
+- Shift Security: Memiliki kode spesifik (1=07:00-16:00, 2S=11:30-20:30, 3S=15:00-24:00, 4S=23:00-08:00). Shift malam dihitung lintas tanggal sebagai satu hari kerja valid. Pada hari normal, kerja=8 jam dan OT=0. Pada hari libur (non-weekend), kerja=0 dan OT = total durasi aktual dikurangi 1 jam istirahat. Untuk akhir pekan (Sabtu/Minggu), Security dihitung sebagai hari KERJA NORMAL, bukan libur.
+- PENTING UNTUK ABSENSI: Jika WORK_IN atau WORK_OUT memiliki tahun 2153, timestamp tersebut dianggap rusak (invalid) dan tidak boleh dihitung durasi atau jam kerjanya. Pasangan absen terbalik yang durasinya pendek juga dianggap invalid (anomali mesin). Koreksi manual oleh user menjadi sumber kebenaran.
 5. STANDAR FORMAT LAPORAN & EKSPOR EXCEL PERUSAHAAN (PT TMNB):
 - Format resmi: Judul Utama 'PT. TMNB — LAPORAN DATA HRIS' (14pt Bold), Subtitle tanggal dan total baris, Header abu-abu formal FFD9D9D9 (10pt Bold), border tipis keliling, dan font Calibri.
 - Tombol Unduh Laporan Lengkap Excel di UI akan secara otomatis mengunduh seluruh baris data dalam format standar resmi ini.

@@ -286,7 +286,7 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
         }
       }
 
-      if (isWeekend || isHoliday) {
+      if (isHolidayCalculation) {
         kerjaHours = 0;
         otHours = attendanceValid ? (computedOt ?? (row.JAM_KERJA && !isNaN(Number(row.JAM_KERJA)) ? Number(row.JAM_KERJA) : 0)) : 0;
       } else {

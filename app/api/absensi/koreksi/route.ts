@@ -67,16 +67,22 @@ export async function POST(request: Request) {
         WORK_IN = @workIn,
         WORK_OUT = @workOut,
         JAM_KERJA = CASE
-          WHEN @workIn IS NOT NULL AND @workOut IS NOT NULL
-            AND CAST(@workOut AS DATETIME) > CAST(@workIn AS DATETIME)
-          THEN DATEDIFF(minute, CAST(@workIn AS DATETIME), CAST(@workOut AS DATETIME)) / 60.0
+          WHEN @isSecurity = 1 AND (@statusHari = 'LIBUR' OR @statusHari = 'OFF') THEN 0
+          WHEN @isSecurity = 1 AND @workIn IS NOT NULL AND @workOut IS NOT NULL AND CAST(@workOut AS DATETIME) > CAST(@workIn AS DATETIME)
+            THEN CASE 
+                   WHEN DATEDIFF(minute, CAST(@workIn AS DATETIME), CAST(@workOut AS DATETIME)) > 60 
+                   THEN (DATEDIFF(minute, CAST(@workIn AS DATETIME), CAST(@workOut AS DATETIME)) - 60) / 60.0
+                   ELSE 0 
+                 END
+          WHEN @workIn IS NOT NULL AND @workOut IS NOT NULL AND CAST(@workOut AS DATETIME) > CAST(@workIn AS DATETIME)
+            THEN DATEDIFF(minute, CAST(@workIn AS DATETIME), CAST(@workOut AS DATETIME)) / 60.0
           ELSE NULL
         END,
         STATUS_HARI = ISNULL(@statusHari, STATUS_HARI),
         REASON = @reason,
         SHIFT = ISNULL(@shift, SHIFT)
       WHERE RTRIM(EMP_CD) = @empCd AND CONVERT(date, DATE_TRANS) = @dateTrans;
-    `, { workIn: cleanWorkIn, workOut: cleanWorkOut, statusHari, reason, shift, empCd, dateTrans }));
+    `, { workIn: cleanWorkIn, workOut: cleanWorkOut, statusHari, reason, shift, empCd, dateTrans, isSecurity: security ? 1 : 0 }));
 
     return NextResponse.json({
       success: true,
