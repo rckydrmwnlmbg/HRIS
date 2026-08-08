@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
 import { detectSecurityShift, isSecurityJob } from '@/lib/securitySchedule';
+import { calculateAttendanceAndOt } from '@/lib/otCalculator';
 
 const parseDate = (value: unknown): Date | null => {
   if (!value) return null;
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
     const dateTrans = String(data.DATE_TRANS || '').split('T')[0];
     const statusHari = data.corrected_status == null || data.corrected_status === '' ? null : String(data.corrected_status).trim();
     const reason = data.corrected_reason == null || data.corrected_reason === '' ? null : String(data.corrected_reason).trim();
+    const correctedShift = data.corrected_shift == null || data.corrected_shift === '' ? null : String(data.corrected_shift).trim();
     let cleanWorkIn = data.WORK_IN ? String(data.WORK_IN).replace('Z', '') : null;
     let cleanWorkOut = data.WORK_OUT ? String(data.WORK_OUT).replace('Z', '') : null;
 
@@ -59,30 +61,49 @@ export async function POST(request: Request) {
     const employee = empCheck[0];
     const security = isSecurityJob(employee.JOB_DESC, employee.SEC_DESC);
     const detectedShift = security ? detectSecurityShift(cleanWorkIn, cleanWorkOut) : null;
-    const shift = detectedShift?.code || employee.CURRENT_SHIFT || null;
+    const shift = correctedShift || detectedShift?.code || employee.CURRENT_SHIFT || null;
+
+    // Hitung Ulang JAM_KERJA, OT, dan perbaiki status hari (jika Security Weekend)
+    const calcResult = calculateAttendanceAndOt(
+      dateTrans,
+      workInDate,
+      workOutDate,
+      employee.JOB_DESC,
+      employee.SEC_DESC,
+      statusHari || employee.STATUS_HARI || '',
+      shift
+    );
 
     await withTransaction(async (tx) => tx(`
       UPDATE TR_ABSEN
       SET
         WORK_IN = @workIn,
         WORK_OUT = @workOut,
-        JAM_KERJA = CASE
-          WHEN @isSecurity = 1 AND (@statusHari = 'LIBUR' OR @statusHari = 'OFF') THEN 0
-          WHEN @isSecurity = 1 AND @workIn IS NOT NULL AND @workOut IS NOT NULL AND CAST(@workOut AS DATETIME) > CAST(@workIn AS DATETIME)
-            THEN CASE 
-                   WHEN DATEDIFF(minute, CAST(@workIn AS DATETIME), CAST(@workOut AS DATETIME)) > 60 
-                   THEN (DATEDIFF(minute, CAST(@workIn AS DATETIME), CAST(@workOut AS DATETIME)) - 60) / 60.0
-                   ELSE 0 
-                 END
-          WHEN @workIn IS NOT NULL AND @workOut IS NOT NULL AND CAST(@workOut AS DATETIME) > CAST(@workIn AS DATETIME)
-            THEN DATEDIFF(minute, CAST(@workIn AS DATETIME), CAST(@workOut AS DATETIME)) / 60.0
-          ELSE NULL
-        END,
-        STATUS_HARI = ISNULL(@statusHari, STATUS_HARI),
+        JAM_KERJA = @jamKerja,
+        STATUS_HARI = @statusHari,
         REASON = @reason,
-        SHIFT = ISNULL(@shift, SHIFT)
+        SHIFT = ISNULL(@shift, SHIFT),
+        OT_1 = @ot1,
+        OT_2 = @ot2,
+        OT_3 = @ot3,
+        OT_4 = @ot4,
+        T_OT = @tOt
       WHERE RTRIM(EMP_CD) = @empCd AND CONVERT(date, DATE_TRANS) = @dateTrans;
-    `, { workIn: cleanWorkIn, workOut: cleanWorkOut, statusHari, reason, shift, empCd, dateTrans, isSecurity: security ? 1 : 0 }));
+    `, {
+      workIn: cleanWorkIn,
+      workOut: cleanWorkOut,
+      jamKerja: calcResult.JAM_KERJA,
+      statusHari: calcResult.STATUS_HARI,
+      reason,
+      shift,
+      ot1: calcResult.OT_1,
+      ot2: calcResult.OT_2,
+      ot3: calcResult.OT_3,
+      ot4: calcResult.OT_4,
+      tOt: calcResult.T_OT,
+      empCd,
+      dateTrans
+    }));
 
     return NextResponse.json({
       success: true,

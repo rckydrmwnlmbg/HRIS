@@ -32,7 +32,54 @@ function AbsensiContent() {
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'warning' } | null>(null);
   const [masterReasons, setMasterReasons] = useState<Reason[]>([]);
   const [karyawanList, setKaryawanList] = useState<Karyawan[]>([]);
-  
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [syncShiftModal, setSyncShiftModal] = useState(false);
+  const [syncShiftLoading, setSyncShiftLoading] = useState(false);
+  const [syncShiftData, setSyncShiftData] = useState<any>(null);
+
+  const getShiftLabel = (code: string | null | undefined) => {
+    if (!code) return '-';
+    const c = String(code).trim().toUpperCase();
+    if (c === '1') return 'Pagi';
+    if (c === '2S') return 'Siang';
+    if (c === '3S') return 'Siang';
+    if (c === '4S') return 'Malam';
+    return c;
+  };
+
+  useEffect(() => {
+    if (koreksiTarget && draftKoreksi.WORK_IN) {
+      if (selectedEmp?.JOB_CD?.includes('SEC') || selectedEmp?.SEC_CD?.includes('SEC') || selectedEmp?.SEC_DESC?.toLowerCase().includes('security') || selectedEmp?.JOB_DESC?.toLowerCase().includes('security')) {
+        const hIn = parseInt(draftKoreksi.WORK_IN.split(':')[0] || '0', 10);
+        const mIn = parseInt(draftKoreksi.WORK_IN.split(':')[1] || '0', 10);
+        const inMinutes = hIn * 60 + mIn;
+        
+        const tolerances = [
+          { code: '1', start: 7 * 60 },
+          { code: '2S', start: 11 * 60 + 30 },
+          { code: '3S', start: 15 * 60 },
+          { code: '4S', start: 23 * 60 }
+        ];
+
+        let bestMatch = null;
+        let minDiff = Infinity;
+        for (const shift of tolerances) {
+          let diff = Math.abs(inMinutes - shift.start);
+          if (diff > 12 * 60) {
+            diff = 24 * 60 - diff;
+          }
+          if (diff <= 60 && diff < minDiff) {
+            minDiff = diff;
+            bestMatch = shift.code;
+          }
+        }
+        
+        if (bestMatch && draftKoreksi.corrected_shift !== bestMatch) {
+          setDraftKoreksi(p => ({ ...p, corrected_shift: bestMatch! }));
+        }
+      }
+    }
+  }, [draftKoreksi.WORK_IN, koreksiTarget, selectedEmp]);
  
   // Load masters and initial params
   useEffect(() => {
@@ -146,6 +193,7 @@ function AbsensiContent() {
       WORK_OUT: newWorkOut,
       corrected_reason: draftKoreksi.corrected_reason || null,
       corrected_status: draftKoreksi.corrected_status || null,
+      corrected_shift: draftKoreksi.corrected_shift || null,
       correction_status: 'draft',
       correction_by: user?.nama || 'Admin',
       correction_at: new Date().toISOString(),
@@ -177,6 +225,7 @@ function AbsensiContent() {
           WORK_OUT: rec.WORK_OUT,
           corrected_status: rec.corrected_status,
           corrected_reason: rec.corrected_reason,
+          corrected_shift: rec.corrected_shift,
           notes: draftKoreksi.notes || '',
           correction_by: user?.nama || 'Admin'
         })
@@ -217,6 +266,7 @@ function AbsensiContent() {
             WORK_OUT: rec.WORK_OUT,
             corrected_status: rec.corrected_status,
             corrected_reason: rec.corrected_reason,
+            corrected_shift: rec.corrected_shift,
             notes: draftKoreksi.notes || '',
             correction_by: user?.nama || 'Admin'
           })
@@ -310,6 +360,57 @@ function AbsensiContent() {
     return job.includes('SECURITY') || job.includes('SATPAM') || sec.includes('SECURITY') || sec.includes('SATPAM');
   };
 
+  const handleSyncShiftPreview = async () => {
+    if (!selectedEmp) return;
+    setSyncShiftLoading(true);
+    setSyncShiftData(null);
+    setSyncShiftModal(true);
+    try {
+      const res = await fetch('/api/absensi/sync-shift-security', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bulan, tahun, emp_cd: selectedEmp.EMP_CD, mode: 'preview' }),
+      });
+      if (res.ok) {
+        setSyncShiftData(await res.json());
+      } else {
+        const err = await res.json();
+        showToast(err.error || 'Gagal memuat preview', 'warning');
+        setSyncShiftModal(false);
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('Terjadi kesalahan koneksi', 'warning');
+      setSyncShiftModal(false);
+    }
+    setSyncShiftLoading(false);
+  };
+
+  const handleSyncShiftApply = async () => {
+    if (!selectedEmp) return;
+    setSyncShiftLoading(true);
+    try {
+      const res = await fetch('/api/absensi/sync-shift-security', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ bulan, tahun, emp_cd: selectedEmp.EMP_CD, mode: 'apply' }),
+      });
+      if (res.ok) {
+        const result = await res.json();
+        showToast(result.message || `${result.updated} shift diperbarui`, 'success');
+        setSyncShiftModal(false);
+        handleLoadAbsensi();
+      } else {
+        const err = await res.json();
+        showToast(err.error || 'Gagal menerapkan', 'warning');
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('Terjadi kesalahan koneksi', 'warning');
+    }
+    setSyncShiftLoading(false);
+  };
+
   return (
     <div className="animate-fadeIn">
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -357,7 +458,12 @@ function AbsensiContent() {
               {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
-          <div className="form-group" style={{ display: 'flex', gap: '8px' }}>
+          <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            {loaded && isSecurityEmployee(selectedEmp) && (
+              <button className="btn btn-secondary" onClick={handleSyncShiftPreview} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <ShieldAlert size={14} /> {lang === 'id' ? 'Sinkronkan Shift' : 'Sync Shift'}
+              </button>
+            )}
             <button className="btn btn-primary" onClick={handleLoadAbsensi} disabled={!selectedEmp}>
               {t(lang, 'tampilkanAbsensi')}
             </button>
@@ -414,6 +520,7 @@ function AbsensiContent() {
                   <tr>
                     <th>{t(lang, 'tanggal')}</th>
                     <th>{t(lang, 'statusHari')}</th>
+                    <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Shift' : 'Shift'}</th>
                     <th>{t(lang, 'dataAsli')}</th>
                     <th>{t(lang, 'dataKoreksi')}</th>
                     <th>{t(lang, 'jamKerja')}</th>
@@ -435,6 +542,11 @@ function AbsensiContent() {
                           </div>
                         </td>
                         <td>{getStatusBadge(disp.corrected_status || r.STATUS_HARI)}</td>
+                        <td style={{ textAlign: 'center' }}>
+                          <span className="badge badge-secondary" style={{ fontSize: '11px' }} title={`Kode DB: ${disp.corrected_shift || r.SHIFT || '-'}`}>
+                            {getShiftLabel(disp.corrected_shift || r.SHIFT)}
+                          </span>
+                        </td>
                         <td>
                           {(r as any).WORK_IN1 || (r as any).WORK_OUT1 ? (
                             <div style={{ fontSize: '12px' }}>
@@ -499,6 +611,7 @@ function AbsensiContent() {
                                 setDraftKoreksi({
                                   corrected_reason: disp.corrected_reason || r.REASON || '',
                                   corrected_status: disp.corrected_status || r.STATUS_HARI,
+                                  corrected_shift: disp.corrected_shift || r.SHIFT || '',
                                   WORK_IN: getHHMMSS(disp.WORK_IN, (disp as any).WORK_IN_STR),
                                   WORK_OUT: getHHMMSS(disp.WORK_OUT, (disp as any).WORK_OUT_STR)
                                 });
@@ -544,6 +657,7 @@ function AbsensiContent() {
                   <tr>
                     <th>{t(lang, 'tanggal')}</th>
                     <th>{t(lang, 'statusHari')}</th>
+                    <th style={{ textAlign: 'center' }}>{lang === 'id' ? 'Shift' : 'Shift'}</th>
                     <th>{t(lang, 'dataAsli')}</th>
                     <th>{t(lang, 'dataKoreksi')}</th>
                     <th>{t(lang, 'jamKerja')}</th>
@@ -556,6 +670,7 @@ function AbsensiContent() {
                     <tr key={i}>
                       <td><Skeleton width={100} height={16} /></td>
                       <td><Skeleton width={60} height={20} style={{ borderRadius: '100px' }} /></td>
+                      <td style={{ textAlign: 'center' }}><Skeleton width={30} height={20} style={{ margin: '0 auto', borderRadius: '100px' }} /></td>
                       <td>
                         <Skeleton width={120} height={12} style={{ marginBottom: 4 }} />
                         <Skeleton width={120} height={12} />
@@ -606,6 +721,23 @@ function AbsensiContent() {
                     </select>
                   </div>
 
+                  <div className="form-group">
+                    <label className="form-label">{lang === 'id' ? 'Kode Shift' : 'Shift Code'}</label>
+                    <select
+                      className="form-select"
+                      value={draftKoreksi.corrected_shift || ''}
+                      onChange={e => setDraftKoreksi(p => ({ ...p, corrected_shift: e.target.value }))}
+                    >
+                      <option value="">{lang === 'id' ? '-- Auto / Kosong --' : '-- Auto / Empty --'}</option>
+                      <option value="1">1 (Pagi 07:00-16:00)</option>
+                      <option value="2S">2S (Siang 11:30-20:30)</option>
+                      <option value="3S">3S (Siang 15:00-24:00)</option>
+                      <option value="4S">4S (Malam 23:00-08:00)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <div className="form-group">
                     <label className="form-label">{t(lang, 'alasan')}</label>
                     <select
@@ -696,6 +828,79 @@ function AbsensiContent() {
                       {r.REASON && <div style={{ fontSize: '12px', marginTop: '4px', color: 'var(--accent-orange)' }}>Alasan: {masterReasons.find(m => m.REASON_CODE === r.REASON)?.REASON_DESC || r.REASON}</div>}
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      , document.body)}
+
+      {/* Sync Shift Security Modal */}
+      {syncShiftModal && typeof document !== 'undefined' && createPortal(
+        <div className="modal-overlay" onClick={() => !syncShiftLoading && setSyncShiftModal(false)}>
+          <div className="modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title"><ShieldAlert size={18} style={{ marginRight: '8px' }} />{lang === 'id' ? 'Sinkronisasi Shift Security' : 'Security Shift Sync'}</h3>
+              <button className="btn btn-sm btn-secondary btn-icon" onClick={() => !syncShiftLoading && setSyncShiftModal(false)}><X size={14} /></button>
+            </div>
+            <div className="modal-body">
+              {syncShiftLoading && !syncShiftData && (
+                <div style={{ textAlign: 'center', padding: '30px', color: 'var(--text-secondary)' }}>
+                  <div className="spinner" style={{ margin: '0 auto 12px' }} />
+                  {lang === 'id' ? 'Memindai shift...' : 'Scanning shifts...'}
+                </div>
+              )}
+              {syncShiftData && syncShiftData.mismatch_count === 0 && (
+                <div style={{ textAlign: 'center', padding: '30px' }}>
+                  <ShieldCheck size={48} style={{ color: 'var(--success)', marginBottom: '12px' }} />
+                  <div style={{ fontWeight: 600, fontSize: '16px', marginBottom: '6px' }}>{lang === 'id' ? 'Semua shift sudah sesuai!' : 'All shifts are correct!'}</div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>{syncShiftData.total_security_rows} {lang === 'id' ? 'record Security diperiksa, tidak ada mismatch.' : 'Security records checked, no mismatches.'}</div>
+                </div>
+              )}
+              {syncShiftData && syncShiftData.mismatch_count > 0 && (
+                <div>
+                  <div style={{ padding: '12px', background: 'rgba(255,165,0,0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(255,165,0,0.2)', marginBottom: '16px' }}>
+                    <div style={{ fontWeight: 600, color: 'var(--warning)', marginBottom: '4px' }}>⚠ {syncShiftData.mismatch_count} {lang === 'id' ? 'shift tidak sesuai ditemukan' : 'shift mismatches found'}</div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{lang === 'id' ? `Dari ${syncShiftData.total_security_rows} record Security, ${syncShiftData.mismatch_count} memiliki kode shift yang tidak sesuai dengan jam fingerprint.` : `Out of ${syncShiftData.total_security_rows} Security records, ${syncShiftData.mismatch_count} have incorrect shift codes.`}</div>
+                  </div>
+                  <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '16px' }}>
+                    <table style={{ width: '100%', fontSize: '12px', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                          <th style={{ padding: '6px 8px' }}>{lang === 'id' ? 'Tanggal' : 'Date'}</th>
+                          <th style={{ padding: '6px 8px' }}>IN</th>
+                          <th style={{ padding: '6px 8px' }}>OUT</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'center' }}>{lang === 'id' ? 'Saat Ini' : 'Current'}</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'center' }}>→</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'center' }}>{lang === 'id' ? 'Terdeteksi' : 'Detected'}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {syncShiftData.mismatches.map((m: any) => (
+                          <tr key={`${m.EMP_CD}-${m.DATE_TRANS}`} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '6px 8px' }}>{new Date(m.DATE_TRANS).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}</td>
+                            <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>{m.WORK_IN?.substring(11, 16) || '-'}</td>
+                            <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>{m.WORK_OUT?.substring(11, 16) || '-'}</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                              <span className="badge badge-warning" style={{ fontSize: '11px' }} title={`Kode: ${m.current_shift}`}>{getShiftLabel(m.current_shift)}</span>
+                              {m.current_status && m.detected_status && m.current_status !== m.detected_status && <div style={{fontSize: '9px', marginTop: '4px', color: 'var(--text-muted)'}}>{m.current_status}</div>}
+                            </td>
+                            <td style={{ padding: '6px 8px', textAlign: 'center', color: 'var(--text-muted)' }}>→</td>
+                            <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                              <span className="badge badge-success" style={{ fontSize: '11px' }} title={`Kode: ${m.detected_shift}`}>{getShiftLabel(m.detected_shift)}</span>
+                              {m.current_status && m.detected_status && m.current_status !== m.detected_status && <div style={{fontSize: '9px', marginTop: '4px', color: 'var(--success)'}}>{m.detected_status}</div>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                    <button className="btn btn-secondary" onClick={() => setSyncShiftModal(false)} disabled={syncShiftLoading}>{lang === 'id' ? 'Batal' : 'Cancel'}</button>
+                    <button className="btn btn-primary" onClick={handleSyncShiftApply} disabled={syncShiftLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      {syncShiftLoading ? <><div className="spinner" style={{ width: 14, height: 14 }} /> {lang === 'id' ? 'Menerapkan...' : 'Applying...'}</> : <><ShieldCheck size={14} /> {lang === 'id' ? 'Terapkan Koreksi Shift' : 'Apply Shift Corrections'}</>}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

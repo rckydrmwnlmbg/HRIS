@@ -104,11 +104,12 @@ export interface AbsensiRecord {
   raw_work_in?: string | null;
   raw_work_out?: string | null;
   corrected_reason?: string | null;
+  corrected_status?: string | null;
+  corrected_shift?: string | null;
   DATE_IN_STR?: string | null;
   WORK_IN_STR?: string | null;
   DATE_OUT_STR?: string | null;
   WORK_OUT_STR?: string | null;
-  corrected_status?: string | null;
   correction_status?: 'draft' | 'applied' | null;
   correction_by?: string | null;
   correction_at?: string | null;
@@ -125,6 +126,7 @@ export interface KoreksiAbsensi {
   corrected_work_out: string | null;
   corrected_reason: string | null;
   corrected_status: string | null;
+  corrected_shift?: string | null;
   correction_status: 'draft' | 'applied';
   correction_by: string;
   correction_at: string;

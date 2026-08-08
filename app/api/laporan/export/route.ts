@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { query } from '@/lib/db';
-import { calculateSecurityOtHours, getDurationMinutes, getSecurityShiftByCode, isSecurityJob, isValidAttendancePair } from '@/lib/securitySchedule';
+import { calculateSecurityOtHours, detectSecurityShift, getDurationMinutes, getSecurityShiftByCode, isSecurityJob, isValidAttendancePair } from '@/lib/securitySchedule';
 
 const addTitleAndHeader = (sheet: any, columns: any[], title: string, subtitle: string, fgColor: string = 'FF00B050') => {
   sheet.columns = columns;
@@ -119,21 +119,25 @@ export async function GET(request: Request) {
           RTRIM(a.STATUS_HARI) AS STATUS_HARI,
           COALESCE(RTRIM(mr.REASON_DESC), RTRIM(a.REASON), '') AS ALASAN,
           CASE 
+            WHEN a.WORK_IN IS NOT NULL AND RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') THEN 
+                 CASE WHEN a.JAM_KERJA IS NOT NULL AND a.JAM_KERJA < 8 THEN a.JAM_KERJA ELSE 8 END
             WHEN RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') OR RTRIM(mr.REASON_GROUP) = 'O' THEN 8 
             WHEN RTRIM(a.STATUS_HARI) IN ('CUTI', 'C', 'H', 'HAID') OR RTRIM(mr.REASON_GROUP) IN ('C', 'H') THEN 8
             ELSE 0 
           END AS BASIC,
-          CAST(ISNULL(a.OT_1, 0) AS INT) AS OT1,
-          CAST(ISNULL(a.OT_2, 0) AS INT) AS OT2,
-          CAST(ISNULL(a.OT_3, 0) AS INT) AS OT3,
-          CAST(ISNULL(a.OT_4, 0) AS INT) AS OT4,
+          CAST(ISNULL(a.OT_1, 0) AS DECIMAL(10,1)) AS OT1,
+          CAST(ISNULL(a.OT_2, 0) AS DECIMAL(10,1)) AS OT2,
+          CAST(ISNULL(a.OT_3, 0) AS DECIMAL(10,1)) AS OT3,
+          CAST(ISNULL(a.OT_4, 0) AS DECIMAL(10,1)) AS OT4,
           CAST(
             (CASE 
+              WHEN a.WORK_IN IS NOT NULL AND RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') THEN 
+                   CASE WHEN a.JAM_KERJA IS NOT NULL AND a.JAM_KERJA < 8 THEN a.JAM_KERJA ELSE 8 END
               WHEN RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') OR RTRIM(mr.REASON_GROUP) = 'O' THEN 8 
               WHEN RTRIM(a.STATUS_HARI) IN ('CUTI', 'C', 'H', 'HAID') OR RTRIM(mr.REASON_GROUP) IN ('C', 'H') THEN 8
               ELSE 0 
             END) + ISNULL(a.OT_1, 0) + ISNULL(a.OT_2, 0) + ISNULL(a.OT_3, 0) + ISNULL(a.OT_4, 0)
-            AS INT
+            AS DECIMAL(10,1)
           ) AS TOTAL
         FROM TR_ABSEN a
         LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
@@ -210,12 +214,12 @@ export async function GET(request: Request) {
           PULANG: row.PULANG || '',
           STATUS_HARI: row.STATUS_HARI || '',
           ALASAN: row.ALASAN || '',
-          BASIC: row.BASIC,
-          OT1: row.OT1,
-          OT2: row.OT2,
-          OT3: row.OT3,
-          OT4: row.OT4,
-          TOTAL: row.TOTAL
+          BASIC: Number(row.BASIC).toFixed(1),
+          OT1: Number(row.OT1).toFixed(1),
+          OT2: Number(row.OT2).toFixed(1),
+          OT3: Number(row.OT3).toFixed(1),
+          OT4: Number(row.OT4).toFixed(1),
+          TOTAL: Number(row.TOTAL).toFixed(1)
         });
 
         addedRow.height = 19;
@@ -232,11 +236,6 @@ export async function GET(request: Request) {
         leftCols.forEach(colIdx => {
           addedRow.getCell(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
         });
-
-        // Numbers formatting
-        for (let numCol of [13, 14, 15, 16, 17, 18]) {
-          addedRow.getCell(numCol).numFmt = '0';
-        }
 
         for (let i = 1; i <= 18; i++) {
           addedRow.getCell(i).border = {
@@ -363,7 +362,7 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
           const outDate = row.WORK_OUT ? new Date(row.WORK_OUT) : null;
           const inDate = row.WORK_IN ? new Date(row.WORK_IN) : null;
           const isSecurityHoliday = security && (status === 'LIBUR' || status === 'OFF') && !isSecurityWeekend;
-          const securityShift = security ? getSecurityShiftByCode(row.SHIFT) : null;
+          const securityShift = security ? (detectSecurityShift(row.WORK_IN, row.WORK_OUT) || getSecurityShiftByCode(row.SHIFT)) : null;
           const attendanceValid = isValidAttendancePair(row.dateStr, inDate, outDate, securityShift);
           if (attendanceValid && inDate && outDate) {
             if (isSecurityHoliday) {
@@ -399,7 +398,9 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
               kerjaHours = 8;
               otHours = 0;
             } else if (isKerjaNormal && attendanceValid) {
-              kerjaHours = 8;
+              const actDur = (inDate && outDate) ? getDurationMinutes(inDate, outDate) / 60 : 0;
+              const roundedDur = Math.round(actDur * 10) / 10;
+              kerjaHours = Math.min(8, roundedDur);
               otHours = computedOt ?? 0;
             } else {
               kerjaHours = 0;
@@ -531,9 +532,8 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
           let ci = 6;
           weekDates.forEach((d) => {
             const dayData = row.days[d] || { kerja: 0, ot: 0 };
-            excelRow.getCell(ci).value = dayData.kerja;
-            excelRow.getCell(ci + 1).value = dayData.ot;
-            excelRow.getCell(ci + 1).numFmt = '0.0';
+            excelRow.getCell(ci).value = Number(dayData.kerja.toFixed(1)).toFixed(1);
+            excelRow.getCell(ci + 1).value = Number(dayData.ot.toFixed(1)).toFixed(1);
             ci += 2;
           });
 
@@ -542,10 +542,9 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
           const totKerjaCol = getColName(colIndex - 4);
           const totOtCol = getColName(colIndex - 3);
 
-          excelRow.getCell(ci).value = { formula: kerjaCols, result: row.totalKerja };
-          excelRow.getCell(ci + 1).value = { formula: otCols, result: row.totalOt };
-          excelRow.getCell(ci + 1).numFmt = '0.0';
-          excelRow.getCell(ci + 2).value = { formula: `${totKerjaCol}${startRow}+${totOtCol}${startRow}`, result: row.totalKerja + row.totalOt };
+          excelRow.getCell(ci).value = Number(row.totalKerja.toFixed(1)).toFixed(1);
+          excelRow.getCell(ci + 1).value = Number(row.totalOt.toFixed(1)).toFixed(1);
+          excelRow.getCell(ci + 2).value = Number((row.totalKerja + row.totalOt).toFixed(1)).toFixed(1);
           ci += 3;
 
           excelRow.getCell(ci).value = row.A;
@@ -562,6 +561,19 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
           startRow++;
         });
 
+        // Compute grand totals server-side
+        let grandTotalKerja = 0;
+        let grandTotalOt = 0;
+        let grandA = 0, grandI = 0, grandS = 0, grandC = 0;
+        filteredData.forEach(row => {
+          grandTotalKerja += Number(row.totalKerja.toFixed(1));
+          grandTotalOt += Number(row.totalOt.toFixed(1));
+          grandA += row.A;
+          grandI += row.I;
+          grandS += row.S;
+          grandC += row.C;
+        });
+
         const sumRowIndex = startRow;
         const sumRow = ws.getRow(startRow);
 
@@ -571,32 +583,45 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
         totalCell.font = { bold: true };
         totalCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-        // Sum columns: TOTAL KERJA (colIndex-3), TOTAL OT (colIndex-2), TOTAL KERJA+OT (colIndex-1), KETERANGAN (colIndex s/d colIndex+3)
+        // Sum columns: TOTAL KERJA, TOTAL OT, TOTAL KERJA+OT, KETERANGAN (A, I, S, C)
         const sumColumns = [
           colIndex - 3, colIndex - 2, colIndex - 1,
           colIndex, colIndex + 1, colIndex + 2, colIndex + 3
         ];
 
+        const sumValues: Record<number, string | number> = {
+          [colIndex - 3]: grandTotalKerja.toFixed(1),
+          [colIndex - 2]: grandTotalOt.toFixed(1),
+          [colIndex - 1]: (grandTotalKerja + grandTotalOt).toFixed(1),
+          [colIndex]: grandA,
+          [colIndex + 1]: grandI,
+          [colIndex + 2]: grandS,
+          [colIndex + 3]: grandC,
+        };
+
         for (let c = 1; c < colIndex + 4; c++) {
           const cell = sumRow.getCell(c);
           setBorder(cell);
           if (sumColumns.includes(c)) {
-            const colLetter = getColName(c - 1);
-            cell.value = { formula: `SUM(${colLetter}15:${colLetter}${sumRowIndex - 1})` };
+            cell.value = sumValues[c];
             cell.font = { bold: true };
             cell.alignment = { horizontal: 'center' };
-            if (c === colIndex - 2) {
-              cell.numFmt = '0.0';
-            }
           }
         }
 
         const totKerjaOtColLetter = getColName(colIndex - 2);
 
+        // Compute MAX WT and Working time breakdown server-side
+        const kerjaOtValues = filteredData.map(row => Number((row.totalKerja + row.totalOt).toFixed(1)));
+        const maxWt = kerjaOtValues.length > 0 ? Math.max(...kerjaOtValues) : 0;
+        const countLte40 = kerjaOtValues.filter(v => v <= 40).length;
+        const countGt40Lte60 = kerjaOtValues.filter(v => v > 40 && v <= 60).length;
+        const countGt60 = kerjaOtValues.filter(v => v > 60).length;
+
         startRow += 3;
         ws.getCell(startRow, colIndex - 3).value = 'MAX WT';
         ws.getCell(startRow, colIndex - 3).font = { bold: true };
-        ws.getCell(startRow, colIndex - 2).value = { formula: `MAX(${totKerjaOtColLetter}15:${totKerjaOtColLetter}${sumRowIndex - 1})` };
+        ws.getCell(startRow, colIndex - 2).value = maxWt.toFixed(1);
         ws.getCell(startRow, colIndex - 2).font = { bold: true };
 
         startRow += 2;
@@ -605,21 +630,21 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
 
         startRow++;
         ws.getCell(startRow, colIndex - 3).value = '<= 40';
-        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIF(${totKerjaOtColLetter}15:${totKerjaOtColLetter}${sumRowIndex - 1}, "<=40")` };
+        ws.getCell(startRow, colIndex - 2).value = countLte40;
         const b1Cell = `${getColName(colIndex - 3)}${startRow}`;
 
         startRow++;
-        ws.getCell(startRow, colIndex - 3).value = '40,5 - 60';
-        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIFS(${totKerjaOtColLetter}15:${totKerjaOtColLetter}${sumRowIndex - 1}, ">40", ${totKerjaOtColLetter}15:${totKerjaOtColLetter}${sumRowIndex - 1}, "<=60")` };
+        ws.getCell(startRow, colIndex - 3).value = '40.5 - 60';
+        ws.getCell(startRow, colIndex - 2).value = countGt40Lte60;
         const b2Cell = `${getColName(colIndex - 3)}${startRow}`;
 
         startRow++;
         ws.getCell(startRow, colIndex - 3).value = '>60';
-        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIF(${totKerjaOtColLetter}15:${totKerjaOtColLetter}${sumRowIndex - 1}, ">60")` };
+        ws.getCell(startRow, colIndex - 2).value = countGt60;
         const b3Cell = `${getColName(colIndex - 3)}${startRow}`;
 
         startRow++;
-        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTA(A15:A${sumRowIndex - 1})` };
+        ws.getCell(startRow, colIndex - 2).value = filteredData.length;
         const totalEmpCell = `${getColName(colIndex - 3)}${startRow}`;
 
         const targetStat = isAllInFilter ? stats.ALL_IN : stats.HARIAN;
@@ -741,7 +766,7 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
           { formula: 'C20+D20' }
         ],
         [
-          'Among 40.5 and 60 hours', '40,5 - 60',
+          'Among 40.5 and 60 hours', '40.5 - 60',
           { formula: stats.HARIAN.b2Cell },
           { formula: stats.ALL_IN.b2Cell },
           { formula: 'C21+D21' }

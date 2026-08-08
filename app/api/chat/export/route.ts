@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbConnection } from '@/lib/db';
-import { calculateSecurityOtHours, getDurationMinutes, getSecurityShiftByCode, isSecurityJob, isValidAttendancePair } from '@/lib/securitySchedule';
+import { calculateSecurityOtHours, detectSecurityShift, getDurationMinutes, getSecurityShiftByCode, isSecurityJob, isValidAttendancePair } from '@/lib/securitySchedule';
 import ExcelJS from 'exceljs';
 
 const DANGEROUS_SQL = /(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|EXEC|EXECUTE|MERGE|GRANT|REVOKE)\s/i;
@@ -258,7 +258,7 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
       const outDate = row.WORK_OUT ? new Date(row.WORK_OUT) : null;
       const inDate = row.WORK_IN ? new Date(row.WORK_IN) : null;
       const isSecurityHoliday = security && (status === 'LIBUR' || status === 'OFF') && !isSecurityWeekend;
-      const securityShift = security ? getSecurityShiftByCode(row.SHIFT) : null;
+      const securityShift = security ? (detectSecurityShift(row.WORK_IN, row.WORK_OUT) || getSecurityShiftByCode(row.SHIFT)) : null;
       const attendanceValid = isValidAttendancePair(row.dateStr, inDate, outDate, securityShift);
       if (attendanceValid && inDate && outDate) {
         if (isSecurityHoliday) {
