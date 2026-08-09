@@ -69,8 +69,8 @@ export function isValidAttendancePair(
   const inMinutes = minutesSinceMidnight(workIn) ?? -1;
   const outMinutes = minutesSinceMidnight(workOut) ?? -1;
   const inferredOvernightMinutes = outMinutes >= 0 && inMinutes >= 0 ? outMinutes + 1440 - inMinutes : 0;
-  const nightStart = securityShift?.startMinutes === 15 * 60 || securityShift?.startMinutes === 23 * 60 || inMinutes >= 14 * 60;
-  return sameDate && workOut.getTime() < workIn.getTime() && nightStart && inferredOvernightMinutes >= 4 * 60 && inferredOvernightMinutes <= 16 * 60;
+  // If sameDate but workOut < workIn, assume they worked past midnight. Tolerate up to 22 hours.
+  return sameDate && workOut.getTime() < workIn.getTime() && inferredOvernightMinutes > 0 && inferredOvernightMinutes <= 22 * 60;
 }
 
 export function calculateSecurityOtHours(workIn: Date, workOut: Date, shift: SecurityShift | null): number {

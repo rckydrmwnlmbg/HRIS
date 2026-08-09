@@ -109,7 +109,7 @@ export default function KaryawanEditPage({ params }: { params: Promise<{ id: str
     setSaving(false);
   };
 
-  const seksiForDep = masterSec.filter(s => !form.DEP_CD || s.GRP_CD === form.DEP_CD);
+  const seksiForDep = masterSec.filter(s => !form.DEP_CD || !s.GRP_CD?.trim() || s.GRP_CD.trim() === form.DEP_CD);
 
   const tabs = [
     { key: 'pekerjaan', icon: <Briefcase size={16} />, label: lang === 'id' ? 'Data Pekerjaan' : 'Employment' },

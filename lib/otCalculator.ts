@@ -136,12 +136,18 @@ export function calculateAttendanceAndOt(
     } else {
       JAM_KERJA = 8; // Default jam kerja kantoran
       
-      // Asumsi pulang standar jam 16:00
-      const scheduleOut = new Date(workOut);
+      // Normalize workOut for overnight (outDate < inDate means next day)
+      let effectiveOut = workOut;
+      if (workOut.getTime() <= workIn.getTime()) {
+        effectiveOut = new Date(workOut.getTime() + 24 * 60 * 60 * 1000);
+      }
+
+      // Asumsi pulang standar jam 16:00, base on workIn date
+      const scheduleOut = new Date(workIn);
       scheduleOut.setHours(16, 0, 0, 0);
       
-      if (workOut.getTime() > scheduleOut.getTime()) {
-        const diffMinutes = (workOut.getTime() - scheduleOut.getTime()) / 60000;
+      if (effectiveOut.getTime() > scheduleOut.getTime()) {
+        const diffMinutes = (effectiveOut.getTime() - scheduleOut.getTime()) / 60000;
         const breakMinutes = diffMinutes >= 210 ? 30 : 0; // Break 30 menit jika lembur > 3.5 jam
         totalOtHours = Math.max(0, Math.floor(((diffMinutes - breakMinutes) / 60) * 2) / 2);
       }

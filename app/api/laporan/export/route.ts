@@ -180,8 +180,23 @@ export async function GET(request: Request) {
 
       worksheet.columns = headers;
 
-      // Style Header Row (Row 1)
-      const headerRow = worksheet.getRow(1);
+      worksheet.spliceRows(1, 0,
+        ['PT SUMBER MASANDA JAYA'],
+        ['LAPORAN ABSENSI KARYAWAN'],
+        [`PERIODE: ${bulan}/${tahun}`],
+        []
+      );
+
+      worksheet.mergeCells('A1:R1');
+      worksheet.mergeCells('A2:R2');
+      worksheet.mergeCells('A3:R3');
+
+      worksheet.getRow(1).font = { name: 'Calibri', size: 14, bold: true };
+      worksheet.getRow(2).font = { name: 'Calibri', size: 12, bold: true };
+      worksheet.getRow(3).font = { name: 'Calibri', size: 11, bold: true };
+
+      // Style Header Row (Now at Row 5)
+      const headerRow = worksheet.getRow(5);
       headerRow.height = 24;
       headerRow.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF000000' } };
       headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
@@ -382,9 +397,14 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
                   schOutMin = pDate.getMinutes();
                 }
               }
-              const scheduleOut = new Date(outDate);
+              // Normalize outDate for overnight workers (outDate < inDate means next day)
+              let effectiveOut = outDate;
+              if (inDate && outDate && outDate.getTime() <= inDate.getTime()) {
+                effectiveOut = new Date(outDate.getTime() + 24 * 60 * 60 * 1000);
+              }
+              const scheduleOut = new Date(inDate!);
               scheduleOut.setHours(schOutHour, schOutMin, 0, 0);
-              const diffMinutes = (outDate.getTime() - scheduleOut.getTime()) / 60000;
+              const diffMinutes = (effectiveOut.getTime() - scheduleOut.getTime()) / 60000;
               const breakMinutes = diffMinutes >= 210 ? 30 : 0;
               computedOt = Math.max(0, Math.floor(((diffMinutes - breakMinutes) / 60) * 2) / 2);
             }

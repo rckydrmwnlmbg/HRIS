@@ -4,25 +4,26 @@ import { query } from '@/lib/db';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const dateParam = searchParams.get('date');
+    const startDateParam = searchParams.get('startDate') || searchParams.get('date');
+    const endDateParam = searchParams.get('endDate') || searchParams.get('date');
 
-    if (!dateParam) {
-      return NextResponse.json({ error: 'Date is required' }, { status: 400 });
+    if (!startDateParam || !endDateParam) {
+      return NextResponse.json({ error: 'startDate and endDate are required' }, { status: 400 });
     }
 
-    const selectedDate = new Date(dateParam);
-    const y = selectedDate.getFullYear();
-    const m = String(selectedDate.getMonth() + 1).padStart(2, '0');
-    const d = String(selectedDate.getDate()).padStart(2, '0');
-    const selectedDateStr = `${y}-${m}-${d}`;
+    const startDate = new Date(startDateParam);
+    const endDate = new Date(endDateParam);
+    
+    const sy = startDate.getFullYear();
+    const sm = String(startDate.getMonth() + 1).padStart(2, '0');
+    const sd = String(startDate.getDate()).padStart(2, '0');
+    const startDateStr = `${sy}-${sm}-${sd}`;
 
-    // Cek hari: 0=Minggu, 6=Sabtu
-    const dayOfWeek = selectedDate.getDay();
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      return NextResponse.json({ data: [] }); // Hari libur, tidak ada yang perlu dicek
-    }
+    const ey = endDate.getFullYear();
+    const em = String(endDate.getMonth() + 1).padStart(2, '0');
+    const ed = String(endDate.getDate()).padStart(2, '0');
+    const endDateStr = `${ey}-${em}-${ed}`;
 
-    // Cek apakah tanggal yang dipilih adalah hari lampau (sebelum hari ini)
     const todayDate = new Date();
     todayDate.setHours(0, 0, 0, 0);
     const ty = todayDate.getFullYear();
@@ -30,13 +31,9 @@ export async function GET(request: Request) {
     const td = String(todayDate.getDate()).padStart(2, '0');
     const todayDateStr = `${ty}-${tm}-${td}`;
 
-    const checkDate = new Date(selectedDate);
-    checkDate.setHours(0, 0, 0, 0);
-    const isPastDay = checkDate < todayDate;
-    const isToday = selectedDateStr === todayDateStr;
-
-    // Jika hari ini, cek apakah fingerprint sudah disinkronkan
-    if (isToday) {
+    // Jika endDate adalah hari ini atau melampaui, cek apakah fingerprint hari ini sudah disinkronkan
+    let todayNotSynced = false;
+    if (endDateStr >= todayDateStr) {
       const syncCheck = await query<any>(`
         SELECT COUNT(*) as syncedCount
         FROM TR_ABSEN
@@ -44,7 +41,7 @@ export async function GET(request: Request) {
           AND (WORK_IN IS NOT NULL OR WORK_OUT IS NOT NULL)
       `);
       if ((syncCheck[0]?.syncedCount || 0) === 0) {
-        return NextResponse.json({ data: [], notSynced: true });
+        todayNotSynced = true;
       }
     }
 
@@ -52,7 +49,9 @@ export async function GET(request: Request) {
     const rawAbsenResult = await query<any>(`
       SELECT 
         RTRIM(e.EMP_CD) as EMP_CD, 
-        RTRIM(e.EMP_NM) as EMP_NM, 
+        RTRIM(e.EMP_NM) as EMP_NM,
+        RTRIM(e.SEX) as SEX,
+        RTRIM(ISNULL(j.JOB_DESC, '')) as JOB_DESC,
         RTRIM(s.SEC_DESC) as SEC_DESC, 
         RTRIM(e.SEC_CD) as SEC_CD,
         RTRIM(s.SEC_DESC) as BAGIAN,
@@ -78,6 +77,7 @@ export async function GET(request: Request) {
              ELSE RTRIM(dp.DEP_DESC) END AS TEAM,
         RTRIM(a.STATUS_HARI) as STATUS_HARI,
         RTRIM(a.REASON) as REASON,
+        CONVERT(varchar(10), a.DATE_TRANS, 120) as DATE_TRANS,
         a.WORK_IN,
         a.WORK_IN1,
         a.WORK_OUT,
@@ -86,10 +86,11 @@ export async function GET(request: Request) {
       FROM EMP_TABLE e
       LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
       LEFT JOIN MS_DEP dp ON RTRIM(e.DEP_CD) = RTRIM(dp.DEP_CD)
+      LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
       JOIN TR_ABSEN a ON RTRIM(e.EMP_CD) = RTRIM(a.EMP_CD) 
-        AND CONVERT(date, a.DATE_TRANS) = '${selectedDateStr}'
-      WHERE (CONVERT(varchar(10), e.DT_ENTRY, 120) <= '${selectedDateStr}')
-        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${selectedDateStr}')
+        AND CONVERT(date, a.DATE_TRANS) >= '${startDateStr}' AND CONVERT(date, a.DATE_TRANS) <= '${endDateStr}'
+      WHERE (CONVERT(varchar(10), e.DT_ENTRY, 120) <= CONVERT(varchar(10), a.DATE_TRANS, 120))
+        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= CONVERT(varchar(10), a.DATE_TRANS, 120))
     `);
 
     const reasonResult = await query<any>(`SELECT RTRIM(REASON_CODE) as REASON_CODE, RTRIM(REASON_GROUP) as REASON_GROUP FROM Ms_Reason`);
@@ -98,14 +99,24 @@ export async function GET(request: Request) {
       if (r.REASON_CODE) reasonMap.set(r.REASON_CODE, r.REASON_GROUP || '');
     });
 
-    const excludedStatuses = ['C', 'CUTI', 'S', 'SAKIT', 'I', 'IJIN', 'L', 'LIBUR', 'H', 'HAID', 'DL'];
-    const excludedGroups = ['C', 'H', 'S', 'I'];
-
     const jamKosongList = rawAbsenResult.filter((r: any) => {
+      // Cek hari libur akhir pekan
+      const rowDate = new Date(r.DATE_TRANS);
+      const dayOfWeek = rowDate.getDay();
+      if (dayOfWeek === 0 || dayOfWeek === 6) {
+        return false;
+      }
+
       const status = (r.STATUS_HARI || '').trim().toUpperCase();
       const reasonGroup = (reasonMap.get((r.REASON || '').trim()) || '').toUpperCase();
 
-      if (excludedStatuses.includes(status) || excludedGroups.includes(reasonGroup)) {
+      // Libur diabaikan, tapi Cuti/Ijin/Sakit dimasukkan ke daftar Jam Kosong
+      if (status === 'L' || status === 'LIBUR') {
+        return false;
+      }
+
+      // Jika ini record hari ini dan hari ini belum di-sync, skip
+      if (todayNotSynced && r.DATE_TRANS === todayDateStr) {
         return false;
       }
 
@@ -115,15 +126,20 @@ export async function GET(request: Request) {
       const hasOut = !(!r.WORK_OUT || r.WORK_OUT.toString().trim() === '' || r.WORK_OUT.toString().includes('00:00:00')) ||
                      !(!r.WORK_OUT1 || r.WORK_OUT1.toString().trim() === '' || r.WORK_OUT1.toString().includes('00:00:00'));
 
-      // JAM KOSONG MURNI: Salah satu ada, salah satu TIDAK ADA
-      // 1. Ada Out tapi tidak ada In (Lupa Tap Masuk)
-      // 2. Ada In tapi tidak ada Out (Lupa Tap Pulang - untuk hari lampau atau hari ini setelah jam 16:00)
-      if (hasOut && !hasIn) return true;
-      if (hasIn && !hasOut) {
-        // Jika hari ini, hanya anggap lupa tap pulang jika jam sekarang sudah >= 16:00
-        if (isToday) {
+      // Jika ada alasan (cuti/ijin), dan tap tidak lengkap, anggap valid untuk dilaporkan
+      if (r.REASON && (!hasIn || !hasOut)) return true;
+
+      // JAM KOSONG MURNI: Salah satu ada, salah satu TIDAK ADA, ATAU KEDUANYA TIDAK ADA
+      if (!hasIn || !hasOut) {
+        // Jika hari ini dan belum jam 16:00, jangan anggap "Mangkir" atau "Lupa Tap Pulang" kecuali sudah absen masuk
+        if (r.DATE_TRANS === todayDateStr) {
           const currentHour = new Date().getHours();
-          return currentHour >= 16;
+          if (hasIn && !hasOut) {
+            return currentHour >= 16;
+          }
+          if (!hasIn && !hasOut) {
+            return currentHour >= 12; // Mangkir jika belum masuk jam 12
+          }
         }
         return true;
       }
@@ -135,8 +151,11 @@ export async function GET(request: Request) {
       const hasOut = !(!r.WORK_OUT || r.WORK_OUT.toString().trim() === '' || r.WORK_OUT.toString().includes('00:00:00')) ||
                      !(!r.WORK_OUT1 || r.WORK_OUT1.toString().trim() === '' || r.WORK_OUT1.toString().includes('00:00:00'));
 
-      let keterangan_kosong = 'Lupa Tap Masuk';
-      if (hasOut && !hasIn) {
+      let keterangan_kosong = 'Mangkir / Tidak Absen';
+      if (r.REASON) {
+        const reasonDesc = (r.REASON || '').trim();
+        keterangan_kosong = reasonMap.get(reasonDesc) ? `${reasonMap.get(reasonDesc)} (${reasonDesc})` : `Alasan: ${reasonDesc}`;
+      } else if (hasOut && !hasIn) {
         keterangan_kosong = 'Lupa Tap Masuk';
       } else if (hasIn && !hasOut) {
         keterangan_kosong = 'Lupa Tap Pulang';
@@ -145,19 +164,22 @@ export async function GET(request: Request) {
       return {
         EMP_CD: r.EMP_CD,
         EMP_NM: r.EMP_NM,
+        SEX: r.SEX || '',
+        JOB_DESC: r.JOB_DESC || '',
         SEC_DESC: r.SEC_DESC,
         SEC_CD: r.SEC_CD,
         BAGIAN: r.BAGIAN,
         TEAM: r.TEAM,
         STATUS_HARI: r.STATUS_HARI,
         REASON: r.REASON,
+        DATE_TRANS: r.DATE_TRANS,
         WORK_IN: r.WORK_IN ? String(r.WORK_IN).substring(0, 8) : (r.WORK_IN1 ? String(r.WORK_IN1).substring(0, 8) : null),
         WORK_OUT: r.WORK_OUT ? String(r.WORK_OUT).substring(0, 8) : (r.WORK_OUT1 ? String(r.WORK_OUT1).substring(0, 8) : null),
         keterangan_kosong
       };
     });
 
-    return NextResponse.json({ data: jamKosongList });
+    return NextResponse.json({ data: jamKosongList, notSynced: todayNotSynced && startDateStr === endDateStr && endDateStr === todayDateStr });
   } catch (err: any) {
     console.error('API Error:', err);
     return NextResponse.json({ error: 'Failed to fetch jam kosong data' }, { status: 500 });

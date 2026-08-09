@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import * as XLSX from 'xlsx';
 import { X, Download, AlertTriangle, Calendar, Loader2, Search, Clock } from 'lucide-react';
 import type { JamKosongRecord } from '@/types';
 
@@ -13,7 +12,8 @@ interface JamKosongModalProps {
 
 export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKosongModalProps) {
   const [mounted, setMounted] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [startDate, setStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [localData, setLocalData] = useState<JamKosongRecord[]>(data);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -23,13 +23,14 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
     setMounted(true);
   }, []);
 
-  // Sync initial data if date is today, else keep localData
+  // Sync initial data if date range is today, else keep localData
   useEffect(() => {
-    if (selectedDate === new Date().toISOString().split('T')[0]) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (startDate === todayStr && endDate === todayStr) {
       setLocalData(data);
       setNotSynced(data.length === 0 && !loading);
     }
-  }, [data, selectedDate, loading]);
+  }, [data, startDate, endDate, loading]);
 
   // Fetch data on date change
   useEffect(() => {
@@ -37,7 +38,7 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
     const fetchData = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/dashboard/jam-kosong?date=${selectedDate}`);
+        const res = await fetch(`/api/dashboard/jam-kosong?startDate=${startDate}&endDate=${endDate}`);
         if (res.ok) {
           const result = await res.json();
           setLocalData(result.data || []);
@@ -50,11 +51,12 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
       }
     };
     
-    // Only fetch if it's not today (today is passed from props)
-    if (selectedDate !== new Date().toISOString().split('T')[0]) {
+    // Only fetch if it's not strictly today (today is passed from props)
+    const todayStr = new Date().toISOString().split('T')[0];
+    if (startDate !== todayStr || endDate !== todayStr) {
       fetchData();
     }
-  }, [selectedDate, isOpen]);
+  }, [startDate, endDate, isOpen]);
 
   // Use Escape key to close
   useEffect(() => {
@@ -79,39 +81,89 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
 
   if (!isOpen || !mounted) return null;
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!filteredData || filteredData.length === 0) return;
 
-    // Prepare data for export
-    const exportData = filteredData.map((item, index) => ({
-      No: index + 1,
-      NIK: item.EMP_CD,
-      'Nama Karyawan': item.EMP_NM,
-      'Unit Kerja': item.BAGIAN || '-',
-      'Tim': item.TEAM || '-',
-      'Waktu Masuk': item.WORK_IN || '-',
-      'Waktu Pulang': item.WORK_OUT || '-',
-      'Status Presensi': item.keterangan_kosong
-    }));
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Rekap Jam Kosong', { views: [{ showGridLines: true }] });
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Presensi Belum Lengkap');
-    
-    // Auto-size columns
-    const wscols = [
-      { wch: 5 },
-      { wch: 15 },
-      { wch: 30 },
-      { wch: 25 },
-      { wch: 20 },
-      { wch: 15 },
-      { wch: 15 },
-      { wch: 25 }
+    const headers = [
+      { header: 'NO', key: 'NO', width: 5 },
+      { header: 'TANGGAL', key: 'TANGGAL', width: 14 },
+      { header: 'NIK', key: 'NIK', width: 13 },
+      { header: 'NAMA', key: 'NAMA', width: 28 },
+      { header: 'L/P', key: 'LP', width: 6 },
+      { header: 'JABATAN', key: 'JABATAN', width: 20 },
+      { header: 'TEAM', key: 'TEAM', width: 18 },
+      { header: 'BAGIAN', key: 'BAGIAN', width: 20 },
+      { header: 'MASUK', key: 'MASUK', width: 10 },
+      { header: 'PULANG', key: 'PULANG', width: 10 },
+      { header: 'STATUS HARI', key: 'STATUS_HARI', width: 14 },
+      { header: 'ALASAN', key: 'ALASAN', width: 22 },
+      { header: 'KETERANGAN', key: 'KETERANGAN', width: 28 },
     ];
-    worksheet['!cols'] = wscols;
 
-    XLSX.writeFile(workbook, `Rekap_Presensi_Belum_Lengkap_${selectedDate}.xlsx`);
+    worksheet.columns = headers;
+
+    // Style Header Row
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 24;
+    headerRow.font = { name: 'Calibri', size: 10, bold: true, color: { argb: 'FF000000' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    headerRow.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9D9D9' } };
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    });
+
+    // Format dates for filename
+    const [sy, sm, sd] = startDate.split('-');
+    const [ey, em, ed] = endDate.split('-');
+    const formattedStartDate = `${sd}-${sm}-${sy}`;
+    const formattedEndDate = `${ed}-${em}-${ey}`;
+    const dateRangeStr = startDate === endDate ? formattedStartDate : `${formattedStartDate}_sd_${formattedEndDate}`;
+
+    filteredData.forEach((item, index) => {
+      const addedRow = worksheet.addRow({
+        NO: index + 1,
+        TANGGAL: item.DATE_TRANS || '-',
+        NIK: item.EMP_CD,
+        NAMA: item.EMP_NM,
+        LP: item.SEX || '-',
+        JABATAN: item.JOB_DESC || '-',
+        TEAM: item.TEAM || '-',
+        BAGIAN: item.BAGIAN || '-',
+        MASUK: item.WORK_IN || '',
+        PULANG: item.WORK_OUT || '',
+        STATUS_HARI: item.STATUS_HARI || '',
+        ALASAN: item.REASON || '',
+        KETERANGAN: item.keterangan_kosong,
+      });
+
+      addedRow.height = 19;
+      addedRow.font = { name: 'Calibri', size: 10 };
+
+      // Center-align specific columns
+      const centerCols = [1, 2, 3, 5, 9, 10, 11];
+      centerCols.forEach(colIdx => {
+        addedRow.getCell(colIdx).alignment = { horizontal: 'center', vertical: 'middle' };
+      });
+
+      // Borders
+      addedRow.eachCell((cell) => {
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+      });
+    });
+
+    // Generate and download
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Rekap_Jam_Kosong_${dateRangeStr}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return createPortal(
@@ -147,7 +199,7 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
                 {lang === 'id' ? 'Daftar Presensi Belum Lengkap' : 'Incomplete Attendance Records'}
               </h2>
               <p className="liquid-glass-modal-desc" style={{ margin: 0, fontSize: 11.5, marginTop: 2 }}>
-                {localData.length} {lang === 'id' ? 'Karyawan terdeteksi hadir namun catatan waktu masuk/pulang belum lengkap.' : 'Employees with incomplete attendance records requiring review.'}
+                {localData.length} {lang === 'id' ? 'Karyawan dengan catatan presensi yang memerlukan peninjauan (Jam Kosong, Cuti, atau Ijin).' : 'Employees with attendance records requiring review (Missing punch, Leave, or Permission).'}
               </p>
             </div>
           </div>
@@ -160,8 +212,17 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
               <Calendar size={13} color="var(--text-secondary)" />
               <input 
                 type="date" 
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                style={{
+                  border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 12, outline: 'none', cursor: 'pointer'
+                }}
+              />
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>-</span>
+              <input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
                 style={{
                   border: 'none', background: 'transparent', color: 'var(--text-primary)', fontSize: 12, outline: 'none', cursor: 'pointer'
                 }}
@@ -225,6 +286,7 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(10px)', backgroundColor: 'rgba(255, 255, 255, 0.05)' }}>
                 <tr>
+                  <th style={{ padding: '8px 16px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Tanggal' : 'Date'}</th>
                   <th style={{ padding: '8px 16px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Informasi Karyawan' : 'Employee'}</th>
                   <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Unit Kerja & Tim' : 'Section & Team'}</th>
                   <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Waktu Masuk' : 'Clock In'}</th>
@@ -234,7 +296,10 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
               </thead>
               <tbody>
                 {filteredData.map((k, i) => (
-                  <tr key={k.EMP_CD} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-subtle)' }}>
+                  <tr key={`${k.EMP_CD}-${k.DATE_TRANS}`} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-subtle)' }}>
+                    <td style={{ padding: '8px 16px', fontSize: 11.5, fontWeight: 500 }}>
+                      {k.DATE_TRANS?.split('-').reverse().join('-')}
+                    </td>
                     <td style={{ padding: '8px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-glow)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11 }}>
@@ -271,13 +336,17 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
                     <td style={{ padding: '8px 16px' }}>
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: '4px', fontSize: 10.5, fontWeight: 550,
-                        background: k.keterangan_kosong === 'Lupa Tap Masuk' ? 'rgba(234, 179, 8, 0.12)' : 'rgba(249, 115, 22, 0.12)',
-                        color: k.keterangan_kosong === 'Lupa Tap Masuk' ? '#ca8a04' : '#ea580c'
+                        background: k.keterangan_kosong.startsWith('Alasan') || k.keterangan_kosong.includes('(') ? 'rgba(59, 130, 246, 0.12)'
+                          : k.keterangan_kosong === 'Lupa Tap Masuk' ? 'rgba(234, 179, 8, 0.12)'
+                          : k.keterangan_kosong === 'Lupa Tap Pulang' ? 'rgba(249, 115, 22, 0.12)'
+                          : 'rgba(239, 68, 68, 0.12)',
+                        color: k.keterangan_kosong.startsWith('Alasan') || k.keterangan_kosong.includes('(') ? '#3b82f6'
+                          : k.keterangan_kosong === 'Lupa Tap Masuk' ? '#ca8a04'
+                          : k.keterangan_kosong === 'Lupa Tap Pulang' ? '#ea580c'
+                          : '#ef4444'
                       }}>
                         <AlertTriangle size={11} />
-                        {k.keterangan_kosong === 'Lupa Tap Masuk' 
-                          ? (lang === 'id' ? 'Presensi Masuk Belum Tercatat' : 'Missing Clock In') 
-                          : (lang === 'id' ? 'Presensi Pulang Belum Tercatat' : 'Missing Clock Out')}
+                        {k.keterangan_kosong}
                       </span>
                     </td>
                   </tr>

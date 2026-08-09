@@ -7,6 +7,17 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
 
+    const syncCheck = await query<any>(`
+      SELECT COUNT(*) as syncedCount
+      FROM TR_ABSEN
+      WHERE CONVERT(date, DATE_TRANS) = '${date.replace(/'/g, "''")}'
+        AND (WORK_IN IS NOT NULL OR WORK_OUT IS NOT NULL)
+    `);
+
+    if ((syncCheck[0]?.syncedCount || 0) === 0) {
+      return NextResponse.json([]);
+    }
+
     const result = await query<any>(`
       SELECT 
         RTRIM(a.EMP_CD) AS EMP_CD,
@@ -23,6 +34,7 @@ export async function GET(request: Request) {
       LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
       LEFT JOIN MS_DEP d ON e.DEP_CD = d.DEP_CD
       WHERE CONVERT(date, a.DATE_TRANS) = '${date.replace(/'/g, "''")}'
+        AND (a.WORK_IN IS NOT NULL OR a.WORK_OUT IS NOT NULL OR RTRIM(ISNULL(a.STATUS_HARI, '')) <> 'KERJA')
       ORDER BY a.EMP_NM ASC
     `);
 

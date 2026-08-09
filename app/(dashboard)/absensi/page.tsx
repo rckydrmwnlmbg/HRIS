@@ -156,7 +156,7 @@ function AbsensiContent() {
     const status = (r.STATUS_HARI || '').trim().toUpperCase();
     const hasIn = !(!r.WORK_IN || r.WORK_IN.toString().trim() === '' || r.WORK_IN.toString().includes('00:00:00'));
     const hasOut = !(!r.WORK_OUT || r.WORK_OUT.toString().trim() === '' || r.WORK_OUT.toString().includes('00:00:00'));
-    return (status === 'O' || status === 'KERJA' || status === '') && ((hasIn && !hasOut) || (!hasIn && hasOut));
+    return (status === 'O' || status === 'KERJA' || status === '') && (!hasIn || !hasOut);
   };
 
   const showToast = (msg: string, type: 'success' | 'warning') => {

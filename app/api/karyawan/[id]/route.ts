@@ -92,11 +92,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
     for (const field of dateFields) {
       if (data[field] !== undefined) {
-        if (data[field] !== null && (typeof data[field] !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(data[field]))) {
-          return NextResponse.json({ error: `${field} harus berformat YYYY-MM-DD atau null.` }, { status: 400 });
+        if (data[field]) {
+          const dateStr = String(data[field]).substring(0, 10);
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            return NextResponse.json({ error: `${field} harus berformat YYYY-MM-DD atau null.` }, { status: 400 });
+          }
+          updates.push(`${field} = @${field}`);
+          values[field] = dateStr;
+        } else {
+          updates.push(`${field} = @${field}`);
+          values[field] = null;
         }
-        updates.push(`${field} = @${field}`);
-        values[field] = data[field] || null;
       }
     }
 

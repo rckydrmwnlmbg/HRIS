@@ -155,10 +155,15 @@ export interface LemburRecord {
 export interface JamKosongRecord {
   EMP_CD: string;
   EMP_NM: string;
+  SEX?: string;
+  JOB_DESC?: string;
   BAGIAN: string;
   TEAM: string;
   SEC_DESC: string;
   SEC_CD: string;
+  STATUS_HARI?: string;
+  REASON?: string;
+  DATE_TRANS: string;
   WORK_IN: string | null;
   WORK_OUT: string | null;
   keterangan_kosong: string;
