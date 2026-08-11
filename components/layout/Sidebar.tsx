@@ -14,7 +14,13 @@ const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, key: 'dashboard' as const },
   { href: '/daily', icon: Clock, key: 'daily' as const },
   { href: '/karyawan', icon: Users, key: 'karyawan' as const },
-  { href: '/absensi', icon: ClipboardList, key: 'absensi' as const },
+  { 
+    href: '/absensi', icon: ClipboardList, key: 'absensi' as const,
+    subItems: [
+      { href: '/absensi', labelId: 'Edit Absensi Karyawan', labelEn: 'Edit Employee Attendance' },
+      { href: '/check-bagian', labelId: 'Check Per Bagian', labelEn: 'Check Per Section' },
+    ]
+  },
   { href: '/cuti', icon: Calendar, key: 'navCuti' as any },
   { 
     href: '/lembur', icon: Clock, key: 'lembur' as const,
@@ -39,7 +45,8 @@ export default function Sidebar() {
   const { user, setUser, settings, setLanguage, setTheme } = useApp();
   const lang = settings.language;
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
-    '/lembur': pathname.startsWith('/lembur'), // Auto-open if we are in lembur routes
+    '/absensi': pathname.startsWith('/absensi') || pathname.startsWith('/check-bagian'),
+    '/lembur': pathname.startsWith('/lembur'),
     '/pengaturan': pathname.startsWith('/pengaturan')
   });
 

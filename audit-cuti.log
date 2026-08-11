@@ -3,3 +3,6 @@
 {"ts":"2026-08-04T05:06:54.065Z","action":"CUTI_DELETE","empCd":"26066995","startDate":"2026-08-10","endDate":"2026-08-13"}
 {"ts":"2026-08-04T05:06:58.607Z","action":"CUTI_DELETE","empCd":"26066995","startDate":"2026-07-21","endDate":"2026-07-21"}
 {"ts":"2026-08-08T16:56:34.871Z","action":"CUTI_DELETE","empCd":"26066995","startDate":"2026-07-21","endDate":"2026-07-21"}
+{"ts":"2026-08-09T10:40:21.542Z","action":"CUTI_CREATE","empCd":"26066995","empNm":"WIDYA ETIKA","reasonCode":"18","startDate":"2026-08-14","endDate":"2026-08-17","days":2,"dates":["2026-08-14","2026-08-15","2026-08-16","2026-08-17"]}
+{"ts":"2026-08-09T11:46:32.452Z","action":"CUTI_DELETE","empCd":"26066995","startDate":"2026-07-21","endDate":"2026-07-21"}
+{"ts":"2026-08-09T11:47:35.934Z","action":"CUTI_DELETE","empCd":"26066995","startDate":"2026-08-14","endDate":"2026-08-14"}

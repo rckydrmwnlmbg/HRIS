@@ -145,6 +145,9 @@ function AbsensiContent() {
   const selectEmployee = (k: Karyawan) => {
     setSelectedEmp(k);
     setSearchEmp('');
+    setKoreksiTarget(null);
+    setDraftKoreksi({});
+    setCorrections(new Map());
     loadAbsensi(k.EMP_CD, bulan, tahun);
   };
 
@@ -154,8 +157,9 @@ function AbsensiContent() {
 
   const isJamKosong = (r: AbsensiRecord) => {
     const status = (r.STATUS_HARI || '').trim().toUpperCase();
-    const hasIn = !(!r.WORK_IN || r.WORK_IN.toString().trim() === '' || r.WORK_IN.toString().includes('00:00:00'));
-    const hasOut = !(!r.WORK_OUT || r.WORK_OUT.toString().trim() === '' || r.WORK_OUT.toString().includes('00:00:00'));
+    // If WORK_IN or WORK_OUT is truthy (Date object, non-empty string), fingerprint exists
+    const hasIn = !!r.WORK_IN && String(r.WORK_IN).trim() !== '';
+    const hasOut = !!r.WORK_OUT && String(r.WORK_OUT).trim() !== '';
     return (status === 'O' || status === 'KERJA' || status === '') && (!hasIn || !hasOut);
   };
 
@@ -559,26 +563,29 @@ function AbsensiContent() {
                               {normalizeStatus(r.STATUS_HARI) === 'L' || normalizeStatus(r.STATUS_HARI) === 'LIBUR' ? (lang === 'id' ? 'Hari Libur' : 'Holiday') : (r.REASON ? (masterReasons.find(mr => mr.REASON_CODE === r.REASON)?.REASON_DESC || r.REASON) : (lang === 'id' ? 'Belum ada catatan presensi' : 'No attendance record'))}
                             </div>
                           )}
-                          {kosong && !r.REASON && <span className={`badge badge-warning`} style={{ marginTop: '2px', fontSize: '10px' }}>⚠ {t(lang, 'jamKosongLabel')}</span>}
                         </td>
                         <td>
-                          {hasCorrection || (r.WORK_IN_STR !== r.DATE_IN_STR || r.WORK_OUT_STR !== r.DATE_OUT_STR) ? (
+                          {hasCorrection || (r.WORK_IN_STR !== r.DATE_IN_STR || r.WORK_OUT_STR !== r.DATE_OUT_STR) || (kosong && !r.REASON) ? (
                             <div style={{ fontSize: '12px' }}>
                               {hasCorrection && (
                                 <span className={`badge ${corrStatus === 'applied' ? 'badge-success' : 'badge-warning'}`} style={{ marginBottom: '4px', display: 'inline-block' }}>
                                   {corrStatus === 'applied' ? '✓ ' + t(lang, 'applied') : '⏳ ' + t(lang, 'draft')}
                                 </span>
                               )}
-                              <div>
-                                {disp.WORK_IN_STR || (hasCorrection && disp.WORK_IN) ? <span style={{ color: 'var(--success)' }}>{lang === 'id' ? 'Masuk' : 'In'}: {(disp as any).WORK_IN_STR ? (disp as any).WORK_IN_STR.split(' ')[1] : new Date(disp.WORK_IN!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--text-secondary)' }}>{lang === 'id' ? 'Masuk' : 'In'}: --:--:--</span>}
-                                {' · '}
-                                {disp.WORK_OUT_STR || (hasCorrection && disp.WORK_OUT) ? <span style={{ color: 'var(--info)' }}>{lang === 'id' ? 'Pulang' : 'Out'}: {(disp as any).WORK_OUT_STR ? (disp as any).WORK_OUT_STR.split(' ')[1] : new Date(disp.WORK_OUT!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--text-secondary)' }}>{lang === 'id' ? 'Pulang' : 'Out'}: --:--:--</span>}
-                              </div>
-                              {disp.corrected_reason && <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{masterReasons.find(mr => mr.REASON_CODE === disp.corrected_reason)?.REASON_DESC}</div>}
-                              {corrStatus === 'draft' && (
-                                <button className="btn btn-sm btn-success" style={{ marginTop: '4px', fontSize: '10px', padding: '3px 8px' }} onClick={() => handleApply(r.DATE_TRANS)}>
-                                  <CheckSquare size={11} /> {t(lang, 'terapkan')}
-                                </button>
+                              {(hasCorrection || (r.WORK_IN_STR !== r.DATE_IN_STR || r.WORK_OUT_STR !== r.DATE_OUT_STR)) && (
+                                <>
+                                  <div>
+                                    {disp.WORK_IN_STR || (hasCorrection && disp.WORK_IN) ? <span style={{ color: 'var(--success)' }}>{lang === 'id' ? 'Masuk' : 'In'}: {(disp as any).WORK_IN_STR ? (disp as any).WORK_IN_STR.split(' ')[1] : new Date(disp.WORK_IN!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--text-secondary)' }}>{lang === 'id' ? 'Masuk' : 'In'}: --:--:--</span>}
+                                    {' · '}
+                                    {disp.WORK_OUT_STR || (hasCorrection && disp.WORK_OUT) ? <span style={{ color: 'var(--info)' }}>{lang === 'id' ? 'Pulang' : 'Out'}: {(disp as any).WORK_OUT_STR ? (disp as any).WORK_OUT_STR.split(' ')[1] : new Date(disp.WORK_OUT!).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span> : <span style={{ color: 'var(--text-secondary)' }}>{lang === 'id' ? 'Pulang' : 'Out'}: --:--:--</span>}
+                                  </div>
+                                  {disp.corrected_reason && <div style={{ color: 'var(--text-secondary)', marginTop: '2px' }}>{masterReasons.find(mr => mr.REASON_CODE === disp.corrected_reason)?.REASON_DESC}</div>}
+                                  {corrStatus === 'draft' && (
+                                    <button className="btn btn-sm btn-success" style={{ marginTop: '4px', fontSize: '10px', padding: '3px 8px' }} onClick={() => handleApply(r.DATE_TRANS)}>
+                                      <CheckSquare size={11} /> {t(lang, 'terapkan')}
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
                           ) : <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span>}
@@ -586,6 +593,7 @@ function AbsensiContent() {
                         <td>
                           <span style={{ fontSize: '12px', fontFamily: 'monospace' }}>
                             {r.JAM_KERJA != null ? `${r.JAM_KERJA.toFixed(1)} jam` : '—'}
+                            {kosong && !r.REASON && <span style={{ marginLeft: '6px', color: 'var(--warning)', cursor: 'help' }} title={t(lang, 'jamKosongLabel')}>⚠</span>}
                           </span>
                         </td>
                         <td>

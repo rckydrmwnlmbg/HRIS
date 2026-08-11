@@ -129,11 +129,18 @@ export async function GET(request: Request) {
 
     const result = await query<any>(queryStr);
 
+    // Filter out weekend rows before grouping — cuti days only count working days
+    const filteredResult = result.filter((r: any) => {
+      const d = new Date(r.dateStr + 'T00:00:00');
+      const dow = d.getDay();
+      return dow !== 0 && dow !== 6;
+    });
+
     // Grouping contiguous dates for each employee
     const groupedRecords: any[] = [];
     let currentGroup: any = null;
 
-    for (const row of result) {
+    for (const row of filteredResult) {
       if (!currentGroup) {
         currentGroup = {
           EMP_CD: row.EMP_CD,
@@ -269,10 +276,13 @@ export async function POST(request: Request) {
       );
     }
 
+    const workingDays = dates.filter(d => [0, 6].includes(new Date(d + 'T00:00:00').getDay()) === false).length || dates.length;
+
     await withTransaction(async (tx) => {
       // ---- LANGKAH 1: tblCUTI ----
       // HR_MG / HR_LBR tetap 0. Sudah diverifikasi di database: dari seluruh baris tblCUTI
       // (termasuk yang dibuat INUS) tidak ada satu pun yang nilainya bukan 0.
+
       await tx(
         `INSERT INTO tblCUTI
            (EMP_CD, EMP_NM, AWAL_CUTI, AKHIR_CUTI, REASON, REMARK, LM_CUTI, HR_MG, HR_LBR)
@@ -284,7 +294,7 @@ export async function POST(request: Request) {
           akhir: endDate,
           reason: reasonCode,
           remark,
-          lama: dates.length,
+          lama: workingDays,
         }
       );
 
@@ -365,11 +375,11 @@ export async function POST(request: Request) {
       reasonCode,
       startDate,
       endDate,
-      days: dates.length,
+      days: workingDays,
       dates,
     });
 
-    return NextResponse.json({ success: true, days: dates.length });
+    return NextResponse.json({ success: true, days: workingDays });
   } catch (error: any) {
     console.error('API /cuti POST error:', error);
     return NextResponse.json({ error: error.message }, { status: 500 });
