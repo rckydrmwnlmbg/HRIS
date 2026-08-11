@@ -405,18 +405,44 @@ export async function DELETE(request: Request) {
     }
 
     await withTransaction(async (tx) => {
-      // 1. tblCUTI
-      await tx(
-        `DELETE FROM tblCUTI
-          WHERE RTRIM(EMP_CD) = @empCd AND AWAL_CUTI = @awal AND AKHIR_CUTI = @akhir`,
+      // ── LANGKAH 0: Cari entry tblCUTI induk ──
+      // GET mengelompokkan tanggal berurutan dan MENGECUALIKAN weekend. Akibatnya
+      // satu entry tblCUTI (misal 14-18 Agustus, Senin-Jumat) bisa dipecah menjadi
+      // 2+ grup di UI kalau ada hari libur/weekend di tengah.
+      //
+      // Frontend mengirim start/end DARI GRUP, bukan dari tblCUTI. Exact match
+      // (AWAL_CUTI=@awal AND AKHIR_CUTI=@akhir) akan GAGAL kalau sub-range tidak
+      // cocok dengan range asli.
+      //
+      // Solusi: cari entry tblCUTI yang MENCAKUP rentang yang dikirim frontend,
+      // lalu gunakan range ASLI dari tblCUTI untuk semua operasi pembersihan.
+      const parentRows = await tx<{ AWAL_CUTI: string; AKHIR_CUTI: string }>(
+        `SELECT TOP 1
+            CONVERT(varchar(10), AWAL_CUTI, 120) AS AWAL_CUTI,
+            CONVERT(varchar(10), AKHIR_CUTI, 120) AS AKHIR_CUTI
+          FROM tblCUTI
+          WHERE RTRIM(EMP_CD) = @empCd
+            AND AWAL_CUTI <= @awal
+            AND AKHIR_CUTI >= @akhir`,
         { empCd, awal: startDate, akhir: endDate }
       );
 
-      // 2. tbldetcuti -- wajib, kalau tidak cuti akan muncul kembali saat sinkronisasi INUS.
+      // Gunakan range asli tblCUTI kalau ditemukan, fallback ke param frontend
+      const actualStart = parentRows?.[0]?.AWAL_CUTI || startDate;
+      const actualEnd = parentRows?.[0]?.AKHIR_CUTI || endDate;
+
+      // 1. tblCUTI — hapus entry induk dengan range aslinya
+      await tx(
+        `DELETE FROM tblCUTI
+          WHERE RTRIM(EMP_CD) = @empCd AND AWAL_CUTI = @awal AND AKHIR_CUTI = @akhir`,
+        { empCd, awal: actualStart, akhir: actualEnd }
+      );
+
+      // 2. tbldetcuti — wajib, kalau tidak cuti akan muncul kembali saat sinkronisasi INUS.
       await tx(
         `DELETE FROM tbldetcuti
           WHERE RTRIM(EMP_CD) = @empCd AND TGL_CUTI >= @awal AND TGL_CUTI <= @akhir`,
-        { empCd, awal: startDate, akhir: endDate }
+        { empCd, awal: actualStart, akhir: actualEnd }
       );
 
       // 3. Bersihkan REASON di TR_ABSEN.
@@ -432,7 +458,7 @@ export async function DELETE(request: Request) {
           WHERE RTRIM(EMP_CD) = @empCd
             AND DATE_TRANS >= @awal AND DATE_TRANS <= @akhir
             AND WORK_IN IS NULL AND WORK_OUT IS NULL`,
-        { empCd, awal: startDate, akhir: endDate }
+        { empCd, awal: actualStart, akhir: actualEnd }
       );
     });
 
