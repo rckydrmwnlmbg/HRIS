@@ -1,0 +1,106 @@
+const isLocal = process.env.DB_SERVER === 'localhost' || process.env.DB_SERVER === '.\\SQLEXPRESS';
+let sql: any;
+if (process.env.NODE_ENV === 'development') {
+  try {
+    sql = require('mssql/msnodesqlv8');
+  } catch {
+    sql = require('mssql');
+  }
+} else {
+  sql = require('mssql');
+}
+
+let serverHost = process.env.DS_DB_SERVER || 'localhost';
+let instanceName = undefined;
+
+if (serverHost.includes('\\')) {
+  const parts = serverHost.split('\\');
+  serverHost = parts[0];
+  instanceName = parts[1];
+}
+
+if (serverHost === '.' || serverHost === '(local)' || serverHost === 'localhost') {
+  serverHost = 'localhost';
+}
+
+const sqlConfig: any = {
+  server: serverHost,
+  database: process.env.DS_DB_NAME || 'DataSolution',
+  pool: {
+    max: 10,
+    min: 0,
+    idleTimeoutMillis: 30000
+  },
+  requestTimeout: 120000,
+  options: {
+    useUTC: false,
+    encrypt: false,
+    trustServerCertificate: true
+  }
+};
+
+if (instanceName) {
+  sqlConfig.options.instanceName = instanceName;
+}
+
+sqlConfig.user = process.env.DS_DB_USER;
+sqlConfig.password = process.env.DS_DB_PASS;
+
+if (process.env.NODE_ENV === 'development') {
+  const odbcDriver = process.env.DB_ODBC_DRIVER || 'ODBC Driver 18 for SQL Server';
+  const odbcServer = instanceName ? `${serverHost}\\${instanceName}` : serverHost;
+
+  let cs = `Driver={${odbcDriver}};Server=${odbcServer};Database=${sqlConfig.database};`;
+
+  const useWindowsAuth = process.env.DB_TRUSTED === '1' || !process.env.DS_DB_USER;
+
+  if (useWindowsAuth) {
+    cs += 'Trusted_Connection=yes;';
+  } else {
+    cs += `Uid=${process.env.DS_DB_USER};Pwd=${process.env.DS_DB_PASS};`;
+  }
+
+  if (odbcDriver.includes('18')) {
+    cs += 'Encrypt=no;TrustServerCertificate=yes;';
+  }
+
+  sqlConfig.connectionString = cs;
+}
+
+let dsPoolPromise: Promise<any> | null = null;
+
+export async function getDsDbConnection() {
+  if (process.env.DATA_MODE !== 'live') {
+    throw new Error('Database connection is only available in live mode');
+  }
+
+  if (!dsPoolPromise) {
+    console.log('Connecting to DataSolution SQL Server at', sqlConfig.server);
+    dsPoolPromise = new sql.ConnectionPool(sqlConfig)
+      .connect()
+      .then((pool: any) => {
+        console.log('Connected to DataSolution SQL Server successfully');
+        return pool;
+      })
+      .catch((err: any) => {
+        console.error('DataSolution Database Connection Failed! Bad Config: ', err);
+        dsPoolPromise = null;
+        throw err;
+      });
+  }
+  return dsPoolPromise;
+}
+
+export async function dsQuery<T>(queryString: string, params?: Record<string, any>): Promise<T[]> {
+  const pool = await getDsDbConnection();
+  const request = pool.request();
+
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      request.input(key, value);
+    });
+  }
+
+  const result = await request.query(queryString);
+  return result.recordset as T[];
+}

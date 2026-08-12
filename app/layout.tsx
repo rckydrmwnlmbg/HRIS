@@ -28,6 +28,10 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: 'HRIS TMNB — Human Resource Management System',
   description: 'Sistem Manajemen Sumber Daya Manusia Terintegrasi — Kehadiran, Kepegawaian, Lembur, dan Rekapitulasi',
+  icons: {
+    icon: '/icon.png?v=2',
+    apple: '/icon.png?v=2',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbConnection } from '@/lib/db';
 import { getRelevantMemory, recordSuccessPattern } from '@/lib/ai-memory';
+import { loadAssistantData, AIAssistantData, addReminder, addNote } from '@/lib/ai-assistant';
 
 function getAIConfig() {
   return {
@@ -351,10 +352,11 @@ async function getContextAndSuggestions(): Promise<{ context: string; suggestion
   if (contextCache && Date.now() - contextCacheTime < CONTEXT_CACHE_TTL) return contextCache;
 
   const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-  const hour = now.getHours();
-  const day = now.getDay();
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const localDate = new Date(now.getTime() + (7 * 60 * 60 * 1000)); // WIB (UTC+7)
+  const today = localDate.toISOString().slice(0, 10);
+  const hour = localDate.getUTCHours();
+  const day = localDate.getUTCDay();
+  const monthStart = `${localDate.getUTCFullYear()}-${String(localDate.getUTCMonth() + 1).padStart(2, '0')}-01`;
 
   try {
     const pool = await getDbConnection();
@@ -785,9 +787,25 @@ function buildSystemPrompt(
   schema: string,
   context: string,
   queryRAG: string,
-  learnedMemory: string
+  learnedMemory: string,
+  assistantData: AIAssistantData
 ): string {
+  const pendingReminders = assistantData.reminders.filter(r => r.status === 'pending');
+  const remindersText = pendingReminders.length > 0 
+    ? pendingReminders.map(r => `- ${r.title} (Jatuh tempo: ${r.dueDate || 'Hari ini'})`).join('\n')
+    : 'Belum ada pengingat.';
+
+  const notesText = assistantData.notes.length > 0
+    ? assistantData.notes.slice(0, 10).map(n => `- ${n.content}`).join('\n')
+    : 'Belum ada catatan.';
+
   return `Kamu adalah Viditii, asisten AI HRIS untuk PT TMNB.
+
+DAFTAR PENGINGAT (REMINDERS) USER SAAT INI:
+${remindersText}
+
+DAFTAR CATATAN (NOTES) TERSIMPAN:
+${notesText}
 
 ⚠️ PERINGATAN PENTING — NAMA KOLOM DATABASE ⚠️
 HANYA gunakan nama kolom ini. JANGAN MENGARANG:
@@ -811,7 +829,14 @@ ATURAN RESPONS:
 5. Jawab pertanyaan user secara langsung, lugas, dan to the point. JANGAN menambahkan teks penawaran unduh Excel atau arahan menu lain kecuali user secara spesifik memintanya.
 6. JANGAN PERNAH generate SQL INSERT/UPDATE/DELETE/DROP/ALTER.
 7. Jawab dalam bahasa Indonesia, ramah, profesional, dan jelas.
-8. STRUKTUR & SPASING PENULISAN (SANGAT PENTING):
+8. FITUR ASISTEN PRIBADI (REMINDER & CATATAN) - SANGAT PENTING:
+- Jika pengguna meminta untuk **diingatkan** atau **menjadwalkan tugas** (contoh: "ingatkan aku besok untuk...", "buat reminder untuk..."), balaslah dengan format khusus ini di akhir pesanmu:
+  <REMINDER>Judul Tugas|YYYY-MM-DD</REMINDER>
+  Tebak tanggal jatuhnya (YYYY-MM-DD) berdasarkan teks user. Jika tidak disebutkan spesifik, gunakan tanggal besok.
+- Jika pengguna meminta untuk **menyimpan catatan** tanpa tenggat waktu (contoh: "catat:", "tolong simpan info ini:"), balaslah dengan format khusus ini di akhir pesanmu:
+  <NOTE>Isi catatan secara lengkap</NOTE>
+- Selalu balas juga dengan teks konfirmasi ramah bahwa catatan/pengingat telah disimpan.
+9. STRUKTUR & SPASING PENULISAN (SANGAT PENTING):
 - Buat tulisan yang SANGAT RAPI dan ENAK DIBACA dengan pemisahan baris (enter) dan spasi yang jelas.
 - Pisahkan paragraf pembuka, poin rincian, dan paragraf penutup menggunakan DUA KALI ENTER (\n\n).
 - Gunakan poin berbutir (- ) atau bernomor (1. , 2. ) untuk merinci data, angka komponen gaji, kehadiran, atau perbandingan status. Setiap poin WAJIB berada di baris tersendiri.
@@ -1078,8 +1103,10 @@ export async function POST(request: NextRequest) {
 
     const learnedMemory = getRelevantMemory(message);
 
+    const assistantData = loadAssistantData();
+
     // Web search jika pertanyaan butuh info dari internet
-    const systemPrompt = buildSystemPrompt(schema, ctx.context, queryRAG, learnedMemory);
+    const systemPrompt = buildSystemPrompt(schema, ctx.context, queryRAG, learnedMemory, assistantData);
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -1151,6 +1178,30 @@ export async function POST(request: NextRequest) {
 
     let sql = extractSQL(aiContent);
     const nikMatch = message.match(/\b(\d{6,10})\b/);
+    
+    // Parse Reminders and Notes (using [\s\S]*? to handle newlines)
+    const reminderMatch = aiContent.match(/<REMINDER>([\s\S]*?)<\/?REMINDER>/i);
+    const noteMatch = aiContent.match(/<NOTE>([\s\S]*?)<\/?NOTE>/i);
+    
+    if (reminderMatch || noteMatch) {
+      if (reminderMatch) {
+        const parts = reminderMatch[1].split('|');
+        const title = parts[0].replace(/\\n/g, ' ').trim();
+        const date = parts[1] ? parts[1].trim() : null;
+        if (title) {
+          addReminder(title, date, 'chat');
+          aiContent = aiContent.replace(reminderMatch[0], '').trim();
+        }
+      }
+      
+      if (noteMatch) {
+        const content = noteMatch[1].trim();
+        if (content) {
+          addNote(content);
+          aiContent = aiContent.replace(noteMatch[0], '').trim();
+        }
+      }
+    }
 
     if (nikMatch) {
       sql = `SELECT 

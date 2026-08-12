@@ -55,9 +55,10 @@ function distributeOtTiers(otHours: number, isHoliday: boolean) {
 
 /**
  * Menghitung Total OT Value berdasarkan tier (pengali)
+ * Diubah sesuai permintaan: T_OT mengikuti INUS, yaitu murni total jam lembur.
  */
 function calculateTotOt(o1: number, o2: number, o3: number, o4: number) {
-  return (o1 * 1.5) + (o2 * 2.0) + (o3 * 3.0) + (o4 * 4.0);
+  return o1 + o2 + o3 + o4;
 }
 
 /**
@@ -138,7 +139,7 @@ export function calculateAttendanceAndOt(
       
       // Normalize workOut for overnight (outDate < inDate means next day)
       let effectiveOut = workOut;
-      if (workOut.getTime() <= workIn.getTime()) {
+      if (workOut.getTime() < workIn.getTime()) {
         effectiveOut = new Date(workOut.getTime() + 24 * 60 * 60 * 1000);
       }
 

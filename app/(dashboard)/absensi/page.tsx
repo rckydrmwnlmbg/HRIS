@@ -36,6 +36,12 @@ function AbsensiContent() {
   const [syncShiftModal, setSyncShiftModal] = useState(false);
   const [syncShiftLoading, setSyncShiftLoading] = useState(false);
   const [syncShiftData, setSyncShiftData] = useState<any>(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
+  const [syncStartDate, setSyncStartDate] = useState('');
+  const [syncEndDate, setSyncEndDate] = useState('');
+  const [syncProgress, setSyncProgress] = useState(0);
+  const [syncMessage, setSyncMessage] = useState('');
 
   const getShiftLabel = (code: string | null | undefined) => {
     if (!code) return '-';
@@ -415,6 +421,77 @@ function AbsensiContent() {
     setSyncShiftLoading(false);
   };
 
+  const openSyncModal = () => {
+    const end = new Date(tahun, bulan, 0); // Last day of month
+    const pad = (n: number) => String(n).padStart(2, '0');
+    setSyncStartDate(`${tahun}-${pad(bulan)}-01`);
+    setSyncEndDate(`${tahun}-${pad(bulan)}-${pad(end.getDate())}`);
+    setSyncModalOpen(true);
+  };
+
+  const handleSyncDataSolution = async () => {
+    if (!syncStartDate || !syncEndDate) {
+      showToast(lang === 'id' ? 'Tanggal mulai dan selesai harus diisi' : 'Start and end dates are required', 'warning');
+      return;
+    }
+    setSyncLoading(true);
+    setSyncProgress(0);
+    setSyncMessage(lang === 'id' ? 'Menghubungkan ke server...' : 'Connecting to server...');
+    try {
+      const res = await fetch('/api/absensi/sync-datasolution', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startDate: syncStartDate, endDate: syncEndDate })
+      });
+      
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        showToast(err.error || (lang === 'id' ? 'Gagal sinkronisasi' : 'Sync failed'), 'warning');
+        setSyncLoading(false);
+        return;
+      }
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error('Stream not supported');
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.replace('data: ', ''));
+              if (data.type === 'progress') {
+                setSyncMessage(data.message);
+                setSyncProgress(data.progress);
+              } else if (data.type === 'done') {
+                setSyncMessage(data.message);
+                setSyncProgress(100);
+                showToast(data.message || 'Sinkronisasi berhasil', 'success');
+                setTimeout(() => {
+                  setSyncModalOpen(false);
+                  if (selectedEmp) handleLoadAbsensi();
+                }, 1500);
+              } else if (data.type === 'error') {
+                showToast(data.message || 'Gagal sinkronisasi', 'warning');
+              }
+            } catch (e) {
+              // Ignore incomplete chunks
+            }
+          }
+        }
+      }
+    } catch (e) {
+      showToast(lang === 'id' ? 'Terjadi kesalahan koneksi' : 'Connection error occurred', 'warning');
+    }
+    setSyncLoading(false);
+  };
+
   return (
     <div className="animate-fadeIn">
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -422,6 +499,15 @@ function AbsensiContent() {
           <h1 className="page-title">{t(lang, 'absensiKaryawan')}</h1>
           <p className="page-subtitle">{lang === 'id' ? 'Manajemen dan penyesuaian catatan presensi kehadiran karyawan' : 'Manage and adjust employee attendance records'}</p>
         </div>
+        <button 
+          className="btn btn-primary" 
+          onClick={openSyncModal} 
+          disabled={syncLoading}
+          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+        >
+          <Clock size={16} className={syncLoading ? 'spin' : ''} />
+          {syncLoading ? (lang === 'id' ? 'Menyinkronkan...' : 'Syncing...') : (lang === 'id' ? 'Tarik Data Mesin' : 'Sync Device Data')}
+        </button>
       </div>
 
       {/* Search + Filter */}
@@ -916,15 +1002,76 @@ function AbsensiContent() {
         </div>
       , document.body)}
 
-      {/* Toast */}
-      {toast && (
+      {/* Sync DataSolution Modal */}
+      {syncModalOpen && typeof document !== 'undefined' && createPortal(
+        <div className="modal-overlay" onClick={() => !syncLoading && setSyncModalOpen(false)}>
+          <div className="modal" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title"><Clock size={18} style={{ marginRight: '8px' }} />{lang === 'id' ? 'Tarik Data Mesin Absensi' : 'Sync Device Attendance Data'}</h3>
+              <button className="btn btn-sm btn-secondary btn-icon" onClick={() => !syncLoading && setSyncModalOpen(false)}><X size={14} /></button>
+            </div>
+            <div className="modal-body">
+              {syncLoading ? (
+                <div style={{ padding: '30px 20px', textAlign: 'center' }}>
+                  <div style={{ marginBottom: '16px', fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {syncMessage}
+                  </div>
+                  <div style={{ width: '100%', height: '10px', background: 'var(--bg-secondary)', borderRadius: '5px', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                    <div style={{ height: '100%', width: `${syncProgress}%`, background: 'var(--accent-blue)', transition: 'width 0.3s ease-out' }} />
+                  </div>
+                  <div style={{ marginTop: '12px', fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                    {syncProgress}%
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div style={{ padding: '12px', background: 'rgba(59,130,246,0.08)', borderRadius: 'var(--radius-md)', border: '1px solid rgba(59,130,246,0.2)', marginBottom: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    {lang === 'id' 
+                      ? 'Silakan tentukan rentang tanggal data absensi yang ingin Anda tarik dari mesin (DataSolution). Data di HRIS akan diperbarui tanpa menimpa jam lembur.'
+                      : 'Please specify the date range to sync from the attendance devices (DataSolution). HRIS data will be updated safely without overwriting overtime hours.'}
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label className="form-label">{lang === 'id' ? 'Tanggal Mulai' : 'Start Date'}</label>
+                      <input 
+                        type="date" 
+                        className="form-input" 
+                        value={syncStartDate} 
+                        onChange={e => setSyncStartDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">{lang === 'id' ? 'Tanggal Selesai' : 'End Date'}</label>
+                      <input 
+                        type="date" 
+                        className="form-input" 
+                        value={syncEndDate} 
+                        onChange={e => setSyncEndDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setSyncModalOpen(false)} disabled={syncLoading}>{t(lang, 'batal')}</button>
+              <button className="btn btn-primary" onClick={handleSyncDataSolution} disabled={syncLoading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {syncLoading ? <><div className="spinner" style={{ width: 14, height: 14 }} /> {lang === 'id' ? 'Menyinkronkan...' : 'Syncing...'}</> : <><CheckSquare size={14} /> {lang === 'id' ? 'Mulai Tarik Data' : 'Start Sync'}</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      , document.body)}
+
+      {/* Toast - portaled to body so it always shows above modals */}
+      {toast && typeof document !== 'undefined' && createPortal(
         <div className="toast-container">
           <div className={`toast toast-${toast.type}`}>
             {toast.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
             {toast.msg}
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import JamKosongModal from '@/components/dashboard/JamKosongModal';
 import PerluPerhatianModal from '@/components/dashboard/PerluPerhatianModal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
+import WelcomeBriefing from '@/components/dashboard/WelcomeBriefing';
 
 export default function DashboardPage() {
   const { user, settings, setTheme } = useApp();
@@ -154,27 +155,10 @@ export default function DashboardPage() {
 
   return (
     <div className="animate-fadeIn">
-      {/* ========== DASHBOARD INTRO ========== */}
-      <section className={styles.dashboardIntro} aria-labelledby="dashboard-greeting">
-        <div className={styles.introAccent} aria-hidden="true" />
-        <div>
-          <p className={styles.introEyebrow}>{dateStr}</p>
-          <h1 id="dashboard-greeting" className={styles.greeting}>
-            {greeting}, <strong>{userName}</strong>
-          </h1>
-          <p className={styles.greetingDesc}>
-            {lang === 'id'
-              ? (stats?.isFingerprintIntegrated
-                ? `Terdapat ${stats?.jamKosongHariIni || 0} catatan presensi yang memerlukan peninjauan hari ini.`
-                : 'Data kehadiran hari ini belum disinkronkan dari mesin fingerprint.')
-              : (stats?.isFingerprintIntegrated
-                ? `You have ${stats?.jamKosongHariIni || 0} attendance records requiring review today.`
-                : "Today's attendance records have not been synchronized.")}
-          </p>
-        </div>
-      </section>
+      {/* ========== VIDITII PROACTIVE BRIEFING ========== */}
+      <WelcomeBriefing />
 
-      {/* ========== STAT CARDS (4 KPI CARDS) ========== */}
+      {/* ========== DASHBOARD STATS ========== */}
       <div className={`${styles.statsGrid} stagger-1`}>
         <StatCard
           icon={<Users size={18} />}

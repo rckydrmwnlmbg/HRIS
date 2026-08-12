@@ -116,8 +116,39 @@ export default function ChatAssistant() {
     }
   };
 
+  const handleAutoGreeting = async () => {
+    try {
+      const res = await fetch('/api/assistant/reminders');
+      if (res.ok) {
+        const data = await res.json();
+        const today = new Date().toISOString().split('T')[0];
+        const pendingReminders = (data.reminders || []).filter((r: any) => 
+          r.status === 'pending' && (!r.dueDate || r.dueDate <= today)
+        );
+
+        if (pendingReminders.length > 0) {
+          const reminderText = pendingReminders.map((r: any, i: number) => `${i + 1}. ${r.title}`).join('\\n');
+          const greeting = `Halo ${userName}! Jangan lupa ada ${pendingReminders.length} reminder hari ini:\\n${reminderText}\\n\\nAda yang bisa kubantu?`;
+          
+          setMessages([{ role: 'assistant', content: greeting }]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load auto greeting', err);
+    }
+  };
+
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
-  useEffect(() => { if (open) { inputRef.current?.focus(); loadSuggestions(); } }, [open]);
+  useEffect(() => { 
+    if (open) { 
+      inputRef.current?.focus(); 
+      loadSuggestions();
+      // Hanya kirim auto-greeting jika belum ada chat history sama sekali
+      if (messages.length === 0) {
+        handleAutoGreeting();
+      }
+    } 
+  }, [open]);
 
   const sendMessage = async (text: string) => {
     if (!text.trim() || loading) return;

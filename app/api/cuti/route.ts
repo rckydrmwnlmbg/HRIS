@@ -124,10 +124,7 @@ export async function GET(request: Request) {
     }
 
     queryStr += ` AND a.DATE_TRANS >= '${tahun}-01-01' AND a.DATE_TRANS <= '${tahun}-12-31'`;
-    // Filter WORK_IN/WORK_OUT IS NULL DIHAPUS.
-    // Deteksi cuti menggunakan REASON (via Ms_Reason), bukan ketiadaan data fingerprint.
-    // Filter lama menyebabkan cuti di tanggal yang sudah terisi WORK_IN/WORK_OUT
-    // (hari yang sudah lewat / hari ini) tidak muncul di riwayat.
+    queryStr += ` AND a.WORK_IN IS NULL AND a.WORK_OUT IS NULL`;
     queryStr += ` ORDER BY a.EMP_CD, a.DATE_TRANS ASC`;
 
     const result = await query<any>(queryStr);
