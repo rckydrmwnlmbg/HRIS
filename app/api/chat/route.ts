@@ -99,10 +99,12 @@ PENGETAHUAN LENGKAP SISTEM HRIS TMNB (PT TP Trading Jakarta):
      * HARIAN: e.ALL_IN NOT IN ('1', 'Y') -> Lembur per jam (Operator, Produksi).
 
 4. DAFTAR MASTER ALASAN ABSENSI (Ms_Reason) & CUTI (tblCUTI, tbldetcuti):
-- Hadir Kerja: a.WORK_IN IS NOT NULL
+- Hadir Kerja: a.WORK_IN IS NOT NULL DAN durasi antara WORK_IN dan WORK_OUT > 15 menit. Jika durasi ≤ 15 menit, itu DOUBLE TAP (data tidak valid, bukan kehadiran asli).
 - Keterlambatan: a.Time_Late > 0 (menit keterlambatan)
 - Hari Libur Mingguan / Libur Nasional: UPPER(RTRIM(ISNULL(a.STATUS_HARI,''))) LIKE '%LIBUR%' (BUKAN ALPHA! Hari libur tidak boleh dihitung mangkir/alpha)
-- Alpa / Mangkir: a.WORK_IN IS NULL AND UPPER(RTRIM(ISNULL(a.STATUS_HARI,''))) = 'KERJA' AND (a.REASON IS NULL OR RTRIM(a.REASON) = '' OR RTRIM(a.REASON) = '0' OR RTRIM(a.REASON) = '02')
+- Alpa / Mangkir: Karyawan yang TIDAK memiliki WORK_IN DAN WORK_OUT sama sekali (keduanya NULL) pada hari kerja biasa, DAN tidak memiliki alasan (REASON kosong). Deteksi otomatis dashboard: sebelum jam 10 pagi = masih dianggap 'Jam Kosong' (data mungkin belum sync), sesudah jam 10 = otomatis ALPHA. Untuk tanggal lampau selalu ALPHA.
+- Jam Kosong / Presensi Tidak Lengkap: (1) Tidak ada WORK_IN dan WORK_OUT sama sekali SEBELUM jam 10 hari ini, (2) Hanya salah satu WORK_IN atau WORK_OUT yang ada, (3) Double tap / durasi ≤ 15 menit — data tidak valid tapi karyawan hadir fisik.
+- Durasi Singkat (Anomali): Durasi antara 15 menit s.d. 1 jam → masuk daftar 'Perlu Perhatian'. Di bawah 15 menit = double tap (diabaikan). Di atas 1 jam = normal.
 - Sakit (SKD): RTRIM(a.REASON) = '15' ATAU RTRIM(a.REASON) = '03'
 - Izin Resmi: RTRIM(a.REASON) IN ('04', '05', '06', '07')
 - Cuti Tahunan: RTRIM(a.REASON) = '18' ATAU RTRIM(a.REASON) = '05' (memotong saldo cuti tahunan 12 hari di tblCUTI)

@@ -44,6 +44,8 @@ export async function GET(request: Request) {
       LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
       WHERE RTRIM(e.SEC_CD) = @secCd
         AND e.Act_NonAct = 1
+        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= @date)
+        AND (e.DT_ENTRY IS NULL OR CONVERT(varchar(10), e.DT_ENTRY, 120) <= @date)
       ORDER BY RTRIM(e.EMP_NM) ASC
     `, { secCd, date });
 

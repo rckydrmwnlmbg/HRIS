@@ -142,10 +142,30 @@ export async function GET() {
       const inStr = inRaw instanceof Date ? inRaw.toTimeString().substring(0, 8) : (inRaw ? String(inRaw).substring(0, 8) : null);
       const outStr = outRaw instanceof Date ? outRaw.toTimeString().substring(0, 8) : (outRaw ? String(outRaw).substring(0, 8) : null);
 
-      // KASUS 1: Tidak ada In dan Tidak ada Out -> ALPHA (Tidak Masuk Kerja)
+      // KASUS 1: Tidak ada In dan Tidak ada Out
+      // Deteksi otomatis berdasarkan waktu:
+      //   - Sebelum jam 10 pagi HARI INI → Jam Kosong (data mungkin belum sync)
+      //   - Setelah jam 10 pagi HARI INI → ALPHA (sudah lewat batas wajar)
+      //   - Tanggal lampau → selalu ALPHA (tidak mungkin tap lagi)
       if (!hasIn && !hasOut) {
         if (isFingerprintIntegrated) {
-          alphaHariIni++;
+          if (currentHour < 10) {
+            // Masih pagi — mungkin belum sync atau belum tap
+            jamKosongList.push({
+              EMP_CD: row.EMP_CD,
+              EMP_NM: row.EMP_NM,
+              SEC_DESC: row.SEC_DESC,
+              SEC_CD: row.SEC_CD,
+              BAGIAN: row.BAGIAN,
+              TEAM: row.TEAM,
+              WORK_IN: null,
+              WORK_OUT: null,
+              keterangan_kosong: 'Belum Ada Data Presensi'
+            });
+          } else {
+            // Sudah lewat jam 10 — otomatis ALPHA
+            alphaHariIni++;
+          }
         }
         return;
       }
@@ -186,9 +206,7 @@ export async function GET() {
         return;
       }
 
-      // KASUS 3: HADIR LENGKAP (hasIn && hasOut) -> Evaluasi Perlu Perhatian (Exceptions)
-      hadirHariIni++;
-
+      // KASUS 3: HADIR LENGKAP (hasIn && hasOut) → cek dulu apakah double tap
       if (inStr && outStr) {
         const inParts = inStr.split(':').map(Number);
         const outParts = outStr.split(':').map(Number);
@@ -199,13 +217,37 @@ export async function GET() {
           let durationHours = outDec - inDec;
           if (durationHours < 0) durationHours += 24;
 
+          // ── DOUBLE TAP (≤ 15 menit) ──
+          // Karyawan SUDAH tap di mesin (ada WORK_IN & WORK_OUT), berarti
+          // hadir secara fisik. Datanya yang tidak valid, bukan orangnya.
+          // Selalu masuk Jam Kosong supaya HR bisa perbaiki, bukan ALPHA.
+          if (durationHours <= 0.25) {
+            jamKosongList.push({
+              EMP_CD: row.EMP_CD,
+              EMP_NM: row.EMP_NM,
+              SEC_DESC: row.SEC_DESC,
+              SEC_CD: row.SEC_CD,
+              BAGIAN: row.BAGIAN,
+              TEAM: row.TEAM,
+              WORK_IN: inStr,
+              WORK_OUT: outStr,
+              keterangan_kosong: 'Double Tap (Data Tidak Valid)'
+            });
+            return;
+          }
+
+          // Data valid — hitung sebagai hadir
+          hadirHariIni++;
+
           let netWorkHours = durationHours;
           if (inDec < 12.0 && outDec > 13.0) {
             netWorkHours = Math.max(0, durationHours - 1.0);
           }
           const jk = Number(row.JAM_KERJA) > 0 ? Number(row.JAM_KERJA) : Math.round(netWorkHours * 10) / 10;
 
-          if (durationHours <= 0.5) {
+          // Durasi 15 menit s.d. 1 jam: durasi singkat (perlu perhatian)
+          // Durasi > 1 jam: normal
+          if (durationHours <= 1.0) {
             const diffMinutes = Math.round(durationHours * 60);
             perluPerhatianList.push({
               EMP_CD: row.EMP_CD,
@@ -251,7 +293,13 @@ export async function GET() {
               keterangan: `Terlambat Masuk (${inStr.substring(0, 5)} / Telat ${telatMenit} Menit)`
             });
           }
+        } else {
+          // Parsing gagal — tetap hitung sebagai hadir
+          hadirHariIni++;
         }
+      } else {
+        // Safety net: hasIn && hasOut tapi string kosong — tetap hitung hadir
+        hadirHariIni++;
       }
     });
 

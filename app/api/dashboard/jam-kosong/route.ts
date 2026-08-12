@@ -87,10 +87,12 @@ export async function GET(request: Request) {
       LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
       LEFT JOIN MS_DEP dp ON RTRIM(e.DEP_CD) = RTRIM(dp.DEP_CD)
       LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-      JOIN TR_ABSEN a ON RTRIM(e.EMP_CD) = RTRIM(a.EMP_CD) 
+      -- LEFT JOIN supaya karyawan yang TIDAK punya baris TR_ABSEN sama sekali
+      -- (belum di-sync, atau memang tidak ada data) tetap muncul di daftar jam kosong.
+      LEFT JOIN TR_ABSEN a ON RTRIM(e.EMP_CD) = RTRIM(a.EMP_CD) 
         AND CONVERT(date, a.DATE_TRANS) >= '${startDateStr}' AND CONVERT(date, a.DATE_TRANS) <= '${endDateStr}'
-      WHERE (CONVERT(varchar(10), e.DT_ENTRY, 120) <= CONVERT(varchar(10), a.DATE_TRANS, 120))
-        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= CONVERT(varchar(10), a.DATE_TRANS, 120))
+      WHERE (e.DT_ENTRY IS NULL OR CONVERT(varchar(10), e.DT_ENTRY, 120) <= '${endDateStr}')
+        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${startDateStr}')
     `);
 
     const reasonResult = await query<any>(`SELECT RTRIM(REASON_CODE) as REASON_CODE, RTRIM(REASON_GROUP) as REASON_GROUP FROM Ms_Reason`);
@@ -100,6 +102,16 @@ export async function GET(request: Request) {
     });
 
     const jamKosongList = rawAbsenResult.filter((r: any) => {
+      // Karyawan tanpa baris TR_ABSEN sama sekali (LEFT JOIN → DATE_TRANS null)
+      // Untuk hari ini: ikuti logika waktu. Untuk tanggal lampau: selalu tampilkan.
+      if (!r.DATE_TRANS) {
+        if (startDateStr === todayDateStr && endDateStr === todayDateStr) {
+          // Hari ini — hanya tampilkan kalau data belum sync sudah dihandle di atas
+          return !todayNotSynced;
+        }
+        return true; // Tanggal lampau — selalu tampilkan
+      }
+
       // Cek hari libur akhir pekan
       const rowDate = new Date(r.DATE_TRANS);
       const dayOfWeek = rowDate.getDay();
@@ -110,7 +122,7 @@ export async function GET(request: Request) {
       const status = (r.STATUS_HARI || '').trim().toUpperCase();
       const reasonGroup = (reasonMap.get((r.REASON || '').trim()) || '').toUpperCase();
 
-      // Libur diabaikan, tapi Cuti/Ijin/Sakit dimasukkan ke daftar Jam Kosong
+      // Libur nasional diabaikan
       if (status === 'L' || status === 'LIBUR') {
         return false;
       }
@@ -126,25 +138,26 @@ export async function GET(request: Request) {
       const hasOut = !(!r.WORK_OUT || r.WORK_OUT.toString().trim() === '' || r.WORK_OUT.toString().includes('00:00:00')) ||
                      !(!r.WORK_OUT1 || r.WORK_OUT1.toString().trim() === '' || r.WORK_OUT1.toString().includes('00:00:00'));
 
-      // Jika ada alasan (cuti/ijin), dan tap tidak lengkap, anggap valid untuk dilaporkan
-      if (r.REASON && (!hasIn || !hasOut)) return true;
+      // Jika kedua jam sudah lengkap → bukan jam kosong
+      if (hasIn && hasOut) return false;
 
-      // JAM KOSONG MURNI: Salah satu ada, salah satu TIDAK ADA, ATAU KEDUANYA TIDAK ADA
-      if (!hasIn || !hasOut) {
-        // Jika hari ini dan belum jam 16:00, jangan anggap "Mangkir" atau "Lupa Tap Pulang" kecuali sudah absen masuk
-        if (r.DATE_TRANS === todayDateStr) {
-          const currentHour = new Date().getHours();
-          if (hasIn && !hasOut) {
-            return currentHour >= 16;
-          }
-          if (!hasIn && !hasOut) {
-            return currentHour >= 12; // Mangkir jika belum masuk jam 12
-          }
-        }
+      // ── TANGGAL LAMPAU (bukan hari ini) ──
+      // Tampilkan SEMUA yang WORK_IN atau WORK_OUT kosong,
+      // entah alasannya alpha, cuti, izin, sakit, atau apa pun.
+      if (r.DATE_TRANS !== todayDateStr) {
         return true;
       }
 
-      return false;
+      // ── HARI INI ── logika waktu
+      const currentHour = new Date().getHours();
+      if (hasIn && !hasOut) {
+        return currentHour >= 16; // Lupa tap pulang: tampilkan setelah jam 16
+      }
+      if (!hasIn && !hasOut) {
+        return currentHour >= 10; // Belum ada data: tampilkan setelah jam 10
+      }
+      // !hasIn && hasOut (Lupa tap masuk): selalu tampilkan
+      return true;
     }).map((r: any) => {
       const hasIn = !(!r.WORK_IN || r.WORK_IN.toString().trim() === '' || r.WORK_IN.toString().includes('00:00:00')) ||
                     !(!r.WORK_IN1 || r.WORK_IN1.toString().trim() === '' || r.WORK_IN1.toString().includes('00:00:00'));
