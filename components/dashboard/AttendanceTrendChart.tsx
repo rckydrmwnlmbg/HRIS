@@ -21,6 +21,7 @@ import {
 import { useApp } from '@/lib/context';
 import { useToast } from '@/components/ui/ToastProvider';
 import { Modal } from '@/components/ui/Modal';
+import { Skeleton } from '@/components/ui/Skeleton';
 import styles from './AttendanceTrendChart.module.css';
 
 const MONTH_OPTIONS = [
@@ -279,8 +280,8 @@ export default function AttendanceTrendChart() {
       {/* Area Chart Container */}
       <div style={{ flex: 1, minHeight: 220, marginTop: 4 }}>
         {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', width: '100%' }}>
-            <div className="spinner" style={{ width: 26, height: 26, borderWidth: 2.5 }} />
+          <div style={{ height: '100%', minHeight: '215px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Skeleton width="100%" height="100%" style={{ borderRadius: 'var(--radius-md)', minHeight: '215px' }} />
           </div>
         ) : trendData.length === 0 ? (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', width: '100%', color: 'var(--text-secondary)', fontSize: '12px' }}>

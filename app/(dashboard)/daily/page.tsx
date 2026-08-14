@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import { useApp } from '@/lib/context';
 import { t } from '@/lib/i18n';
 import { Search } from 'lucide-react';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 
 export default function DailyAttendancePage() {
   const { settings } = useApp();
@@ -92,9 +93,8 @@ export default function DailyAttendancePage() {
         </div>
 
         {isLoading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
-            {lang === 'id' ? 'Memuat data...' : 'Loading...'}
+          <div style={{ padding: '16px' }}>
+            <SkeletonTable rows={7} cols={6} />
           </div>
         ) : (
           <div className="table-wrapper">

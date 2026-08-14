@@ -14,7 +14,7 @@ import type { DashboardStats, TrendAbsensi, JamKosongRecord, PerluPerhatianRecor
 import styles from './dashboard.module.css';
 import JamKosongModal from '@/components/dashboard/JamKosongModal';
 import PerluPerhatianModal from '@/components/dashboard/PerluPerhatianModal';
-import { Skeleton } from '@/components/ui/Skeleton';
+import { Skeleton, SkeletonDashboard } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import WelcomeBriefing from '@/components/dashboard/WelcomeBriefing';
 import DashboardCalendar from '@/components/dashboard/DashboardCalendar';
@@ -109,30 +109,7 @@ export default function DashboardPage() {
   const userName = user?.nama?.split(' ')[0] || 'Administrator';
 
   if (loading) {
-    return (
-      <div className="animate-fadeIn" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <Skeleton width={200} height={32} style={{ marginBottom: 8 }} />
-            <Skeleton width={150} height={16} />
-          </div>
-          <Skeleton width={120} height={40} />
-        </div>
-
-        <Skeleton width="100%" height={240} style={{ borderRadius: 'var(--radius-xl)' }} />
-
-        <div className={styles.statsGrid}>
-          {[1, 2, 3, 4].map(i => (
-            <Skeleton key={i} width="100%" height={120} style={{ borderRadius: 'var(--radius-lg)' }} />
-          ))}
-        </div>
-
-        <div className="glass-card" style={{ padding: '24px' }}>
-          <Skeleton width={150} height={24} style={{ marginBottom: 24 }} />
-          <Skeleton width="100%" height={300} />
-        </div>
-      </div>
-    );
+    return <SkeletonDashboard />;
   }
 
   if (stats?.totalKaryawan === 0) {

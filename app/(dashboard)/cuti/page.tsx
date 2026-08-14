@@ -6,6 +6,7 @@ import { t } from '@/lib/i18n';
 import type { Karyawan } from '@/types';
 import { Search, Calendar as CalendarIcon, CheckCircle, Plus, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { SkeletonTable } from '@/components/ui/Skeleton';
 
 interface LeaveRequest {
   id: number;
@@ -348,9 +349,8 @@ export default function CutiPage() {
             )}
           </div>
           {isLoading ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-              <div className="spinner" style={{ margin: '0 auto 16px' }}></div>
-              {lang === 'id' ? 'Memuat riwayat cuti...' : 'Loading history...'}
+            <div style={{ padding: '16px', flex: 1 }}>
+              <SkeletonTable rows={5} cols={5} />
             </div>
           ) : requests.length === 0 ? (
             <div className="empty-state" style={{ padding: '60px 20px', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>

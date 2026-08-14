@@ -7,6 +7,7 @@ import MobileHeader from '@/components/layout/MobileHeader';
 import Breadcrumb from '@/components/layout/Breadcrumb';
 import ChatAssistant from '@/components/chat/ChatAssistant';
 import { ToastProvider } from '@/components/ui/ToastProvider';
+import { SkeletonDashboard } from '@/components/ui/Skeleton';
 import styles from './layout.module.css';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -28,8 +29,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   if (!isInit || !isLoggedIn) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div className="spinner" />
+      <div className={styles.layout}>
+        <div className={styles.sidebarWrapper}>
+          <Sidebar />
+        </div>
+        <main className={styles.main}>
+          <div className={styles.content}>
+            <SkeletonDashboard />
+          </div>
+        </main>
       </div>
     );
   }

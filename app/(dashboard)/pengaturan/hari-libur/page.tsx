@@ -6,6 +6,7 @@ import { format } from 'date-fns';
 import { Trash2 } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useApp } from '@/lib/context';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 interface Holiday {
   tanggal: string;
@@ -166,9 +167,13 @@ export default function HariLiburPage() {
               </thead>
               <tbody>
                 {isLoading ? (
-                  <tr>
-                    <td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>{lang === 'id' ? 'Memuat kalender hari libur...' : 'Loading holiday calendar...'}</td>
-                  </tr>
+                  Array.from({ length: 5 }).map((_, idx) => (
+                    <tr key={idx}>
+                      <td><Skeleton width={120} height={16} /></td>
+                      <td><Skeleton width="70%" height={16} /></td>
+                      <td style={{ textAlign: 'center' }}><Skeleton variant="circle" width={24} height={24} style={{ margin: '0 auto' }} /></td>
+                    </tr>
+                  ))
                 ) : holidays.length === 0 ? (
                   <tr>
                     <td colSpan={3} style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)' }}>{lang === 'id' ? `Belum ada hari libur yang terdaftar di tahun ${year}` : `No holidays registered for ${year}`}</td>
