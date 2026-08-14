@@ -6,6 +6,7 @@ import Sidebar from '@/components/layout/Sidebar';
 import MobileHeader from '@/components/layout/MobileHeader';
 import Breadcrumb from '@/components/layout/Breadcrumb';
 import ChatAssistant from '@/components/chat/ChatAssistant';
+import { ToastProvider } from '@/components/ui/ToastProvider';
 import styles from './layout.module.css';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -34,30 +35,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
-    <div className={styles.layout}>
-      <a href="#main-content" className="skip-link">{settings.language === 'id' ? 'Lompat ke konten utama' : 'Skip to main content'}</a>
-      <div className={`${styles.sidebarWrapper} ${isSidebarOpen ? styles.sidebarOpen : ''}`}>
-        <Sidebar />
-      </div>
-      
-      {/* Overlay untuk mobile saat drawer terbuka */}
-      {isSidebarOpen && (
-        <div 
-          className={styles.drawerOverlay} 
-          onClick={() => setIsSidebarOpen(false)} 
-        />
-      )}
+    <ToastProvider>
+      <div className={styles.layout}>
+        <a href="#main-content" className="skip-link">{settings.language === 'id' ? 'Lompat ke konten utama' : 'Skip to main content'}</a>
+        <div className={`${styles.sidebarWrapper} ${isSidebarOpen ? styles.sidebarOpen : ''}`}>
+          <Sidebar />
+        </div>
+        
+        {/* Overlay untuk mobile saat drawer terbuka */}
+        {isSidebarOpen && (
+          <div 
+            className={styles.drawerOverlay} 
+            onClick={() => setIsSidebarOpen(false)} 
+          />
+        )}
 
-      <main className={styles.main} id="main-content">
-        <div className={styles.mobileHeaderWrapper}>
-          <MobileHeader onMenuClick={() => setIsSidebarOpen(true)} />
-        </div>
-        <div className={styles.content}>
-          <Breadcrumb />
-          {children}
-        </div>
-      </main>
-      <ChatAssistant />
-    </div>
+        <main className={styles.main} id="main-content">
+          <div className={styles.mobileHeaderWrapper}>
+            <MobileHeader onMenuClick={() => setIsSidebarOpen(true)} />
+          </div>
+          <div className={styles.content}>
+            <Breadcrumb />
+            {children}
+          </div>
+        </main>
+        <ChatAssistant />
+      </div>
+    </ToastProvider>
   );
 }

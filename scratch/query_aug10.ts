@@ -17,9 +17,9 @@ async function run() {
     const schema = await query(`
       SELECT COLUMN_NAME, DATA_TYPE 
       FROM INFORMATION_SCHEMA.COLUMNS 
-      WHERE TABLE_NAME = 'TR_ABSEN'
+      WHERE TABLE_NAME = 'msSHIFT'
     `);
-    fs.writeFileSync('scratch/schema.json', JSON.stringify(schema, null, 2));
+    fs.writeFileSync('scratch/msshift_schema.json', JSON.stringify(schema, null, 2));
 
     console.log("Done");
   } catch(e) {

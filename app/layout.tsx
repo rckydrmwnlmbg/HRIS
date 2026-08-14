@@ -38,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="id" className={`${outfit.variable} ${plusJakartaSans.variable} ${jetbrainsMono.variable}`}>
       <body className={outfit.className}>
+        <div className="app-wallpaper" aria-hidden="true" />
         <AppProvider>
           <NextTopLoader color="#0ea5e9" showSpinner={false} height={2.5} />
           {children}

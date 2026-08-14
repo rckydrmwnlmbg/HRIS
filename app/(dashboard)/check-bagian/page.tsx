@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useApp } from '@/lib/context';
+import { useToast } from '@/components/ui/ToastProvider';
 import { t } from '@/lib/i18n';
 import { DataTable } from '@/components/ui/DataTable';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -37,6 +38,7 @@ interface DraftCorrection {
 
 export default function CheckBagianPage() {
   const { settings } = useApp();
+  const { showToast } = useToast();
   const lang = settings.language;
 
   const [sections, setSections] = useState<Seksi[]>([]);
@@ -45,7 +47,6 @@ export default function CheckBagianPage() {
   const [records, setRecords] = useState<CheckRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'warning' } | null>(null);
   const [otHours, setOtHours] = useState('');
   const [drafts, setDrafts] = useState<Map<string, DraftCorrection>>(new Map());
   const [applyLoading, setApplyLoading] = useState(false);
@@ -56,11 +57,6 @@ export default function CheckBagianPage() {
       .then(data => setSections(data.seksi || []))
       .catch(err => console.error(err));
   }, []);
-
-  const showToast = (msg: string, type: 'success' | 'warning') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  };
 
   const loadData = async () => {
     if (!selectedSec || !selectedDate) return;
@@ -194,13 +190,6 @@ export default function CheckBagianPage() {
           </p>
         </div>
       </div>
-
-      {/* Toast */}
-      {toast && (
-        <div className={`toast toast-${toast.type}`} style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 9999 }}>
-          {toast.msg}
-        </div>
-      )}
 
       {/* Filter Controls */}
       <div className="glass-card" style={{ padding: '20px', marginBottom: '20px' }}>

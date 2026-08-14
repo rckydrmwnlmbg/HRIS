@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { query } from '@/lib/db';
 import { calculateSecurityOtHours, detectSecurityShift, getDurationMinutes, getSecurityShiftByCode, isSecurityJob, isValidAttendancePair } from '@/lib/securitySchedule';
+import { TEAM_NAME_CASE } from '@/lib/queries';
 
 const addTitleAndHeader = (sheet: any, columns: any[], title: string, subtitle: string, fgColor: string = 'FF00B050') => {
   sheet.columns = columns;
@@ -18,6 +19,7 @@ const addTitleAndHeader = (sheet: any, columns: any[], title: string, subtitle: 
 
   const headerRow = sheet.getRow(4);
   headerRow.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+  headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
   headerRow.eachCell((cell: any) => {
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fgColor } };
   });
@@ -91,28 +93,7 @@ export async function GET(request: Request) {
           RTRIM(e.SX) AS LP,
           CASE WHEN UPPER(ISNULL(RTRIM(e.ALL_IN), '0')) IN ('1', 'Y', 'TRUE') THEN 'ALL IN' ELSE 'HARIAN' END AS JNSKAR,
           RTRIM(j.JOB_DESC) AS JABATAN,
-          CASE 
-            WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'
-            WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'
-            WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'
-            WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'
-            WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'
-            WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'
-            WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'
-            WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'
-            WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'
-            WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'
-            WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'
-            WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'
-            WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'
-            WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'
-            WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'
-            WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'
-            WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'
-            WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'
-            WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'
-            ELSE RTRIM(d.DEP_DESC) 
-          END AS TEAM,
+          ${TEAM_NAME_CASE} AS TEAM,
           RTRIM(s.SEC_DESC) AS BAGIAN,
           CONVERT(varchar(5), a.WORK_IN, 108) AS MASUK,
           CONVERT(varchar(5), a.WORK_OUT, 108) AS PULANG,
@@ -140,13 +121,13 @@ export async function GET(request: Request) {
             AS DECIMAL(10,1)
           ) AS TOTAL
         FROM TR_ABSEN a
-        LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
+        LEFT JOIN EMP_TABLE e ON a.EMP_CD = e.EMP_CD
         LEFT JOIN MS_DEP d ON e.DEP_CD = d.DEP_CD
         LEFT JOIN MS_SEC s ON e.SEC_CD = s.SEC_CD
         LEFT JOIN MS_JOBS j ON e.JOB_CD = j.JOB_CD
-        LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
+        LEFT JOIN Ms_Reason mr ON a.REASON = mr.REASON_CODE
         WHERE ${dateCondition} ${extraCondition}
-        ORDER BY RTRIM(s.SEC_DESC) ASC, RTRIM(e.EMP_NM) ASC, a.DATE_TRANS ASC
+        ORDER BY s.SEC_DESC ASC, e.EMP_NM ASC, a.DATE_TRANS ASC
       `);
       previewData = rawAbsensiData;
 
@@ -178,12 +159,25 @@ export async function GET(request: Request) {
         { header: 'TOTAL', key: 'TOTAL', width: 8 },
       ];
 
-      worksheet.columns = headers;
+      const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
+      const monthStr = monthNames[bulan - 1] || String(bulan);
+
+      worksheet.columns = headers.map(h => ({
+        ...h,
+        style: {
+          font: { name: 'Calibri', size: 10 },
+          border: { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } },
+          alignment: { 
+            horizontal: ['TANGGAL', 'NIK', 'LP', 'JNSKAR', 'MASUK', 'PULANG', 'STATUS_HARI', 'BASIC', 'OT1', 'OT2', 'OT3', 'OT4', 'TOTAL'].includes(h.key) ? 'center' : 'left', 
+            vertical: 'middle' 
+          }
+        }
+      }));
 
       worksheet.spliceRows(1, 0,
-        ['PT SUMBER MASANDA JAYA'],
+        ['PT. TPINC Trading Jakarta'],
         ['LAPORAN ABSENSI KARYAWAN'],
-        [`PERIODE: ${bulan}/${tahun}`],
+        [`PERIODE: ${monthStr.toUpperCase()} ${tahun}`],
         []
       );
 
@@ -194,6 +188,17 @@ export async function GET(request: Request) {
       worksheet.getRow(1).font = { name: 'Calibri', size: 14, bold: true };
       worksheet.getRow(2).font = { name: 'Calibri', size: 12, bold: true };
       worksheet.getRow(3).font = { name: 'Calibri', size: 11, bold: true };
+
+      worksheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(2).alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(3).alignment = { horizontal: 'center', vertical: 'middle' };
+      
+      // Override column styles for title rows to remove borders
+      for(let r = 1; r <= 4; r++) {
+        worksheet.getRow(r).eachCell({ includeEmpty: true }, (cell) => {
+          cell.border = {};
+        });
+      }
 
       // Style Header Row (Now at Row 5)
       const headerRow = worksheet.getRow(5);
@@ -236,30 +241,7 @@ export async function GET(request: Request) {
           OT4: Number(row.OT4).toFixed(1),
           TOTAL: Number(row.TOTAL).toFixed(1)
         });
-
         addedRow.height = 19;
-        addedRow.font = { name: 'Calibri', size: 10 };
-
-        // Center align
-        const centerCols = [1, 2, 4, 5, 9, 10, 11, 13, 14, 15, 16, 17, 18];
-        centerCols.forEach(colIdx => {
-          addedRow.getCell(colIdx).alignment = { horizontal: 'center', vertical: 'middle' };
-        });
-
-        // Left align
-        const leftCols = [3, 6, 7, 8, 12];
-        leftCols.forEach(colIdx => {
-          addedRow.getCell(colIdx).alignment = { horizontal: 'left', vertical: 'middle' };
-        });
-
-        for (let i = 1; i <= 18; i++) {
-          addedRow.getCell(i).border = {
-            top: { style: 'thin' },
-            left: { style: 'thin' },
-            bottom: { style: 'thin' },
-            right: { style: 'thin' }
-          };
-        }
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
@@ -272,7 +254,7 @@ export async function GET(request: Request) {
       });
 
     } else if (type === 'ot') {
-const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0]).split('-');
+      const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0]).split('-');
       const inputDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
       const day = inputDate.getDay();
       const diff = day === 0 ? -6 : 1 - day;
@@ -327,11 +309,11 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
           SELECT * FROM TR_ABSEN 
           WHERE DATE_TRANS >= '${startStr}' AND DATE_TRANS <= '${endStr}'
         ) a ON e.EMP_CD = a.EMP_CD
-        LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
+        LEFT JOIN Ms_Reason mr ON a.REASON = mr.REASON_CODE
         WHERE (e.DT_ENTRY IS NULL OR e.DT_ENTRY <= '${endStr}')
           AND (e.DT_RSG IS NULL OR e.DT_RSG >= '${startStr}')
           ${extraCondition}
-        ORDER BY RTRIM(s.SEC_DESC), RTRIM(e.EMP_NM), a.DATE_TRANS
+        ORDER BY s.SEC_DESC, e.EMP_NM, a.DATE_TRANS
       `);
 
       const empMap = new Map();
@@ -357,7 +339,7 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
         if (row.dateStr) {
           const status = row.STATUS_HARI;
           const rg = row.REASON_GROUP;
-          
+
           // Deteksi Weekend (Sabtu/Minggu) atau Hari Libur:
           const dObj = new Date(row.dateStr + 'T00:00:00');
           const dayOfWeek = dObj.getDay(); // 0 = Sunday, 6 = Saturday
@@ -462,15 +444,15 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFF00' } };
       };
 
-      const getColName = (n: number) => { 
-        let ordA = 'A'.charCodeAt(0); 
-        let len = 26; 
-        let s = ""; 
-        while (n >= 0) { 
-          s = String.fromCharCode((n % len) + ordA) + s; 
-          n = Math.floor(n / len) - 1; 
-        } 
-        return s; 
+      const getColName = (n: number) => {
+        let ordA = 'A'.charCodeAt(0);
+        let len = 26;
+        let s = "";
+        while (n >= 0) {
+          s = String.fromCharCode((n % len) + ordA) + s;
+          n = Math.floor(n / len) - 1;
+        }
+        return s;
       };
 
       const coverWs = workbook.addWorksheet('REPORT', { views: [{ showGridLines: false }] });
@@ -861,11 +843,11 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
           RTRIM(d.DEP_DESC) AS DEP_DESC,
           CASE   WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'   WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'   WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'   WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'   WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'   WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'   WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'   WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'   WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'   WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'   WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'   WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'   WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'   WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'   WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'   WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'   WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'   ELSE RTRIM(d.DEP_DESC) END AS TEAM
         FROM TR_ABSEN a
-        LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-        LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-        LEFT JOIN MS_DEP d ON RTRIM(e.DEP_CD) = RTRIM(d.DEP_CD)
-        LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-        LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
+        LEFT JOIN EMP_TABLE e ON a.EMP_CD = e.EMP_CD
+        LEFT JOIN MS_SEC s ON e.SEC_CD = s.SEC_CD
+        LEFT JOIN MS_DEP d ON e.DEP_CD = d.DEP_CD
+        LEFT JOIN MS_JOBS j ON e.JOB_CD = j.JOB_CD
+        LEFT JOIN Ms_Reason mr ON a.REASON = mr.REASON_CODE
         WHERE CONVERT(date, a.DATE_TRANS) BETWEEN '${start}' AND '${end}'
           AND (RTRIM(a.STATUS_HARI) IN ('C', 'H', 'CUTI', 'S', 'I') 
                OR RTRIM(a.STATUS_HARI) LIKE 'CUTI%'
@@ -1056,23 +1038,23 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
           CONVERT(varchar(8), a.WORK_OUT, 108) AS WORK_OUT_STR,
           CASE WHEN UPPER(ISNULL(RTRIM(e.ALL_IN), '0')) IN ('1', 'Y', 'TRUE') THEN 1 ELSE 0 END AS isAllIn
         FROM TR_ABSEN a
-        LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-        LEFT JOIN MS_DEP d ON RTRIM(e.DEP_CD) = RTRIM(d.DEP_CD)
-        LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-        LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+        LEFT JOIN EMP_TABLE e ON a.EMP_CD = e.EMP_CD
+        LEFT JOIN MS_DEP d ON e.DEP_CD = d.DEP_CD
+        LEFT JOIN MS_SEC s ON e.SEC_CD = s.SEC_CD
+        LEFT JOIN MS_JOBS j ON e.JOB_CD = j.JOB_CD
         WHERE CONVERT(date, a.DATE_TRANS) BETWEEN '${start}' AND '${end}'
         ${extraCondition}
         ORDER BY a.DATE_TRANS ASC, a.EMP_CD ASC
       `);
 
       const skorsingList: any[] = [];
-      
+
       const todayStrLocal = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 
       absensiData.forEach(row => {
         let isSkorsing = false;
         let reasons: string[] = [];
-        
+
         let workIn = row.WORK_IN_STR;
         let workOut = row.WORK_OUT_STR;
 
@@ -1092,27 +1074,34 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
         if (workOut) {
           const outTime = workOut.substring(0, 5);
           let isValid = false;
-
           if (
-            (outTime >= "15:50" && outTime <= "16:15") || // Normal Pulang (16:00)
-            (outTime >= "16:50" && outTime <= "17:15") || // OT1 (17:00)
-            (outTime >= "17:50" && outTime <= "18:15") || // OT2 (18:00)
-            (outTime >= "18:50" && outTime <= "19:15") || // OT3 (19:00)
-            (outTime >= "19:50" && outTime <= "20:15") || // OT4 (20:00)
-            (outTime >= "20:50" && outTime <= "21:15")    // OT5 (21:00)
+            (outTime >= "15:50" && outTime <= "16:15") || // Pulang Normal (16:00)
+            (outTime >= "16:50" && outTime <= "17:15") || // Lembur 1 Jam (17:00)
+            (outTime >= "17:50" && outTime <= "18:15") || // Lembur 2 Jam (18:00)
+            (outTime >= "18:50" && outTime <= "19:15") || // Lembur 3 Jam (19:00)
+            (outTime >= "19:50" && outTime <= "20:15") || // Lembur 3.5 Jam (20:00) - Potong istirahat 30m
+            (outTime >= "20:50" && outTime <= "21:15") || // Lembur 4.5 Jam (21:00)
+            (outTime >= "21:50" && outTime <= "22:15") || // Lembur 5.5 Jam (22:00)
+            (outTime >= "22:50" && outTime <= "23:15") || // Lembur 6.5 Jam (23:00)
+            (outTime >= "23:50" || outTime <= "00:15")    // Lembur 7.5 Jam (24:00)
           ) {
             isValid = true;
           }
 
-          if (!isValid) {
+          // Aturan Khusus Karyawan Harian: Tidak Boleh Lembur Melebihi 20:30
+          if (!row.isAllIn && (outTime > "20:30" || outTime <= "04:00")) {
+            isValid = false;
+            isSkorsing = true;
+            reasons.push("Pelanggaran Batas Lembur Harian (>20:30)");
+          } else if (!isValid) {
             isSkorsing = true;
             reasons.push("Pelanggaran Jam Pulang (" + outTime + ")");
           }
         } else if (workIn) {
           // Jam Pulang Kosong (Tidak Absen Pulang)
           if (row.dateStr !== todayStrLocal) {
-             isSkorsing = true;
-             reasons.push("Tidak Absen Pulang");
+            isSkorsing = true;
+            reasons.push("Tidak Absen Pulang");
           }
         }
 
@@ -1168,6 +1157,292 @@ const parts = (searchParams.get('date') || new Date().toISOString().split('T')[0
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           'Content-Disposition': `attachment; filename="Laporan_Skorsing_${start}_${end}.xlsx"`,
+        },
+      });
+    } else if (type === 'ketidakhadiran' || type === 'alpha-izin') {
+      const startMonthParam = searchParams.get('startMonth');
+      const endMonthParam = searchParams.get('endMonth');
+
+      let startDate = '';
+      let endDate = '';
+
+      if (startParam && endParam) {
+        startDate = startParam;
+        endDate = endParam;
+      } else if (startMonthParam && endMonthParam) {
+        const sm = parseInt(startMonthParam, 10);
+        const em = parseInt(endMonthParam, 10);
+        const lastDay = new Date(tahun, em, 0).getDate();
+        startDate = `${tahun}-${String(sm).padStart(2, '0')}-01`;
+        endDate = `${tahun}-${String(em).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      } else {
+        const lastDay = new Date(tahun, bulan, 0).getDate();
+        startDate = `${tahun}-${String(bulan).padStart(2, '0')}-01`;
+        endDate = `${tahun}-${String(bulan).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+      }
+
+      const activeEmpRes = await query<any>(`
+        SELECT COUNT(*) as totalAktif
+        FROM EMP_TABLE
+        WHERE Act_NonAct = 1 AND (DT_RSG IS NULL OR YEAR(DT_RSG) <= 1900 OR DT_RSG >= GETDATE())
+      `);
+      const totalKaryawanAktif = activeEmpRes[0]?.totalAktif || 1966;
+
+      const rawAbsences = await query<any>(`
+        SELECT 
+          CONVERT(varchar(10), a.DATE_TRANS, 120) AS dateStr,
+          CONVERT(varchar(10), a.DATE_TRANS, 103) AS tglFormat,
+          DATENAME(weekday, a.DATE_TRANS) AS namaHariEn,
+          RTRIM(e.EMP_CD) AS NIK,
+          RTRIM(e.EMP_NM) AS NAMA,
+          RTRIM(e.SX) AS LP,
+          RTRIM(s.SEC_DESC) AS BAGIAN,
+          RTRIM(j.JOB_DESC) AS JABATAN,
+          RTRIM(a.STATUS_HARI) AS STATUS_HARI,
+          RTRIM(a.REASON) AS REASON_CODE,
+          COALESCE(RTRIM(mr.REASON_DESC), RTRIM(a.REASON), '') AS ALASAN_DESC,
+          RTRIM(mr.REASON_GROUP) AS REASON_GROUP,
+          a.WORK_IN, a.WORK_OUT
+        FROM TR_ABSEN a
+        JOIN EMP_TABLE e ON a.EMP_CD = e.EMP_CD
+        LEFT JOIN MS_SEC s ON e.SEC_CD = s.SEC_CD
+        LEFT JOIN MS_JOBS j ON e.JOB_CD = j.JOB_CD
+        LEFT JOIN Ms_Reason mr ON a.REASON = mr.REASON_CODE
+        WHERE a.DATE_TRANS >= '${startDate}' AND a.DATE_TRANS <= '${endDate}'
+          AND e.Act_NonAct = 1 AND (e.DT_RSG IS NULL OR YEAR(e.DT_RSG) <= 1900 OR e.DT_RSG >= GETDATE())
+          ${extraCondition}
+        ORDER BY a.DATE_TRANS ASC, s.SEC_DESC ASC, e.EMP_NM ASC
+      `);
+
+      const DAY_MAP: Record<string, string> = {
+        'Monday': 'Senin',
+        'Tuesday': 'Selasa',
+        'Wednesday': 'Rabu',
+        'Thursday': 'Kamis',
+        'Friday': 'Jumat',
+        'Saturday': 'Sabtu',
+        'Sunday': 'Minggu'
+      };
+
+      // Group per date for Sheet 1 (Rekap Harian)
+      const dailyMap = new Map<string, {
+        dateStr: string;
+        tglFormat: string;
+        namaHari: string;
+        alpha: number;
+        izin: number;
+        sakit: number;
+        cuti: number;
+      }>();
+
+      // List of individual absence records for Sheet 2 (Rincian Karyawan)
+      const detailRecords: Array<{
+        dateStr: string;
+        tglFormat: string;
+        namaHari: string;
+        nik: string;
+        nama: string;
+        lp: string;
+        bagian: string;
+        jabatan: string;
+        status: string;
+        keterangan: string;
+      }> = [];
+
+      rawAbsences.forEach(row => {
+        const dStr = row.dateStr;
+        const namaHari = DAY_MAP[row.namaHariEn] || row.namaHariEn || '-';
+        if (!dailyMap.has(dStr)) {
+          dailyMap.set(dStr, {
+            dateStr: dStr,
+            tglFormat: row.tglFormat,
+            namaHari,
+            alpha: 0,
+            izin: 0,
+            sakit: 0,
+            cuti: 0,
+          });
+        }
+
+        const sHari = (row.STATUS_HARI || '').toUpperCase().trim();
+        const rGroup = (row.REASON_GROUP || '').toUpperCase().trim();
+        const hasIn = row.WORK_IN !== null && !String(row.WORK_IN).includes('00:00:00');
+        const hasOut = row.WORK_OUT !== null && !String(row.WORK_OUT).includes('00:00:00');
+
+        let statusKetidakhadiran = '';
+        let keteranganFinal = row.ALASAN_DESC || '-';
+
+        if (sHari === 'CUTI' || sHari === 'C' || sHari === 'H' || rGroup === 'C' || rGroup === 'H') {
+          dailyMap.get(dStr)!.cuti++;
+          statusKetidakhadiran = 'CUTI';
+        } else if (sHari === 'SAKIT' || sHari === 'S' || rGroup === 'S') {
+          dailyMap.get(dStr)!.sakit++;
+          statusKetidakhadiran = 'SAKIT';
+        } else if (sHari === 'IJIN' || sHari === 'IZIN' || sHari === 'I' || rGroup === 'I') {
+          dailyMap.get(dStr)!.izin++;
+          statusKetidakhadiran = 'IZIN';
+        } else if ((!hasIn && !hasOut) && (sHari === 'ALPHA' || sHari === 'MANGKIR' || sHari === 'A' || sHari === 'KERJA' || !row.REASON_CODE)) {
+          if (sHari !== 'LIBUR' && sHari !== 'L' && !namaHari.includes('Minggu')) {
+            dailyMap.get(dStr)!.alpha++;
+            statusKetidakhadiran = 'ALPHA';
+            if (keteranganFinal === '-') keteranganFinal = 'Mangkir (Tanpa Keterangan)';
+          }
+        }
+
+        if (statusKetidakhadiran) {
+          detailRecords.push({
+            dateStr: dStr,
+            tglFormat: row.tglFormat,
+            namaHari,
+            nik: row.NIK,
+            nama: row.NAMA,
+            lp: row.LP || '-',
+            bagian: row.BAGIAN || '-',
+            jabatan: row.JABATAN || '-',
+            status: statusKetidakhadiran,
+            keterangan: keteranganFinal,
+          });
+        }
+      });
+
+      if (format === 'json') {
+        return NextResponse.json({
+          summary: Array.from(dailyMap.values()),
+          details: detailRecords,
+          totalKaryawanAktif
+        });
+      }
+
+      const workbook = new ExcelJS.Workbook();
+
+      // ==========================================
+      // SHEET 1: REKAPITULASI HARIAN & BULANAN
+      // ==========================================
+      const sheetSummary = workbook.addWorksheet('Rekap Harian & Bulanan', { views: [{ showGridLines: true }] });
+      const summaryCols = [
+        { header: 'NO', key: 'no', width: 6 },
+        { header: 'TANGGAL', key: 'tanggal', width: 14 },
+        { header: 'HARI', key: 'hari', width: 12 },
+        { header: 'TOTAL KARYAWAN', key: 'totalKaryawan', width: 18 },
+        { header: 'ALPHA (MANGKIR)', key: 'alpha', width: 18 },
+        { header: 'IZIN', key: 'izin', width: 14 },
+        { header: 'SAKIT (SKD)', key: 'sakit', width: 14 },
+        { header: 'CUTI', key: 'cuti', width: 14 },
+        { header: 'TOTAL TIDAK HADIR', key: 'totalAbsen', width: 18 },
+        { header: 'TINGKAT KEHADIRAN (%)', key: 'persentaseHadir', width: 22 },
+      ];
+
+      addTitleAndHeader(
+        sheetSummary,
+        summaryCols,
+        'PT. TMNB — LAPORAN REKAPITULASI KETIDAKHADIRAN',
+        `Periode: ${formatDate(startDate)} s/d ${formatDate(endDate)} | Total Karyawan Aktif: ${totalKaryawanAktif} Orang`,
+        'FF00B050'
+      );
+
+      let sumAlpha = 0, sumIzin = 0, sumSakit = 0, sumCuti = 0, sumTidakHadir = 0;
+      let rowIndex = 1;
+
+      const dailySorted = Array.from(dailyMap.values()).sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+
+      dailySorted.forEach(day => {
+        const totalAbsenHariIni = day.alpha + day.izin + day.sakit + day.cuti;
+        const hadirHariIni = Math.max(0, totalKaryawanAktif - totalAbsenHariIni);
+        const persenHadir = totalKaryawanAktif > 0 ? ((hadirHariIni / totalKaryawanAktif) * 100).toFixed(1) + '%' : '100%';
+
+        sumAlpha += day.alpha;
+        sumIzin += day.izin;
+        sumSakit += day.sakit;
+        sumCuti += day.cuti;
+        sumTidakHadir += totalAbsenHariIni;
+
+        sheetSummary.addRow({
+          no: rowIndex++,
+          tanggal: day.tglFormat,
+          hari: day.namaHari,
+          totalKaryawan: totalKaryawanAktif,
+          alpha: day.alpha,
+          izin: day.izin,
+          sakit: day.sakit,
+          cuti: day.cuti,
+          totalAbsen: totalAbsenHariIni,
+          persentaseHadir: persenHadir,
+        });
+      });
+
+      // Total Row Summary
+      const avgPersenHadir = dailySorted.length > 0 
+        ? ((1 - (sumTidakHadir / (totalKaryawanAktif * dailySorted.length))) * 100).toFixed(1) + '%'
+        : '100%';
+
+      const totalRow = sheetSummary.addRow({
+        no: '',
+        tanggal: 'TOTAL & RATA-RATA',
+        hari: '',
+        totalKaryawan: totalKaryawanAktif,
+        alpha: sumAlpha,
+        izin: sumIzin,
+        sakit: sumSakit,
+        cuti: sumCuti,
+        totalAbsen: sumTidakHadir,
+        persentaseHadir: avgPersenHadir,
+      });
+
+      totalRow.font = { bold: true };
+      totalRow.eachCell((cell) => {
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+      });
+
+      applyTableBorders(sheetSummary, summaryCols.length);
+
+      // ==========================================
+      // SHEET 2: DETAIL RINCIAN KARYAWAN
+      // ==========================================
+      const sheetDetail = workbook.addWorksheet('Rincian Karyawan', { views: [{ showGridLines: true }] });
+      const detailCols = [
+        { header: 'NO', key: 'no', width: 6 },
+        { header: 'TANGGAL', key: 'tanggal', width: 14 },
+        { header: 'HARI', key: 'hari', width: 12 },
+        { header: 'NIK', key: 'nik', width: 14 },
+        { header: 'NAMA KARYAWAN', key: 'nama', width: 28 },
+        { header: 'L/P', key: 'lp', width: 8 },
+        { header: 'BAGIAN', key: 'bagian', width: 22 },
+        { header: 'JABATAN', key: 'jabatan', width: 22 },
+        { header: 'STATUS KETIDAKHADIRAN', key: 'status', width: 24 },
+        { header: 'KETERANGAN ALASAN', key: 'keterangan', width: 34 },
+      ];
+
+      addTitleAndHeader(
+        sheetDetail,
+        detailCols,
+        'PT. TMNB — RINCIAN DETAIL KETIDAKHADIRAN KARYAWAN',
+        `Periode: ${formatDate(startDate)} s/d ${formatDate(endDate)} | Total Kasus: ${detailRecords.length} Data`,
+        'FF0284C7'
+      );
+
+      detailRecords.forEach((item, idx) => {
+        sheetDetail.addRow({
+          no: idx + 1,
+          tanggal: item.tglFormat,
+          hari: item.namaHari,
+          nik: item.nik,
+          nama: item.nama,
+          lp: item.lp,
+          bagian: item.bagian,
+          jabatan: item.jabatan,
+          status: item.status,
+          keterangan: item.keterangan,
+        });
+      });
+
+      applyTableBorders(sheetDetail, detailCols.length);
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      return new NextResponse(buffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition': `attachment; filename="Laporan_Ketidakhadiran_PT_TMNB_${startDate}_${endDate}.xlsx"`,
         },
       });
     }

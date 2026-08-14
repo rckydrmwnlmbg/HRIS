@@ -11,7 +11,10 @@
 }
 
 .sidebarWrapper {
-  display: block;
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 100;
 }
 
 .drawerOverlay {
@@ -20,16 +23,14 @@
 
 .main {
   flex: 1;
-  margin-left: var(--sidebar-width);
   min-height: 100vh;
   min-width: 0;
   max-width: calc(100vw - var(--sidebar-width));
   overflow-x: hidden;
-  transition: margin-left var(--transition-slow);
 }
 
 .content {
-  padding: 22px 26px;
+  padding: 22px 28px;
   min-height: 100vh;
   min-width: 0;
   max-width: 100%;
@@ -37,16 +38,8 @@
 }
 
 @media (max-width: 1024px) {
-  .main {
-    margin-left: 0;
-  }
-  
-  .mobileHeaderWrapper {
-    display: block;
-  }
-  
   .sidebarWrapper {
-    width: var(--sidebar-width);
+    width: 0;
     position: fixed;
     left: 0;
     top: 0;
@@ -56,7 +49,16 @@
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
   
+  .main {
+    max-width: 100vw;
+  }
+  
+  .mobileHeaderWrapper {
+    display: block;
+  }
+  
   .sidebarOpen {
+    width: var(--sidebar-width);
     transform: translateX(0) !important;
   }
   
@@ -64,20 +66,20 @@
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(5, 11, 20, 0.5);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    background: rgba(5, 11, 20, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     z-index: 40;
-    animation: fadeIn 0.3s ease;
+    animation: fadeIn 0.2s ease;
   }
   
   .content {
-    padding: 20px;
+    padding: 18px 20px;
   }
 }
 
 @media (max-width: 768px) {
   .content {
-    padding: 16px;
+    padding: 14px 16px;
   }
 }

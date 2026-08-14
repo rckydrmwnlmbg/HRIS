@@ -74,7 +74,14 @@ export interface Outsource {
 export interface Reason {
   REASON_CODE: string;
   REASON_DESC: string;
-  REASON_GROUP: string | null;
+  REASON_GROUP?: string;
+}
+
+export interface Shift {
+  shift_CODE: string;
+  keterangan: string;
+  WORK_IN: string | null;
+  WORK_OUT: string | null;
 }
 
 export interface AbsensiRecord {

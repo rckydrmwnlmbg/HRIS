@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context';
+import { useToast } from '@/components/ui/ToastProvider';
 import { t } from '@/lib/i18n';
 import type { Karyawan, Department, Seksi, Jabatan, Divisi, JenisKaryawan } from '@/types';
 import { ArrowLeft, Save, CheckCircle, Loader2, Briefcase, User, Landmark } from 'lucide-react';
@@ -10,6 +11,7 @@ import styles from '../[id]/edit/edit.module.css';
 export default function KaryawanBaruPage() {
   const router = useRouter();
   const { settings } = useApp();
+  const { showToast } = useToast();
   const lang = settings.language;
 
   const [form, setForm] = useState<Partial<Karyawan>>({
@@ -21,7 +23,6 @@ export default function KaryawanBaruPage() {
     PTKP_ST: 'TK/0'
   });
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<'pekerjaan' | 'pribadi' | 'bank'>('pekerjaan');
   const [loading, setLoading] = useState(true);
 
@@ -56,7 +57,7 @@ export default function KaryawanBaruPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.EMP_CD || !form.EMP_NM) {
-      alert(lang === 'id' ? 'NIK dan Nama wajib diisi' : 'ID and Name are required');
+      showToast(lang === 'id' ? 'NIK dan Nama wajib diisi' : 'ID and Name are required', 'warning');
       return;
     }
     setSaving(true);
@@ -67,17 +68,17 @@ export default function KaryawanBaruPage() {
         body: JSON.stringify(form)
       });
       if (res.ok) {
-        setSaved(true);
+        showToast(lang === 'id' ? 'Karyawan berhasil ditambahkan!' : 'Employee successfully added!', 'success');
         setTimeout(() => {
-          setSaved(false);
           router.push(`/karyawan/${form.EMP_CD}`);
-        }, 1500);
+        }, 1200);
       } else {
         const err = await res.json();
-        alert((lang === 'id' ? 'Gagal menyimpan: ' : 'Failed to save: ') + (err.error || (lang === 'id' ? 'Terjadi kendala' : 'An error occurred')));
+        showToast((lang === 'id' ? 'Gagal menyimpan: ' : 'Failed to save: ') + (err.error || (lang === 'id' ? 'Terjadi kendala' : 'An error occurred')), 'warning');
       }
     } catch (err) {
       console.error(err);
+      showToast(lang === 'id' ? 'Terjadi kesalahan sistem' : 'A system error occurred', 'error');
     }
     setSaving(false);
   };
@@ -291,14 +292,6 @@ export default function KaryawanBaruPage() {
           )}
         </form>
       </div>
-
-      {saved && (
-        <div className="toast-container">
-          <div className="toast toast-success">
-            <CheckCircle size={16} /> {lang === 'id' ? 'Karyawan berhasil ditambahkan!' : 'Employee successfully added!'}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

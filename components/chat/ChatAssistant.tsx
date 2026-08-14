@@ -127,10 +127,11 @@ export default function ChatAssistant() {
         );
 
         if (pendingReminders.length > 0) {
-          const reminderText = pendingReminders.map((r: any, i: number) => `${i + 1}. ${r.title}`).join('\\n');
-          const greeting = `Halo ${userName}! Jangan lupa ada ${pendingReminders.length} reminder hari ini:\\n${reminderText}\\n\\nAda yang bisa kubantu?`;
-          
+          const reminderText = pendingReminders.map((r: any, i: number) => `${i + 1}. ${r.title}`).join('\n');
+          const greeting = `Halo ${userName}! Jangan lupa ada ${pendingReminders.length} reminder hari ini:\n${reminderText}\n\nAda yang bisa kubantu?`;
           setMessages([{ role: 'assistant', content: greeting }]);
+        } else {
+          setMessages([{ role: 'assistant', content: `Halo ${userName}! Ada yang bisa kubantu hari ini?` }]);
         }
       }
     } catch (err) {

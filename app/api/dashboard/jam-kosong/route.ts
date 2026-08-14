@@ -50,7 +50,7 @@ export async function GET(request: Request) {
       SELECT 
         RTRIM(e.EMP_CD) as EMP_CD, 
         RTRIM(e.EMP_NM) as EMP_NM,
-        RTRIM(e.SEX) as SEX,
+        RTRIM(e.SX) as SEX,
         RTRIM(ISNULL(j.JOB_DESC, '')) as JOB_DESC,
         RTRIM(s.SEC_DESC) as SEC_DESC, 
         RTRIM(e.SEC_CD) as SEC_CD,

@@ -112,7 +112,8 @@ export function calculateAttendanceAndOt(
   const workedMinutes = getDurationMinutes(workIn, workOut);
 
   // 4. Kalkulasi Jam Kerja & Lembur berdasarkan Tipe Karyawan
-  if (isSecurity) {
+  // Jika dia Security, TAPI di-assign ke Shift 1 (Pagi normal), maka perhitungannya ikut aturan UMUM (cut-off 16:00)
+  if (isSecurity && inputShift !== '1') {
     // --- SECURITY ---
     const secShift = inputShift ? getSecurityShiftByCode(inputShift) : detectSecurityShift(workIn, workOut);
     
@@ -142,10 +143,13 @@ export function calculateAttendanceAndOt(
       if (workOut.getTime() < workIn.getTime()) {
         effectiveOut = new Date(workOut.getTime() + 24 * 60 * 60 * 1000);
       }
+      // Force recompile 
+      // console.log("Calculating for UMUM:", workIn, workOut);
 
-      // Asumsi pulang standar jam 16:00, base on workIn date
-      const scheduleOut = new Date(workIn);
-      scheduleOut.setHours(16, 0, 0, 0);
+      // Asumsi pulang standar jam 16:00 WIB, base on workIn date
+      const wibISO = new Date(workIn.getTime() + 7 * 60 * 60 * 1000).toISOString();
+      const scheduleOutStr = wibISO.substring(0, 11) + '16:00:00+07:00';
+      const scheduleOut = new Date(scheduleOutStr);
       
       if (effectiveOut.getTime() > scheduleOut.getTime()) {
         const diffMinutes = (effectiveOut.getTime() - scheduleOut.getTime()) / 60000;

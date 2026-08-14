@@ -259,9 +259,6 @@ export default function KaryawanDetailPage({ params }: { params: Promise<{ id: s
             <button className="btn btn-secondary w-full" onClick={() => router.push(`/absensi?emp=${karyawan.EMP_CD}`)}>
               <ClipboardList size={14} /> {lang === 'id' ? 'Lihat Absensi Bulan Ini' : 'View This Month Attendance'}
             </button>
-            <button className="btn btn-secondary w-full" onClick={() => router.push(`/lembur`)}>
-              <BadgeInfo size={14} /> {lang === 'id' ? 'Input Lembur' : 'Input Overtime'}
-            </button>
             <button className="btn btn-primary w-full" onClick={() => router.push(`/karyawan/${karyawan.EMP_CD}/edit`)}>
               <Edit2 size={14} /> {lang === 'id' ? 'Edit Data Karyawan' : 'Edit Employee Data'}
             </button>

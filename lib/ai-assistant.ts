@@ -16,16 +16,27 @@ export interface Note {
   createdAt: string;
 }
 
+export interface Milestone {
+  id: string;
+  title: string;
+  date: string; // Format YYYY-MM-DD
+  category: 'payroll' | 'contract' | 'audit' | 'general';
+  source: 'manual' | 'chat' | 'system';
+  createdAt: string;
+}
+
 export interface AIAssistantData {
   reminders: Reminder[];
   notes: Note[];
+  milestones?: Milestone[];
 }
 
 const DATA_FILE_PATH = path.join(process.cwd(), 'data', 'ai_assistant.json');
 
 const DEFAULT_DATA: AIAssistantData = {
   reminders: [],
-  notes: []
+  notes: [],
+  milestones: []
 };
 
 /**
@@ -42,7 +53,9 @@ export function loadAssistantData(): AIAssistantData {
       return DEFAULT_DATA;
     }
     const content = fs.readFileSync(DATA_FILE_PATH, 'utf8');
-    return JSON.parse(content);
+    const parsed = JSON.parse(content);
+    if (!parsed.milestones) parsed.milestones = [];
+    return parsed;
   } catch (err) {
     console.error('[AI ASSISTANT LOAD ERROR]', err);
     return DEFAULT_DATA;
@@ -59,25 +72,28 @@ export function saveAssistantData(data: AIAssistantData): void {
       fs.mkdirSync(dir, { recursive: true });
     }
 
+    if (!data.milestones) data.milestones = [];
+
     // Auto-cleanup: Batasi maksimal 100 notes terbaru
     if (data.notes.length > 100) {
-      // Sort by newest first, then slice
       data.notes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       data.notes = data.notes.slice(0, 100);
     }
 
-    // Auto-cleanup: Batasi maksimal 100 reminder (prioritaskan membuang yang sudah 'done' dan lama)
+    // Auto-cleanup: Batasi maksimal 100 reminder
     if (data.reminders.length > 100) {
       const pending = data.reminders.filter(r => r.status === 'pending');
       let done = data.reminders.filter(r => r.status === 'done');
-      
-      // Sort done by oldest first
       done.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      
       const allowedDoneCount = Math.max(0, 100 - pending.length);
       done = done.slice(0, allowedDoneCount);
-      
       data.reminders = [...pending, ...done];
+    }
+
+    // Auto-cleanup: Batasi maksimal 100 milestones
+    if (data.milestones.length > 100) {
+      data.milestones.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      data.milestones = data.milestones.slice(0, 100);
     }
 
     fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(data, null, 2), 'utf8');
@@ -91,8 +107,6 @@ export function saveAssistantData(data: AIAssistantData): void {
  */
 export function addReminder(title: string, dueDate: string | null = null, source: 'manual' | 'chat' | 'system' = 'manual'): Reminder {
   const data = loadAssistantData();
-  
-  // Jika dueDate tidak diisi dari chat, asumsikan untuk hari ini
   const finalDueDate = dueDate || new Date(Date.now()).toISOString().split('T')[0];
 
   const newReminder: Reminder = {
@@ -124,6 +138,42 @@ export function addNote(content: string): Note {
   data.notes.push(newNote);
   saveAssistantData(data);
   return newNote;
+}
+
+/**
+ * Menambahkan milestone baru.
+ */
+export function addMilestone(title: string, date: string, category: 'payroll' | 'contract' | 'audit' | 'general' = 'general', source: 'manual' | 'chat' | 'system' = 'manual'): Milestone {
+  const data = loadAssistantData();
+  if (!data.milestones) data.milestones = [];
+
+  const newMilestone: Milestone = {
+    id: `ms-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    title: title.trim(),
+    date: date.trim(),
+    category,
+    source,
+    createdAt: new Date().toISOString(),
+  };
+
+  data.milestones.push(newMilestone);
+  saveAssistantData(data);
+  return newMilestone;
+}
+
+/**
+ * Menghapus milestone.
+ */
+export function deleteMilestone(id: string): boolean {
+  const data = loadAssistantData();
+  if (!data.milestones) return false;
+  const initialLen = data.milestones.length;
+  data.milestones = data.milestones.filter(m => m.id !== id);
+  if (data.milestones.length !== initialLen) {
+    saveAssistantData(data);
+    return true;
+  }
+  return false;
 }
 
 /**

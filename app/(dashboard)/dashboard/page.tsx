@@ -3,11 +3,12 @@ import React, { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context';
+import { useToast } from '@/components/ui/ToastProvider';
 import { t } from '@/lib/i18n';
 import {
   Users, UserCheck, UserX, Clock, TrendingUp,
   AlertTriangle, ClipboardList, BarChart3, Plus, Settings,
-  X, CheckCircle, AlertCircle
+  X, CheckCircle, AlertCircle, Calendar
 } from 'lucide-react';
 import type { DashboardStats, TrendAbsensi, JamKosongRecord, PerluPerhatianRecord } from '@/types';
 import styles from './dashboard.module.css';
@@ -16,9 +17,12 @@ import PerluPerhatianModal from '@/components/dashboard/PerluPerhatianModal';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import WelcomeBriefing from '@/components/dashboard/WelcomeBriefing';
+import DashboardCalendar from '@/components/dashboard/DashboardCalendar';
+import AttendanceTrendChart from '@/components/dashboard/AttendanceTrendChart';
 
 export default function DashboardPage() {
   const { user, settings, setTheme } = useApp();
+  const { showToast } = useToast();
   const lang = settings.language;
 
   const router = useRouter();
@@ -32,13 +36,6 @@ export default function DashboardPage() {
   const [showPerluPerhatianModal, setShowPerluPerhatianModal] = useState(false);
 
   const [trendLoading, setTrendLoading] = useState(true);
-
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'warning' } | null>(null);
-
-  const showToast = (msg: string, type: 'success' | 'warning') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3500);
-  };
 
 
 
@@ -203,118 +200,12 @@ export default function DashboardPage() {
       </div>
 
       {/* ========== ROW 2: Chart + Status ========== */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 24 }}>
-        {/* Trend Chart */}
-        <div className="glass-card stagger-2" style={{ padding: 24, display: 'flex', flexDirection: 'column' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-            <h3>{lang === 'id' ? 'Tren Ketidakhadiran' : 'Absence Trend'}</h3>
-            <div style={{ display: 'flex', gap: 12, fontSize: 11 }}>
-              {[
-                { label: lang === 'id' ? 'Alpha' : 'Absent', color: 'var(--status-alpha)' },
-                { label: lang === 'id' ? 'Izin' : 'Permit', color: 'var(--status-izin)' },
-                { label: lang === 'id' ? 'Sakit' : 'Sick', color: 'var(--status-sakit)' },
-                { label: lang === 'id' ? 'Cuti' : 'Leave', color: 'var(--status-cuti)' },
-              ].map(l => (
-                <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <div className="dot" style={{ background: l.color }} />
-                  <span style={{ color: 'var(--text-secondary)' }}>{l.label}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div style={{ flex: 1, minHeight: 200, marginTop: 10 }}>
-            {trendLoading ? (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', width: '100%' }}>
-                <div className="spinner" style={{ width: 30, height: 30, borderWidth: 3 }} />
-              </div>
-            ) : trend.length === 0 ? (
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', width: '100%', color: 'var(--text-secondary)' }}>
-                {lang === 'id' ? 'Belum ada data tren presensi' : 'No attendance trend data available'}
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                              <LineChart data={trend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--text-muted)' }} />
-                                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: 'var(--text-muted)' }} allowDecimals={false} />
-                                <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" opacity={0.4} />
-                                <Tooltip
-                                  contentStyle={{
-                                    background: 'var(--glass-bg)',
-                                    border: '1px solid var(--glass-border)',
-                                    borderRadius: 8,
-                                    fontSize: 12,
-                                    boxShadow: '0 0 0 1px var(--glass-edge-light), 0 0 0 2px var(--glass-edge-dark), 0 4px 16px rgba(0,0,0,0.1)',
-                                    backdropFilter: 'blur(40px) saturate(180%)',
-                                    WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-                                  }}
-                                  itemStyle={{ fontSize: 13, fontWeight: 600 }}
-                                />
-                                <Line type="monotone" dataKey="alpha" stroke="var(--status-alpha)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--bg-secondary)', stroke: 'var(--status-alpha)' }} name={lang === 'id' ? 'Alpha' : 'Absent'} />
-                                <Line type="monotone" dataKey="sakit" stroke="var(--status-sakit)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--bg-secondary)', stroke: 'var(--status-sakit)' }} name={lang === 'id' ? 'Sakit' : 'Sick'} />
-                                <Line type="monotone" dataKey="izin" stroke="var(--status-izin)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--bg-secondary)', stroke: 'var(--status-izin)' }} name={lang === 'id' ? 'Izin' : 'Permit'} />
-                                <Line type="monotone" dataKey="cuti" stroke="var(--status-cuti)" strokeWidth={1.5} dot={false} activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--bg-secondary)', stroke: 'var(--status-cuti)' }} name={lang === 'id' ? 'Cuti' : 'Leave'} />
-                              </LineChart>
-                            </ResponsiveContainer>
-            )}
-          </div>
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18, marginBottom: 22, alignItems: 'stretch' }}>
+        {/* Trend Chart (Smooth Area Spline + Clickable Series + Export Excel) */}
+        <AttendanceTrendChart />
 
-        {/* Sorotan Karyawan */}
-        <div className="glass-card stagger-3" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* Demografi */}
-          <div>
-            <h3 style={{ marginBottom: 16 }}>{lang === 'id' ? 'Komposisi Karyawan' : "Employee Demographics"}</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {[
-                { label: 'ALL IN vs HARIAN', v1: stats?.demografi?.allIn || 0, v2: stats?.demografi?.harian || 0, c1: '#3B82F6', c2: '#8B5CF6', l1: 'ALL IN', l2: 'HARIAN' }
-              ].map(item => {
-                const total = item.v1 + item.v2;
-                const p1 = total > 0 ? (item.v1 / total) * 100 : 0;
-                const p2 = total > 0 ? (item.v2 / total) * 100 : 0;
-                return (
-                  <div key={item.label}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                      <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{item.label}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>{total}</span>
-                    </div>
-                    <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', marginBottom: 6 }}>
-                      <div style={{ width: `${p1}%`, background: item.c1 }} title={`${item.l1}: ${item.v1}`} />
-                      <div style={{ width: `${p2}%`, background: item.c2 }} title={`${item.l2}: ${item.v2}`} />
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
-                      <span style={{ color: item.c1, fontWeight: 500 }}>{item.l1}: {item.v1} ({p1.toFixed(0)}%)</span>
-                      <span style={{ color: item.c2, fontWeight: 500 }}>{item.l2}: {item.v2} ({p2.toFixed(0)}%)</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '4px 0' }} />
-
-          {/* Top Lembur */}
-          <div>
-            <h3 style={{ marginBottom: 16 }}>{lang === 'id' ? 'Sorotan Lembur (Top 5)' : "Overtime Highlights"}</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {stats?.topLembur && stats.topLembur.length > 0 ? stats.topLembur.map((item, idx) => (
-                <div key={item.bagian} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg-secondary)', borderRadius: 8, border: '1px solid var(--border-color)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontSize: 15, fontWeight: 'bold', color: idx === 0 ? '#F59E0B' : idx === 1 ? '#9CA3AF' : idx === 2 ? '#D97706' : 'var(--text-muted)' }}>#{idx + 1}</span>
-                    <span style={{ fontSize: 14, fontWeight: 500 }}>{item.bagian}</span>
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>
-                    {item.total} {lang === 'id' ? 'kali' : 'times'}
-                  </div>
-                </div>
-              )) : (
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>
-                  {lang === 'id' ? 'Belum ada data lembur bulan ini' : 'No overtime data this month'}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        {/* Kalender Operasional HR */}
+        <DashboardCalendar />
       </div>
 
       {/* ========== ROW 3: Alerts + Quick Access ========== */}
@@ -407,7 +298,7 @@ export default function DashboardPage() {
             {[
               { icon: Users, label: lang === 'id' ? 'Data Karyawan' : 'Employees', href: '/karyawan', color: '#3b82f6' },
               { icon: ClipboardList, label: lang === 'id' ? 'Absensi' : 'Attendance', href: '/absensi', color: '#10b981' },
-              { icon: Clock, label: lang === 'id' ? 'Input Lembur' : 'Overtime', href: '/lembur', color: '#f59e0b' },
+              { icon: Calendar, label: lang === 'id' ? 'Form Cuti' : 'Leave Form', href: '/cuti', color: '#f59e0b' },
               { icon: BarChart3, label: lang === 'id' ? 'Laporan Excel' : 'Excel Reports', href: '/laporan', color: '#8b5cf6' },
               { icon: TrendingUp, label: lang === 'id' ? 'Analisis Lembur' : 'OT Analysis', href: '/laporan?tab=ot', color: '#f97316' },
               { icon: Settings, label: lang === 'id' ? 'Pengaturan' : 'Settings', href: '/pengaturan', color: '#6b7280' },
@@ -438,16 +329,6 @@ export default function DashboardPage() {
         initialData={perluPerhatian}
         lang={lang}
       />
-      
-
-      {toast && (
-        <div className="toast-container">
-          <div className={`toast toast-${toast.type}`}>
-            {toast.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-            {toast.msg}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

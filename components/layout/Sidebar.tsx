@@ -22,13 +22,6 @@ const navItems = [
     ]
   },
   { href: '/cuti', icon: Calendar, key: 'navCuti' as any },
-  { 
-    href: '/lembur', icon: Clock, key: 'lembur' as const,
-    subItems: [
-      { href: '/lembur/all-in', labelId: 'Input Lembur (ALL IN)', labelEn: 'Input Overtime (ALL IN)' },
-      { href: '/lembur/spl', labelId: 'Surat Perintah Lembur (Harian)', labelEn: 'Overtime Orders (Daily)' },
-    ]
-  },
   { href: '/laporan', icon: BarChart3, key: 'laporan' as const },
   { 
     href: '/pengaturan', icon: Settings, key: 'pengaturan' as const,
@@ -46,7 +39,6 @@ export default function Sidebar() {
   const lang = settings.language;
   const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({
     '/absensi': pathname.startsWith('/absensi') || pathname.startsWith('/check-bagian'),
-    '/lembur': pathname.startsWith('/lembur'),
     '/pengaturan': pathname.startsWith('/pengaturan')
   });
 

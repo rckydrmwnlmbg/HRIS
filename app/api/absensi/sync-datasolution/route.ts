@@ -176,24 +176,41 @@ export async function POST(request: Request) {
             END;
           `;
 
-          for (let i = 0; i < dsData.length; i++) {
-            const row = dsData[i];
-            await query(singleMergeQuery, {
-              nik: String(row.NIK).trim(),
-              tanggal: row.Tanggal,
-              workIn: row.finalWorkIn || null,
-              workOut: row.finalWorkOut || null
-            });
-            processedCount++;
-
-            // Kirim progress setiap 25 row agar tidak membanjiri stream
-            if (i % 25 === 0 || i === dsData.length - 1) {
-              const pct = 10 + Math.floor((i / dsData.length) * 40);
-              sendEvent('progress', { message: `Menyinkronkan data presensi (${i + 1}/${dsData.length})...`, progress: pct });
+          const CHUNK_SIZE = 50;
+          for (let i = 0; i < dsData.length; i += CHUNK_SIZE) {
+            const chunk = dsData.slice(i, i + CHUNK_SIZE);
+            let batchSql = '';
+            
+            for (let j = 0; j < chunk.length; j++) {
+              const row = chunk[j];
+              const pNik = `'${String(row.NIK).trim().replace(/'/g, "''")}'`;
+              const pTanggal = `'${row.Tanggal}'`;
+              const pIn = row.finalWorkIn ? `'${new Date(row.finalWorkIn).toISOString().replace('T', ' ').slice(0, 19)}'` : 'NULL';
+              const pOut = row.finalWorkOut ? `'${new Date(row.finalWorkOut).toISOString().replace('T', ' ').slice(0, 19)}'` : 'NULL';
+              
+              batchSql += singleMergeQuery
+                .replace(/@nik/g, pNik)
+                .replace(/@tanggal/g, pTanggal)
+                .replace(/@workIn/g, pIn)
+                .replace(/@workOut/g, pOut)
+                .replace(/@diffMins/g, `@diffMins_${j}`)
+                .replace(/@netMins/g, `@netMins_${j}`)
+                .replace(/@calcJamKerja/g, `@calcJamKerja_${j}`)
+                .replace(/@targetShift/g, `@targetShift_${j}`)
+                .replace(/@targetJamMasuk/g, `@targetJamMasuk_${j}`)
+                .replace(/@targetJamPulang/g, `@targetJamPulang_${j}`)
+                .replace(/@defaultJamMasuk/g, `@defaultJamMasuk_${j}`)
+                .replace(/@defaultJamPulang/g, `@defaultJamPulang_${j}`) + '\n';
             }
+            
+            await query(batchSql);
+            processedCount += chunk.length;
+
+            const pct = 10 + Math.floor((processedCount / dsData.length) * 40);
+            sendEvent('progress', { message: `Menyinkronkan data presensi (${processedCount}/${dsData.length})...`, progress: pct });
           }
 
-          // ── FASE 2: Hitung ulang lembur ──
+          // ── FASE 2: Hitung ulang lembur (batched UPDATE, 30 per batch) ──
           sendEvent('progress', { message: 'Mengambil data absen untuk divalidasi lemburnya...', progress: 55 });
           
           const syncedAbsen = await query<any>(`
@@ -207,34 +224,32 @@ export async function POST(request: Request) {
               AND a.WORK_IN IS NOT NULL AND a.WORK_OUT IS NOT NULL
           `, { startDate, endDate });
 
-          const updateOtQuery = `
-            UPDATE TR_ABSEN 
-            SET OT_1 = @ot1, OT_2 = @ot2, OT_3 = @ot3, OT_4 = @ot4, T_OT = @tot, JAM_KERJA = @jamKerja
-            WHERE RTRIM(EMP_CD) = RTRIM(@nik) AND CONVERT(date, DATE_TRANS) = CONVERT(date, @tanggal)
-          `;
+          const OT_BATCH_SIZE = 30;
+          for (let i = 0; i < syncedAbsen.length; i += OT_BATCH_SIZE) {
+            const chunk = syncedAbsen.slice(i, i + OT_BATCH_SIZE);
+            let batchSql = '';
 
-          for (let i = 0; i < syncedAbsen.length; i++) {
-            const row = syncedAbsen[i];
-            const dateStr = new Date(row.DATE_TRANS).toISOString().split('T')[0];
-            const ot = calculateAttendanceAndOt(
-              dateStr,
-              new Date(row.WORK_IN),
-              new Date(row.WORK_OUT),
-              row.JOB_DESC || '',
-              row.SEC_DESC || '',
-              row.STATUS_HARI || '',
-              row.SHIFT || ''
-            );
-            
-            await query(updateOtQuery, {
-              ot1: ot.OT_1, ot2: ot.OT_2, ot3: ot.OT_3, ot4: ot.OT_4, tot: ot.T_OT, jamKerja: ot.JAM_KERJA || 0,
-              nik: String(row.EMP_CD).trim(), tanggal: dateStr
-            });
-
-            if (i % 25 === 0 || i === syncedAbsen.length - 1) {
-              const pct = 55 + Math.floor((i / syncedAbsen.length) * 40);
-              sendEvent('progress', { message: `Menghitung ulang jam lembur (${i + 1}/${syncedAbsen.length})...`, progress: pct });
+            for (const row of chunk) {
+              const dateStr = new Date(row.DATE_TRANS).toISOString().split('T')[0];
+              const ot = calculateAttendanceAndOt(
+                dateStr,
+                new Date(row.WORK_IN),
+                new Date(row.WORK_OUT),
+                row.JOB_DESC || '',
+                row.SEC_DESC || '',
+                row.STATUS_HARI || '',
+                row.SHIFT || ''
+              );
+              
+              const empCd = String(row.EMP_CD).trim().replace(/'/g, "''");
+              batchSql += `UPDATE TR_ABSEN SET OT_1=${ot.OT_1||0},OT_2=${ot.OT_2||0},OT_3=${ot.OT_3||0},OT_4=${ot.OT_4||0},T_OT=${ot.T_OT||0},JAM_KERJA=${ot.JAM_KERJA||0} WHERE RTRIM(EMP_CD)=RTRIM('${empCd}') AND CONVERT(date,DATE_TRANS)=CONVERT(date,'${dateStr}');\n`;
             }
+            
+            await query(batchSql);
+
+            const processedOt = Math.min(i + OT_BATCH_SIZE, syncedAbsen.length);
+            const pct = 55 + Math.floor((processedOt / syncedAbsen.length) * 40);
+            sendEvent('progress', { message: `Menghitung ulang jam lembur (${processedOt}/${syncedAbsen.length})...`, progress: pct });
           }
 
           if (fallbackLogs.length > 0) {

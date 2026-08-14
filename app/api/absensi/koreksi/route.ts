@@ -3,10 +3,37 @@ import { query, withTransaction } from '@/lib/db';
 import { detectSecurityShift, isSecurityJob } from '@/lib/securitySchedule';
 import { calculateAttendanceAndOt } from '@/lib/otCalculator';
 
-const parseDate = (value: unknown): Date | null => {
-  if (!value) return null;
-  const date = new Date(String(value).replace('Z', ''));
+const parseCorrectEpoch = (val: unknown): Date | null => {
+  if (!val) return null;
+  if (val instanceof Date) {
+    return Number.isNaN(val.getTime()) ? null : val;
+  }
+  if (typeof val !== 'string') return null;
+  const trimmed = val.trim();
+  if (!trimmed || trimmed === '-' || trimmed === 'null' || trimmed === 'undefined') return null;
+
+  let date: Date;
+  if (trimmed.endsWith('Z') || /[+-]\d{2}(:\d{2})?$/.test(trimmed)) {
+    date = new Date(trimmed);
+  } else {
+    const isoStr = trimmed.includes(' ') ? trimmed.replace(' ', 'T') : trimmed;
+    date = new Date(isoStr + '+07:00');
+  }
+
   return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const toWibString = (dateObj: Date | null): string | null => {
+  if (!dateObj || Number.isNaN(dateObj.getTime())) return null;
+  const wibTime = new Date(dateObj.getTime() + 7 * 60 * 60 * 1000);
+  if (Number.isNaN(wibTime.getTime())) return null;
+  return wibTime.toISOString().replace(/Z$/, ''); 
+};
+
+const isMeaningful = (val: unknown): boolean => {
+  if (val == null) return false;
+  const str = String(val).trim();
+  return str !== '' && str !== '-' && str !== 'null' && str !== 'undefined';
 };
 
 export async function POST(request: Request) {
@@ -17,16 +44,15 @@ export async function POST(request: Request) {
     const statusHari = data.corrected_status == null || data.corrected_status === '' ? null : String(data.corrected_status).trim();
     const reason = data.corrected_reason == null || data.corrected_reason === '' ? null : String(data.corrected_reason).trim();
     const correctedShift = data.corrected_shift == null || data.corrected_shift === '' ? null : String(data.corrected_shift).trim();
-    let cleanWorkIn = data.WORK_IN ? String(data.WORK_IN).replace('Z', '') : null;
-    let cleanWorkOut = data.WORK_OUT ? String(data.WORK_OUT).replace('Z', '') : null;
+    
+    const workInDate = parseCorrectEpoch(data.WORK_IN);
+    const workOutDate = parseCorrectEpoch(data.WORK_OUT);
 
     if (!empCd || !/^\d{4}-\d{2}-\d{2}$/.test(dateTrans)) {
       return NextResponse.json({ error: 'EMP_CD dan DATE_TRANS wajib valid.' }, { status: 400 });
     }
 
-    const workInDate = parseDate(cleanWorkIn);
-    const workOutDate = parseDate(cleanWorkOut);
-    if (cleanWorkIn && !workInDate || cleanWorkOut && !workOutDate) {
+    if ((isMeaningful(data.WORK_IN) && !workInDate) || (isMeaningful(data.WORK_OUT) && !workOutDate)) {
       return NextResponse.json({ error: 'WORK_IN/WORK_OUT harus berupa timestamp valid.' }, { status: 400 });
     }
 
@@ -38,8 +64,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'WORK_OUT lebih awal dari WORK_IN; periksa pasangan fingerprint.' }, { status: 400 });
       }
       workOutDate.setDate(workOutDate.getDate() + 1);
-      cleanWorkOut = workOutDate.toISOString().replace('Z', '');
     }
+    
+    // Konversi kembali ke string (tanpa Z) untuk disimpan ke DB
+    const cleanWorkIn = toWibString(workInDate);
+    const cleanWorkOut = toWibString(workOutDate);
 
     const empCheck = await query<any>(`
       SELECT TOP 1
@@ -75,6 +104,26 @@ export async function POST(request: Request) {
     );
 
     await withTransaction(async (tx) => tx(`
+      DECLARE @targetShift VARCHAR(10) = ISNULL(@shift, (SELECT TOP 1 SHIFT FROM TR_ABSEN WHERE RTRIM(EMP_CD) = @empCd AND CONVERT(date, DATE_TRANS) = @dateTrans));
+      SET @targetShift = ISNULL(@targetShift, '1');
+
+      DECLARE @targetJamMasuk DATETIME = (
+        SELECT TOP 1 CAST(@dateTrans + ' ' + CONVERT(varchar(8), WORK_IN, 108) AS DATETIME) 
+        FROM msSHIFT 
+        WHERE RTRIM(shift_CODE) = RTRIM(@targetShift)
+      );
+
+      DECLARE @targetJamPulang DATETIME = (
+        SELECT TOP 1 
+          CASE 
+            WHEN CONVERT(varchar(8), WORK_OUT, 108) < CONVERT(varchar(8), WORK_IN, 108) 
+            THEN CAST(CONVERT(varchar(10), DATEADD(day, 1, CONVERT(date, @dateTrans)), 120) + ' ' + CONVERT(varchar(8), WORK_OUT, 108) AS DATETIME)
+            ELSE CAST(@dateTrans + ' ' + CONVERT(varchar(8), WORK_OUT, 108) AS DATETIME)
+          END
+        FROM msSHIFT 
+        WHERE RTRIM(shift_CODE) = RTRIM(@targetShift)
+      );
+
       UPDATE TR_ABSEN
       SET
         WORK_IN = @workIn,
@@ -82,7 +131,14 @@ export async function POST(request: Request) {
         JAM_KERJA = @jamKerja,
         STATUS_HARI = @statusHari,
         REASON = @reason,
-        SHIFT = ISNULL(@shift, SHIFT),
+        SHIFT = @targetShift,
+        JAM_MASUK = ISNULL(@targetJamMasuk, JAM_MASUK),
+        JAM_PULANG = ISNULL(@targetJamPulang, JAM_PULANG),
+        Time_Late = CASE 
+          WHEN @workIn IS NOT NULL AND @targetJamMasuk IS NOT NULL 
+          THEN CAST(DATEDIFF(MINUTE, @targetJamMasuk, CAST(@workIn AS DATETIME)) AS FLOAT)
+          ELSE ISNULL(Time_Late, 0.0)
+        END,
         OT_1 = @ot1,
         OT_2 = @ot2,
         OT_3 = @ot3,

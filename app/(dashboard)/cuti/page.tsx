@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { useApp } from '@/lib/context';
+import { useToast } from '@/components/ui/ToastProvider';
 import { t } from '@/lib/i18n';
 import type { Karyawan } from '@/types';
 import { Search, Calendar as CalendarIcon, CheckCircle, Plus, Trash2 } from 'lucide-react';
@@ -16,6 +17,7 @@ interface LeaveRequest {
   type: string;
   reason: string;
   reasonGroup?: string;
+  reasonCode?: string;
   status: 'approved' | 'pending';
   TEAM?: string;
   JOB_DESC?: string;
@@ -26,6 +28,7 @@ interface LeaveRequest {
 
 export default function CutiPage() {
   const { settings } = useApp();
+  const { showToast } = useToast();
   const lang = settings.language;
   const today = new Date().toISOString().split('T')[0];
 
@@ -37,7 +40,6 @@ export default function CutiPage() {
     type: '' // Will be set after masterReasons is loaded
   });
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
-  const [toast, setToast] = useState<string | null>(null);
   const [karyawanList, setKaryawanList] = useState<Karyawan[]>([]);
   const [masterReasons, setMasterReasons] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -120,12 +122,29 @@ export default function CutiPage() {
 
   const days = calculateDays(form.startDate, form.endDate);
 
-  const totalCutiTerpakai = requests.reduce((sum, r) => sum + ((r.reasonGroup?.trim() === 'C' || r.reasonGroup?.trim() === 'H') ? r.days : 0), 0);
+  let hasMaternity = false;
+  const totalCutiTerpakai = requests.reduce((sum, r) => {
+    const isLeave = r.reasonGroup?.trim() === 'C' || r.reasonGroup?.trim() === 'H';
+    if (!isLeave) return sum;
+    
+    // Cuti Melahirkan (Kode 13) dihitung hanya 1 kejadian = 1 hari jatah terpotong per TAHUN
+    // Menggunakan flag untuk mencegah double-deduction jika cuti panjangnya terpecah (chunked) 
+    // oleh hari libur nasional atau weekend di dalam database TR_ABSEN.
+    if (r.reasonCode === '13') {
+      hasMaternity = true;
+      return sum;
+    }
+    return sum + r.days;
+  }, 0) + (hasMaternity ? 1 : 0);
   
   const selectedReasonObj = masterReasons.find(r => r.REASON_CODE === form.type);
   const isCutiType = selectedReasonObj && (selectedReasonObj.REASON_GROUP?.trim() === 'C' || selectedReasonObj.REASON_GROUP?.trim() === 'H');
   
-  const isExceedingQuota = isCutiType && (totalCutiTerpakai + days > BATAS_CUTI);
+  // Jika pengajuan saat ini adalah Cuti Melahirkan (Kode 13), anggap hanya memotong 1 hari untuk validasi kuota
+  const isCurrentMaternity = form.type === '13';
+  const deductedDays = isCurrentMaternity ? 1 : days;
+  
+  const isExceedingQuota = isCutiType && (totalCutiTerpakai + deductedDays > BATAS_CUTI);
 
   const handleDelete = (r: LeaveRequest) => {
     setConfirmTarget(r);
@@ -142,16 +161,15 @@ export default function CutiPage() {
       });
       const res = await fetch(`/api/cuti?${params.toString()}`, { method: 'DELETE' });
       if (res.ok) {
-        setToast(lang === 'id' ? 'Data cuti berhasil dihapus' : 'Leave record deleted');
-        setTimeout(() => setToast(null), 3000);
+        showToast(lang === 'id' ? 'Data cuti berhasil dihapus' : 'Leave record deleted', 'success');
         loadRequests(selectedEmp?.EMP_CD);
       } else {
         const err = await res.json();
-        alert(lang === 'id' ? 'Gagal menghapus data' : 'Failed to delete record');
+        showToast(lang === 'id' ? 'Gagal menghapus data' : 'Failed to delete record', 'warning');
       }
     } catch (err) {
       console.error(err);
-      alert(lang === 'id' ? 'Terjadi kendala saat menghapus data cuti' : 'Failed to delete leave record');
+      showToast(lang === 'id' ? 'Terjadi kendala saat menghapus data cuti' : 'Failed to delete leave record', 'error');
     }
     setConfirmTarget(null);
   };
@@ -177,8 +195,7 @@ export default function CutiPage() {
       });
 
       if (res.ok) {
-        setToast(lang === 'id' ? 'Pengajuan cuti berhasil disimpan' : 'Leave request saved');
-        setTimeout(() => setToast(null), 3000);
+        showToast(lang === 'id' ? 'Pengajuan cuti berhasil disimpan' : 'Leave request saved', 'success');
 
         // Reset form
         setForm(f => ({
@@ -188,9 +205,13 @@ export default function CutiPage() {
         }));
 
         loadRequests(selectedEmp.EMP_CD);
+      } else {
+        const err = await res.json();
+        showToast(err.error || (lang === 'id' ? 'Gagal menyimpan pengajuan cuti' : 'Failed to save leave request'), 'warning');
       }
     } catch (err) {
       console.error(err);
+      showToast(lang === 'id' ? 'Terjadi kesalahan sistem' : 'A system error occurred', 'error');
     }
     setIsSubmitting(false);
   };
@@ -397,14 +418,6 @@ export default function CutiPage() {
           )}
         </div>
       </div>
-
-      {toast && (
-        <div className="toast-container">
-          <div className="toast toast-success">
-            <CheckCircle size={16} /> {toast}
-          </div>
-        </div>
-      )}
 
       <ConfirmModal
         isOpen={!!confirmTarget}

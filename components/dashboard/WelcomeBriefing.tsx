@@ -116,172 +116,201 @@ export default function WelcomeBriefing() {
 
   return (
     <div className="glass-card animate-fadeIn" style={{
-      padding: '16px 20px',
-      marginBottom: '20px',
-      borderRadius: '16px',
-      borderLeft: '4px solid var(--accent-blue)',
-      background: 'linear-gradient(145deg, var(--bg-secondary) 0%, rgba(37,99,235,0.05) 100%)',
-      boxShadow: '0 8px 20px -5px rgba(0,0,0,0.15)'
+      padding: '14px 18px',
+      marginBottom: '18px',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-
-        <div>
-          <h2 style={{ fontSize: '16px', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{greeting}, {userName}!</h2>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', margin: 0, marginTop: '2px' }}>
-            {todayStr}.
-          </p>
+      {/* Top Header Row */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: (insights.length > 0 || reminders.length > 0) ? '12px' : '0', flexWrap: 'wrap', gap: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{
+            width: '26px',
+            height: '26px',
+            borderRadius: 'var(--radius-sm)',
+            background: 'linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(99, 102, 241, 0.15))',
+            border: '1px solid rgba(14, 165, 233, 0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--accent)',
+            boxShadow: '0 2px 8px rgba(14, 165, 233, 0.2)'
+          }}>
+            <Sparkles size={14} />
+          </div>
+          <div>
+            <h2 style={{ fontSize: '13.5px', fontWeight: 750, margin: 0, color: 'var(--text-primary)', letterSpacing: '-0.015em', display: 'inline' }}>
+              {greeting}, {userName}!
+            </h2>
+            <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginLeft: '8px' }}>
+              {todayStr}
+            </span>
+          </div>
         </div>
+
+        {insights.length > 0 && (
+          <span className="badge badge-info badge-sm">
+            {insights.length} Wawasan Presensi
+          </span>
+        )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px' }}>
-
+      <div>
         {/* EMPTY STATE (ALL CLEAR) */}
         {insights.length === 0 && reminders.length === 0 && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            background: 'rgba(16, 185, 129, 0.05)',
+            background: 'rgba(16, 185, 129, 0.08)',
             padding: '8px 12px',
-            borderRadius: '8px',
-            border: '1px solid rgba(16, 185, 129, 0.2)',
-            marginTop: '-10px'
+            borderRadius: 'var(--radius-sm)',
+            border: '1px solid rgba(16, 185, 129, 0.22)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            marginTop: '8px'
           }}>
-            <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '6px', borderRadius: '50%', display: 'flex' }}>
-              <CheckCircle2 size={16} color="var(--success)" />
-            </div>
-            <div>
-              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>Luar Biasa! Data Sangat Rapi. </span>
-              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Tidak ada satupun anomali presensi atau tugas tertunda hari ini. Nikmati harimu!</span>
+            <CheckCircle2 size={15} color="var(--success)" style={{ flexShrink: 0 }} />
+            <div style={{ fontSize: '12px' }}>
+              <span style={{ fontWeight: 650, color: 'var(--success)' }}>Luar Biasa! Data Sangat Rapi. </span>
+              <span style={{ color: 'var(--text-secondary)' }}>Tidak ada satupun anomali presensi atau tugas tertunda hari ini.</span>
             </div>
           </div>
         )}
 
         {/* INSIGHTS SECTION */}
         {insights.length > 0 && (
-          <div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '16px' }}>
-              {insights.map(insight => {
-                const isDanger = insight.type === 'danger';
-                const isWarning = insight.type === 'warning';
-                const isExpanded = expandedInsightId === insight.id;
-                return (
-                  <div key={insight.id} style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '10px',
-                    background: isDanger ? 'rgba(239, 68, 68, 0.06)' : isWarning ? 'rgba(245, 158, 11, 0.06)' : 'rgba(59, 130, 246, 0.06)',
-                    padding: '16px',
-                    borderRadius: '12px',
-                    border: '1px solid',
-                    borderColor: isDanger ? 'rgba(239, 68, 68, 0.2)' : isWarning ? 'rgba(245, 158, 11, 0.2)' : 'rgba(59, 130, 246, 0.2)',
-                    transition: 'all 0.2s ease',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '14px' }}>
-                      <div style={{ marginTop: '2px', background: isDanger ? 'rgba(239,68,68,0.1)' : isWarning ? 'rgba(245,158,11,0.1)' : 'rgba(59,130,246,0.1)', padding: '6px', borderRadius: '8px' }}>
-                        {getIconForInsight(insight.type)}
-                      </div>
-                      <div style={{ fontSize: '14px', lineHeight: 1.5, color: 'var(--text-secondary)', flex: 1 }}>
-                        {renderText(insight.text)}
-                      </div>
-                    </div>
-                    {insight.details && insight.details.length > 0 && (
-                      <div style={{ paddingLeft: '44px' }}>
-                        <button
-                          onClick={() => setExpandedInsightId(isExpanded ? null : insight.id)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--accent-blue)',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '4px 8px',
-                            marginLeft: '-8px',
-                            borderRadius: '4px'
-                          }}
-                        >
-                          {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                          {isExpanded ? 'Tutup Detail' : 'Lihat Detail Karyawan'}
-                        </button>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '10px', marginBottom: reminders.length > 0 ? '12px' : '0' }}>
+            {insights.map(insight => {
+              const isDanger = insight.type === 'danger';
+              const isWarning = insight.type === 'warning';
+              const isExpanded = expandedInsightId === insight.id;
+              const accentColor = isDanger ? 'var(--danger)' : isWarning ? 'var(--warning)' : 'var(--accent)';
+              const bgTint = isDanger ? 'rgba(225, 29, 72, 0.06)' : isWarning ? 'rgba(217, 119, 6, 0.06)' : 'rgba(14, 165, 233, 0.06)';
+              const borderTint = isDanger ? 'rgba(225, 29, 72, 0.22)' : isWarning ? 'rgba(217, 119, 6, 0.22)' : 'rgba(14, 165, 233, 0.22)';
 
-                        {isExpanded && (
-                          <div style={{
-                            marginTop: '8px',
-                            padding: '12px',
-                            background: 'var(--bg-secondary)',
-                            border: '1px solid var(--border)',
-                            borderRadius: '6px',
-                            maxHeight: '150px',
-                            overflowY: 'auto',
-                            fontSize: '13px',
-                            color: 'var(--text-secondary)'
-                          }}>
-                            <ul style={{ margin: 0, paddingLeft: '16px' }}>
-                              {insight.details.map((detail, idx) => (
-                                <li key={idx} style={{ marginBottom: '4px' }}>{detail}</li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
+              return (
+                <div key={insight.id} style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '6px',
+                  background: bgTint,
+                  padding: '10px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  border: `1px solid ${borderTint}`,
+                  transition: 'all 0.2s ease',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                    <div style={{
+                      marginTop: '1px',
+                      background: bgTint,
+                      padding: '4px',
+                      borderRadius: 'var(--radius-sm)',
+                      display: 'flex',
+                      flexShrink: 0
+                    }}>
+                      {getIconForInsight(insight.type)}
+                    </div>
+                    <div style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--text-secondary)', flex: 1 }}>
+                      {renderText(insight.text)}
+                    </div>
+                  </div>
+
+                  {insight.details && insight.details.length > 0 && (
+                    <div style={{ paddingLeft: '32px' }}>
+                      <button
+                        onClick={() => setExpandedInsightId(isExpanded ? null : insight.id)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: accentColor,
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px',
+                          padding: '2px 4px',
+                          marginLeft: '-4px',
+                          borderRadius: '4px'
+                        }}
+                      >
+                        {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                        {isExpanded ? 'Tutup Detail' : 'Lihat Detail Karyawan'}
+                      </button>
+
+                      {isExpanded && (
+                        <div style={{
+                          marginTop: '6px',
+                          padding: '8px 10px',
+                          background: 'var(--glass-bg)',
+                          border: '1px solid var(--border)',
+                          borderRadius: 'var(--radius-sm)',
+                          maxHeight: '120px',
+                          overflowY: 'auto',
+                          fontSize: '11.5px',
+                          color: 'var(--text-secondary)'
+                        }}>
+                          <ul style={{ margin: 0, paddingLeft: '14px' }}>
+                            {insight.details.map((detail, idx) => (
+                              <li key={idx} style={{ marginBottom: '3px' }}>{detail}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* REMINDERS SECTION */}
+        {reminders.length > 0 && (
+          <div style={{ marginTop: insights.length > 0 ? '10px' : '0' }}>
+            <div style={{ fontSize: '11px', fontWeight: 650, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <CheckCircle2 size={12} /> Tugas Hari Ini
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '6px' }}>
+              {reminders.map(rem => {
+                const isOverdue = rem.dueDate && rem.dueDate < new Date().toISOString().split('T')[0];
+                const isUpcoming = rem.dueDate && rem.dueDate > new Date().toISOString().split('T')[0];
+                
+                return (
+                  <div
+                    key={rem.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      background: 'var(--glass-bg)',
+                      padding: '7px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border)',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onClick={() => handleMarkDone(rem.id)}
+                    onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--success)'}
+                    onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
+                  >
+                    <Circle size={13} color="var(--text-secondary)" style={{ flexShrink: 0 }} />
+                    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                      <span style={{ fontSize: '12px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{rem.title}</span>
+                      {isOverdue && (
+                        <span className="badge badge-danger badge-sm" style={{ padding: '1px 5px', fontSize: '9px' }}>Terlambat</span>
+                      )}
+                      {isUpcoming && (
+                        <span className="badge badge-info badge-sm" style={{ padding: '1px 5px', fontSize: '9px' }}>{rem.dueDate}</span>
+                      )}
+                    </div>
                   </div>
                 );
               })}
             </div>
           </div>
         )}
-
-        {/* REMINDERS SECTION */}
-        {reminders.length > 0 && (
-          <div>
-            <h3 style={{ fontSize: '14px', color: 'var(--text-secondary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <CheckCircle2 size={14} /> Tugas Hari Ini
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {reminders.map(rem => {
-                const isOverdue = rem.dueDate && rem.dueDate < new Date().toISOString().split('T')[0];
-                const isUpcoming = rem.dueDate && rem.dueDate > new Date().toISOString().split('T')[0];
-                
-                return (
-                <div
-                  key={rem.id}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    background: 'var(--bg-primary)',
-                    padding: '10px 12px',
-                    borderRadius: '8px',
-                    border: '1px solid var(--border)',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                  onClick={() => handleMarkDone(rem.id)}
-                  onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--success)'}
-                  onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border)'}
-                >
-                  <Circle size={16} color="var(--text-secondary)" />
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '14px', color: 'var(--text-primary)' }}>{rem.title}</span>
-                    {isOverdue && (
-                      <span style={{ fontSize: '10px', background: 'rgba(239,68,68,0.1)', color: 'var(--danger)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>Terlambat</span>
-                    )}
-                    {isUpcoming && (
-                      <span style={{ fontSize: '10px', background: 'rgba(59,130,246,0.1)', color: 'var(--accent-blue)', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>{rem.dueDate}</span>
-                    )}
-                  </div>
-                </div>
-              )})}
-            </div>
-          </div>
-        )}
-
       </div>
     </div>
   );

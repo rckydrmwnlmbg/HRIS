@@ -166,9 +166,32 @@ export async function GET(request: Request) {
         const currDate = new Date(row.dateStr);
         const diffTime = Math.abs(currDate.getTime() - prevDate.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const prevDow = prevDate.getDay();
+        
+        // Cek apakah jeda antara prevDate dan currDate murni hanya akhir pekan (Sabtu/Minggu)
+        let isAdjacent = false;
+        if (diffDays === 1) {
+          isAdjacent = true;
+        } else if (diffDays <= 3) {
+          // Jika selisih 2 atau 3 hari, pastikan tidak ada hari kerja (Senin-Jumat) di antaranya
+          let temp = new Date(prevDate);
+          temp.setDate(temp.getDate() + 1);
+          let hasWorkdayInBetween = false;
+          while (temp < currDate) {
+            const dow = temp.getDay();
+            if (dow !== 0 && dow !== 6) { // Jika ada hari selain Sabtu/Minggu
+              hasWorkdayInBetween = true;
+              break;
+            }
+            temp.setDate(temp.getDate() + 1);
+          }
+          if (!hasWorkdayInBetween) {
+            isAdjacent = true;
+          }
+        }
 
-        if (row.EMP_CD === currentGroup.EMP_CD && row.typeCode === currentGroup.typeCode && row.reasonCode === currentGroup.reasonCode && diffDays === 1) {
-          // contiguous day
+        if (row.EMP_CD === currentGroup.EMP_CD && row.typeCode === currentGroup.typeCode && row.reasonCode === currentGroup.reasonCode && isAdjacent) {
+          // contiguous day (atau terpisah murni karena akhir pekan)
           currentGroup.endDate = row.dateStr;
           currentGroup.days += 1;
         } else {

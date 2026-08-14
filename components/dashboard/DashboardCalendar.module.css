@@ -1,0 +1,348 @@
+.calendarCard {
+  padding: 14px 20px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.titleGroup {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.title {
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.navButtons {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.navBtn {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 3px 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+}
+
+.navBtn:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--accent);
+  color: var(--accent);
+  transform: translateY(-1px);
+}
+
+.todayBtn {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 7px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.todayBtn:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.monthLabel {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  min-width: 105px;
+  text-align: center;
+  letter-spacing: -0.01em;
+}
+
+/* Unregistered Holiday Sync Banner */
+.syncBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  margin-bottom: 8px;
+  font-size: 10.5px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.syncBtn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 2.5px 7px;
+  font-size: 9.5px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  box-shadow: 0 2px 5px rgba(217, 119, 6, 0.25);
+}
+
+.syncBtn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(217, 119, 6, 0.4);
+}
+
+/* Day of Week Headers */
+.weekGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 2px;
+  text-align: center;
+}
+
+.weekDay {
+  font-size: 10px;
+  font-weight: 650;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 0;
+}
+
+.weekDaySunday,
+.weekDayWeekend {
+  color: var(--danger);
+}
+
+/* Calendar Day Grid */
+.daysGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2.5px;
+  margin-bottom: 8px;
+}
+
+.dayCell {
+  height: 27px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  cursor: pointer;
+  position: relative;
+  font-size: 11px;
+  font-weight: 550;
+  color: var(--text-primary);
+  transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  border: 1px solid transparent;
+  background: transparent;
+  user-select: none;
+}
+
+.dayCell:hover {
+  background: var(--glass-bg-hover);
+  border-color: var(--border-subtle);
+  transform: scale(1.05);
+  z-index: 5;
+}
+
+.otherMonth {
+  opacity: 0.2;
+  color: var(--text-muted);
+}
+
+.isToday {
+  background: rgba(14, 165, 233, 0.15) !important;
+  color: var(--accent) !important;
+  font-weight: 750 !important;
+  border-color: rgba(56, 189, 248, 0.4) !important;
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.isSelected {
+  border-color: var(--accent) !important;
+  background: var(--glass-bg-hover) !important;
+  box-shadow: 0 0 12px var(--accent-glow);
+  transform: scale(1.04);
+  z-index: 6;
+}
+
+.isSunday,
+.isWeekend {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* Event Dots Container */
+.dotsContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  position: absolute;
+  bottom: 2px;
+  left: 0;
+  right: 0;
+}
+
+.dotReminder {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 4px var(--accent-glow);
+}
+
+.dotHoliday {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 4px rgba(225, 29, 72, 0.5);
+}
+
+.dotUnregisteredHoliday {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #f59e0b;
+  border: 1px solid #ef4444;
+  animation: pulse 1.5s infinite;
+  box-shadow: 0 0 5px rgba(245, 158, 11, 0.6);
+}
+
+.dotPayroll {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 5px rgba(251, 191, 36, 0.6);
+}
+
+.dotMilestone {
+  width: 3.5px;
+  height: 3.5px;
+  border-radius: 50%;
+  background: #a855f7;
+  box-shadow: 0 0 4px rgba(168, 85, 247, 0.5);
+}
+
+/* Selected Date Agenda Details */
+.agendaBox {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.agendaHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+  margin-bottom: 1px;
+}
+
+.agendaDateTitle {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.agendaItemsList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 85px;
+  overflow-y: auto;
+}
+
+.agendaItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 7px;
+  border-radius: 4px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  font-size: 10.5px;
+  transition: all 0.15s ease;
+}
+
+.agendaItem:hover {
+  background: var(--bg-secondary);
+  border-color: var(--glass-border-hover);
+}
+
+.quickAddBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--text-secondary);
+  font-size: 10.5px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: all var(--transition);
+  margin-top: 2px;
+}
+
+.quickAddBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(14, 165, 233, 0.06);
+}
+
+/* Legend */
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 9.5px;
+  color: var(--text-muted);
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}

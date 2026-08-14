@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbConnection } from '@/lib/db';
 import { getRelevantMemory, recordSuccessPattern } from '@/lib/ai-memory';
-import { loadAssistantData, AIAssistantData, addReminder, addNote } from '@/lib/ai-assistant';
+import { loadAssistantData, AIAssistantData, addReminder, addNote, addMilestone } from '@/lib/ai-assistant';
 
 function getAIConfig() {
   return {
@@ -134,12 +134,6 @@ Berikut adalah daftar halaman yang tersedia di aplikasi HRIS ini. Jika pertanyaa
   Kapan diarahkan: user ingin laporan absensi bulanan, rekap per periode.
 - /cuti → Pengajuan dan monitoring cuti karyawan. Sisa cuti, histori cuti, approval.
   Kapan diarahkan: user bertanya soal cuti, sisa cuti, pengajuan cuti.
-- /lembur → Rekap lembur mingguan. Analysis OT per karyawan, breakdown per hari.
-  Kapan diarahkan: user ingin lihat jam lembur mingguan, analisis OT visual.
-- /lembur/all-in → Input nominal lembur karyawan kategori All-In (tunjangan flat).
-  Kapan diarahkan: user ingin input/lihat data lembur all-in.
-- /lembur/spl → Surat Perintah Lembur (SPL) harian per Line/Seksi produksi.
-  Kapan diarahkan: user ingin lihat/input SPL.
 - /pengaturan → Pengaturan umum aplikasi (bahasa, tema, profil).
 - /pengaturan/hari-libur → Master data hari libur nasional dan perusahaan.
   Kapan diarahkan: user bertanya kapan libur, tanggal merah.
@@ -354,7 +348,9 @@ async function getContextAndSuggestions(): Promise<{ context: string; suggestion
   const now = new Date();
   const localDate = new Date(now.getTime() + (7 * 60 * 60 * 1000)); // WIB (UTC+7)
   const today = localDate.toISOString().slice(0, 10);
-  const hour = localDate.getUTCHours();
+  const hour = String(localDate.getUTCHours()).padStart(2, '0');
+  const minute = String(localDate.getUTCMinutes()).padStart(2, '0');
+  const timeStr = `${hour}:${minute}`;
   const day = localDate.getUTCDay();
   const monthStart = `${localDate.getUTCFullYear()}-${String(localDate.getUTCMonth() + 1).padStart(2, '0')}-01`;
 
@@ -379,12 +375,13 @@ async function getContextAndSuggestions(): Promise<{ context: string; suggestion
     const activePria = row.active_pria || 510;
     const activeWanita = row.active_wanita || 1456;
 
-    const context = `[RAG STATISTIK AKTIF REAL-TIME]:\n- Tanggal & Jam Sistem: ${today}, pukul ${hour}:00 WIB\n- Total Karyawan Aktif Sebenarnya (Act_NonAct=1 AND DT_RSG IS NULL): ${activeEmp} orang\n- Komposisi Status Kerja: Kontrak = ${activeKontrak} orang, Tetap = ${activeTetap} orang, Training = 1 orang\n- Komposisi Gender: Laki-laki = ${activePria} orang, Perempuan = ${activeWanita} orang\n- Absensi Hari Ini: Alpha = ${alphaToday} orang\n- Record Lembur Bulan Ini: ${otMonth} data lembur`;
+    const context = `[RAG STATISTIK AKTIF REAL-TIME]:\n- Tanggal & Jam Sistem: ${today}, pukul ${timeStr} WIB\n- Total Karyawan Aktif Sebenarnya (Act_NonAct=1 AND DT_RSG IS NULL): ${activeEmp} orang\n- Komposisi Status Kerja: Kontrak = ${activeKontrak} orang, Tetap = ${activeTetap} orang, Training = 1 orang\n- Komposisi Gender: Laki-laki = ${activePria} orang, Perempuan = ${activeWanita} orang\n- Absensi Hari Ini: Alpha = ${alphaToday} orang\n- Record Lembur Bulan Ini: ${otMonth} data lembur`;
 
     const suggestions: string[] = [];
-    if (hour < 11) {
+    const hourNum = localDate.getUTCHours();
+    if (hourNum < 11) {
       suggestions.push('Berapa total karyawan aktif saat ini?', 'Berapa jumlah karyawan tetap vs kontrak?');
-    } else if (hour < 16) {
+    } else if (hourNum < 16) {
       suggestions.push('Daftar karyawan terlambat hari ini', 'Rekap kehadiran per bagian hari ini');
     } else {
       suggestions.push('Rekap lembur hari ini', 'Top 5 karyawan dengan jam lembur terbanyak bulan ini');
@@ -1179,11 +1176,12 @@ export async function POST(request: NextRequest) {
     let sql = extractSQL(aiContent);
     const nikMatch = message.match(/\b(\d{6,10})\b/);
     
-    // Parse Reminders and Notes (using [\s\S]*? to handle newlines)
+    // Parse Reminders, Notes, and Milestones (using [\s\S]*? to handle newlines)
     const reminderMatch = aiContent.match(/<REMINDER>([\s\S]*?)<\/?REMINDER>/i);
     const noteMatch = aiContent.match(/<NOTE>([\s\S]*?)<\/?NOTE>/i);
+    const milestoneMatch = aiContent.match(/<MILESTONE>([\s\S]*?)<\/?MILESTONE>/i);
     
-    if (reminderMatch || noteMatch) {
+    if (reminderMatch || noteMatch || milestoneMatch) {
       if (reminderMatch) {
         const parts = reminderMatch[1].split('|');
         const title = parts[0].replace(/\\n/g, ' ').trim();
@@ -1199,6 +1197,17 @@ export async function POST(request: NextRequest) {
         if (content) {
           addNote(content);
           aiContent = aiContent.replace(noteMatch[0], '').trim();
+        }
+      }
+
+      if (milestoneMatch) {
+        const parts = milestoneMatch[1].split('|');
+        const title = parts[0].replace(/\\n/g, ' ').trim();
+        const date = parts[1] ? parts[1].trim() : new Date().toISOString().split('T')[0];
+        const category = (parts[2] ? parts[2].trim().toLowerCase() : 'general') as any;
+        if (title) {
+          addMilestone(title, date, category, 'chat');
+          aiContent = aiContent.replace(milestoneMatch[0], '').trim();
         }
       }
     }

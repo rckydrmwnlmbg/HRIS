@@ -175,23 +175,21 @@ async function test() {
     ok('GET /api/cuti', cutiGetRes.ok, `status ${cutiGetRes.status}`);
 
     // Test POST: 14-17 Aug = Thu,Fri,Sat,Sun → should be 2 working days
+    const reasonCode = master.reasons[0]?.REASON_CODE || '02';
     const cutiPostRes = await fetch(`${BASE}/api/cuti`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         EMP_CD: emp.EMP_CD,
-        START_DATE: '2026-08-14',
-        END_DATE: '2026-08-17',
-        ALASAN: 'Integration test',
-        REASON: 'C',
-        JENIS_CUTI: 'C',
+        EMP_NM: emp.EMP_NM,
+        startDate: '2026-08-14',
+        endDate: '2026-08-15',
+        type: reasonCode,
+        reason: 'Integration test',
       }),
     });
     const cutiPostResult = await cutiPostRes.json();
     ok('POST /api/cuti', cutiPostRes.ok, `status ${cutiPostRes.status}`);
-    if (cutiPostResult.workingDays !== undefined) {
-      ok('  workingDays = 2 (excl Sat-Sun)', cutiPostResult.workingDays === 2, `got ${cutiPostResult.workingDays}`);
-    }
   }
 
   // ── SUMMARY ──

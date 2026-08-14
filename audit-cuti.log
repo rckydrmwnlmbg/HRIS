@@ -6,3 +6,7 @@
 {"ts":"2026-08-09T10:40:21.542Z","action":"CUTI_CREATE","empCd":"26066995","empNm":"WIDYA ETIKA","reasonCode":"18","startDate":"2026-08-14","endDate":"2026-08-17","days":2,"dates":["2026-08-14","2026-08-15","2026-08-16","2026-08-17"]}
 {"ts":"2026-08-09T11:46:32.452Z","action":"CUTI_DELETE","empCd":"26066995","startDate":"2026-07-21","endDate":"2026-07-21"}
 {"ts":"2026-08-09T11:47:35.934Z","action":"CUTI_DELETE","empCd":"26066995","startDate":"2026-08-14","endDate":"2026-08-14"}
+{"ts":"2026-08-14T12:26:11.137Z","action":"CUTI_DELETE","empCd":"26066995","startDate":"2026-07-21","endDate":"2026-07-21"}
+{"ts":"2026-08-14T12:27:42.352Z","action":"CUTI_CREATE","empCd":"26066995","empNm":"WIDYA ETIKA","reasonCode":"18","startDate":"2026-08-18","endDate":"2026-08-20","days":3,"dates":["2026-08-18","2026-08-19","2026-08-20"]}
+{"ts":"2026-08-14T12:27:57.860Z","action":"CUTI_CREATE","empCd":"26066995","empNm":"WIDYA ETIKA","reasonCode":"18","startDate":"2026-08-12","endDate":"2026-08-12","days":1,"dates":["2026-08-12"]}
+{"ts":"2026-08-14T12:28:29.207Z","action":"CUTI_CREATE","empCd":"26046679","empNm":"A FARUK","reasonCode":"01","startDate":"2026-08-14","endDate":"2026-08-15","days":1,"dates":["2026-08-14","2026-08-15"]}

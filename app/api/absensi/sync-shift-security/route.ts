@@ -131,18 +131,42 @@ export async function POST(request: Request) {
     await withTransaction(async (tx) => {
       for (const m of mismatches) {
         await tx(`
+          DECLARE @targetJamMasuk DATETIME = (
+            SELECT TOP 1 CAST(@dateTrans + ' ' + CONVERT(varchar(8), WORK_IN, 108) AS DATETIME)
+            FROM msSHIFT
+            WHERE RTRIM(shift_CODE) = RTRIM(@detectedShift)
+          );
+
+          DECLARE @targetJamPulang DATETIME = (
+            SELECT TOP 1 
+              CASE 
+                WHEN CONVERT(varchar(8), WORK_OUT, 108) < CONVERT(varchar(8), WORK_IN, 108) 
+                THEN CAST(CONVERT(varchar(10), DATEADD(day, 1, CONVERT(date, @dateTrans)), 120) + ' ' + CONVERT(varchar(8), WORK_OUT, 108) AS DATETIME)
+                ELSE CAST(@dateTrans + ' ' + CONVERT(varchar(8), WORK_OUT, 108) AS DATETIME)
+              END
+            FROM msSHIFT
+            WHERE RTRIM(shift_CODE) = RTRIM(@detectedShift)
+          );
+
           UPDATE TR_ABSEN
           SET 
             SHIFT = @detectedShift,
             STATUS_HARI = @statusHari,
             JAM_KERJA = @jamKerja,
+            JAM_MASUK = ISNULL(@targetJamMasuk, JAM_MASUK),
+            JAM_PULANG = ISNULL(@targetJamPulang, JAM_PULANG),
+            Time_Late = CASE 
+              WHEN WORK_IN IS NOT NULL AND @targetJamMasuk IS NOT NULL
+              THEN CAST(DATEDIFF(MINUTE, @targetJamMasuk, WORK_IN) AS FLOAT)
+              ELSE ISNULL(Time_Late, 0.0)
+            END,
             OT_1 = @ot1,
             OT_2 = @ot2,
             OT_3 = @ot3,
             OT_4 = @ot4,
             T_OT = @tOt
           WHERE RTRIM(EMP_CD) = @empCd
-            AND CONVERT(varchar(10), DATE_TRANS, 120) = @dateTrans
+            AND CONVERT(varchar(10), DATE_TRANS, 120) = @dateTrans;
         `, {
           detectedShift: m.detected_shift,
           statusHari: m.calcResult.STATUS_HARI,

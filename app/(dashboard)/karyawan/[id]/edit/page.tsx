@@ -2,6 +2,7 @@
 import { useState, use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/lib/context';
+import { useToast } from '@/components/ui/ToastProvider';
 import { t } from '@/lib/i18n';
 import type { Karyawan, Department, Seksi, Jabatan, Divisi, JenisKaryawan } from '@/types';
 import { ArrowLeft, Save, CheckCircle, Loader2, Briefcase, User, Landmark } from 'lucide-react';
@@ -11,12 +12,12 @@ export default function KaryawanEditPage({ params }: { params: Promise<{ id: str
   const { id } = use(params);
   const router = useRouter();
   const { settings } = useApp();
+  const { showToast } = useToast();
   const lang = settings.language;
 
   const [form, setForm] = useState<Partial<Karyawan>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [activeTab, setActiveTab] = useState<'pekerjaan' | 'pribadi' | 'bank'>('pekerjaan');
   const [error, setError] = useState<string | null>(null);
 
@@ -95,16 +96,17 @@ export default function KaryawanEditPage({ params }: { params: Promise<{ id: str
         body: JSON.stringify(form)
       });
       if (res.ok) {
-        setSaved(true);
+        showToast(lang === 'id' ? 'Data berhasil disimpan!' : 'Data successfully saved!', 'success');
         setTimeout(() => {
-          setSaved(false);
           router.push(`/karyawan/${id}`);
-        }, 1500);
+        }, 1200);
       } else {
-        alert(lang === 'id' ? 'Gagal menyimpan data' : 'Failed to save data');
+        const err = await res.json();
+        showToast((lang === 'id' ? 'Gagal menyimpan: ' : 'Failed to save: ') + (err.error || (lang === 'id' ? 'Terjadi kendala' : 'An error occurred')), 'warning');
       }
     } catch (err) {
       console.error(err);
+      showToast(lang === 'id' ? 'Terjadi kesalahan sistem' : 'A system error occurred', 'error');
     }
     setSaving(false);
   };
@@ -313,14 +315,6 @@ export default function KaryawanEditPage({ params }: { params: Promise<{ id: str
           )}
         </form>
       </div>
-
-      {saved && (
-        <div className="toast-container">
-          <div className="toast toast-success">
-            <CheckCircle size={16} /> {lang === 'id' ? 'Data berhasil disimpan!' : 'Data successfully saved!'}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

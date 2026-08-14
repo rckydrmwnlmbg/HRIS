@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "last_updated": "2026-08-07T17:02:08.225Z",
+  "last_updated": "2026-08-13T15:39:46.755Z",
   "glossary": [
     {
       "term": "anak gudang",
@@ -66,6 +66,22 @@
       "last_used": "2026-08-06"
     },
     {
+      "id": "pat-1786036654541",
+      "keywords": [
+        "ingin",
+        "laporan",
+        "absensi",
+        "bulan",
+        "juni"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Aku ingin laporan Absensi Bulan Juni untuk karyawan Widya Et\"",
+      "sql_snippet": "SELECT CONVERT(varchar(10), a.DATE_TRANS, 120) AS TANGGAL, RTRIM(a.STATUS_HARI) AS STATUS_HARI, CONVERT(varchar(5), a.WORK_IN, 108) AS JAM_MASUK, CONV",
+      "usage_count": 4,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
       "id": "pat-1786028819943",
       "keywords": [
         "berapa",
@@ -80,6 +96,36 @@
       "likes": 8,
       "dislikes": 7,
       "last_used": "2026-08-06"
+    },
+    {
+      "id": "pat-1786120355291",
+      "keywords": [
+        "siapa",
+        "saja",
+        "yang",
+        "sudah",
+        "hadir"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Siapa saja yang sudah hadir hari ini?\"",
+      "sql_snippet": "SELECT COUNT(DISTINCT RTRIM(a.EMP_CD)) AS TOTAL_HADIR FROM TR_ABSEN a JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD) WHERE a.DATE_TRANS = CAST(",
+      "usage_count": 2,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786120591352",
+      "keywords": [
+        "tampilkan",
+        "analysis",
+        "minggu"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"Tampilkan analysis OT minggu ini\"",
+      "sql_snippet": "SELECT CONVERT(varchar(10), a.DATE_TRANS, 120) AS TANGGAL, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(j.JOB_D",
+      "usage_count": 2,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-07"
     },
     {
       "id": "pat-1786028957138",
@@ -240,22 +286,6 @@
       "likes": 1,
       "dislikes": 0,
       "last_used": "2026-08-06"
-    },
-    {
-      "id": "pat-1786036654541",
-      "keywords": [
-        "ingin",
-        "laporan",
-        "absensi",
-        "bulan",
-        "juni"
-      ],
-      "intent": "Pola kueri sukses untuk permintaan \"Aku ingin laporan Absensi Bulan Juni untuk karyawan Widya Et\"",
-      "sql_snippet": "SELECT CONVERT(varchar(10), a.DATE_TRANS, 120) AS TANGGAL, RTRIM(a.STATUS_HARI) AS STATUS_HARI, CONVERT(varchar(5), a.WORK_IN, 108) AS JAM_MASUK, CONV",
-      "usage_count": 4,
-      "likes": 1,
-      "dislikes": 0,
-      "last_used": "2026-08-07"
     },
     {
       "id": "pat-1786037431795",
@@ -638,22 +668,6 @@
       "last_used": "2026-08-07"
     },
     {
-      "id": "pat-1786120355291",
-      "keywords": [
-        "siapa",
-        "saja",
-        "yang",
-        "sudah",
-        "hadir"
-      ],
-      "intent": "Pola kueri sukses untuk permintaan \"Siapa saja yang sudah hadir hari ini?\"",
-      "sql_snippet": "SELECT COUNT(DISTINCT RTRIM(a.EMP_CD)) AS TOTAL_HADIR FROM TR_ABSEN a JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD) WHERE a.DATE_TRANS = CAST(",
-      "usage_count": 2,
-      "likes": 1,
-      "dislikes": 0,
-      "last_used": "2026-08-07"
-    },
-    {
       "id": "pat-1786120536535",
       "keywords": [
         "berapa",
@@ -665,20 +679,6 @@
       "intent": "Pola kueri sukses untuk permintaan \"Berapa total lembur resmi bulan ini berdasarkan OT1 sampai O\"",
       "sql_snippet": "SELECT SUM(ISNULL(a.OT_1, 0)) AS TOTAL_OT_1, SUM(ISNULL(a.OT_2, 0)) AS TOTAL_OT_2, SUM(ISNULL(a.OT_3, 0)) AS TOTAL_OT_3, SUM(ISNULL(a.OT_4, 0)) AS TOT",
       "usage_count": 1,
-      "likes": 1,
-      "dislikes": 0,
-      "last_used": "2026-08-07"
-    },
-    {
-      "id": "pat-1786120591352",
-      "keywords": [
-        "tampilkan",
-        "analysis",
-        "minggu"
-      ],
-      "intent": "Pola kueri sukses untuk permintaan \"Tampilkan analysis OT minggu ini\"",
-      "sql_snippet": "SELECT CONVERT(varchar(10), a.DATE_TRANS, 120) AS TANGGAL, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(j.JOB_D",
-      "usage_count": 2,
       "likes": 1,
       "dislikes": 0,
       "last_used": "2026-08-07"
@@ -809,6 +809,22 @@
       "likes": 1,
       "dislikes": 0,
       "last_used": "2026-08-07"
+    },
+    {
+      "id": "pat-1786634354192",
+      "keywords": [
+        "siapa",
+        "yang",
+        "mempunyai",
+        "gaji",
+        "tertinggi"
+      ],
+      "intent": "Pola kueri sukses untuk permintaan \"siapa yang mempunyai gaji tertinggi di sini ?\"",
+      "sql_snippet": "SELECT TOP 5 RTRIM(e.EMP_CD) AS NIK, RTRIM(e.EMP_NM) AS NAMA, RTRIM(s.SEC_DESC) AS BAGIAN, RTRIM(j.JOB_DESC) AS JABATAN, e.BS_SLR AS GAJI_POKOK, ISNUL",
+      "usage_count": 1,
+      "likes": 1,
+      "dislikes": 0,
+      "last_used": "2026-08-13"
     }
   ],
   "user_corrections": [

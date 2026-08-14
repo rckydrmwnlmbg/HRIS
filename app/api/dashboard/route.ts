@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getCache, setCache } from '@/lib/cache';
+import { TEAM_NAME_CASE } from '@/lib/queries';
 
 // GET /api/dashboard — Fetch dashboard statistics
 export async function GET() {
@@ -58,7 +59,8 @@ export async function GET() {
         RTRIM(s.SEC_DESC) as SEC_DESC, 
         RTRIM(e.SEC_CD) as SEC_CD,
         RTRIM(s.SEC_DESC) as BAGIAN,
-        CASE WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING' ELSE RTRIM(d.DEP_DESC) END AS TEAM,
+        ${TEAM_NAME_CASE} AS TEAM_NAME,
+        RTRIM(d.DEP_DESC) as DEPARTEMEN,
         RTRIM(a.STATUS_HARI) as STATUS_HARI, 
         RTRIM(a.REASON) as REASON, 
         a.WORK_IN, a.WORK_IN1, a.WORK_OUT, a.WORK_OUT1,
@@ -157,7 +159,7 @@ export async function GET() {
               SEC_DESC: row.SEC_DESC,
               SEC_CD: row.SEC_CD,
               BAGIAN: row.BAGIAN,
-              TEAM: row.TEAM,
+              TEAM: row.TEAM_NAME,
               WORK_IN: null,
               WORK_OUT: null,
               keterangan_kosong: 'Belum Ada Data Presensi'
@@ -179,7 +181,7 @@ export async function GET() {
           SEC_DESC: row.SEC_DESC,
           SEC_CD: row.SEC_CD,
           BAGIAN: row.BAGIAN,
-          TEAM: row.TEAM,
+          TEAM: row.TEAM_NAME,
           WORK_IN: null,
           WORK_OUT: outStr,
           keterangan_kosong: 'Lupa Tap Masuk'
@@ -197,7 +199,7 @@ export async function GET() {
             SEC_DESC: row.SEC_DESC,
             SEC_CD: row.SEC_CD,
             BAGIAN: row.BAGIAN,
-            TEAM: row.TEAM,
+            TEAM: row.TEAM_NAME,
             WORK_IN: inStr,
             WORK_OUT: null,
             keterangan_kosong: 'Lupa Tap Pulang'
@@ -228,7 +230,7 @@ export async function GET() {
               SEC_DESC: row.SEC_DESC,
               SEC_CD: row.SEC_CD,
               BAGIAN: row.BAGIAN,
-              TEAM: row.TEAM,
+              TEAM: row.TEAM_NAME,
               WORK_IN: inStr,
               WORK_OUT: outStr,
               keterangan_kosong: 'Double Tap (Data Tidak Valid)'
