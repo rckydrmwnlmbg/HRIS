@@ -52,7 +52,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
 
   const updatePillPosition = useCallback(() => {
     if (!navRef.current) return;
-    const activeEl = navRef.current.querySelector('.' + styles.subItemActive) || navRef.current.querySelector('.' + styles.navItemActive);
+    const activeEl = navRef.current.querySelector('.' + styles.navItemActive);
     
     if (activeEl) {
       const elRect = (activeEl as HTMLElement).getBoundingClientRect();
