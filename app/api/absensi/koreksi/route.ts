@@ -132,6 +132,7 @@ export async function POST(request: Request) {
         STATUS_HARI = @statusHari,
         REASON = @reason,
         SHIFT = @targetShift,
+        FLAG_ABSEN = ISNULL(FLAG_ABSEN, 'M'),
         JAM_MASUK = ISNULL(@targetJamMasuk, JAM_MASUK),
         JAM_PULANG = ISNULL(@targetJamPulang, JAM_PULANG),
         Time_Late = CASE 

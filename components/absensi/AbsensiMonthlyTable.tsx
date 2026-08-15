@@ -183,10 +183,17 @@ export function AbsensiMonthlyTable({
               const safeShifts = Array.isArray(masterShifts) ? masterShifts : [];
               const safeReasons = Array.isArray(masterReasons) ? masterReasons : [];
 
+              const isHoliday = currentStatus === 'LIBUR' || (!disp.corrected_status && (r.STATUS_HARI === 'L' || r.STATUS_HARI === 'LIBUR'));
+
               return (
                 <tr
                   key={r.DATE_TRANS}
-                  className={isDraft ? 'row-warning' : (hasCorrection && corrStatus === 'applied' ? 'row-success' : '')}
+                  className={isDraft ? 'row-warning' : (hasCorrection && corrStatus === 'applied' ? 'row-success' : (isHoliday ? 'row-holiday' : ''))}
+                  style={{
+                    backgroundColor: isHoliday ? 'rgba(239, 68, 68, 0.05)' : undefined,
+                    borderLeft: isHoliday ? '3.5px solid #ef4444' : undefined,
+                    transition: 'background-color 0.15s ease'
+                  }}
                 >
                   <td>
                     <select
@@ -290,11 +297,19 @@ export function AbsensiMonthlyTable({
                       className="form-select form-select-sm"
                       value={currentStatus}
                       onChange={e => handleInlineChange('status', e.target.value)}
-                      style={{ width: '100%', fontSize: '11px', padding: '3px 6px' }}
+                      style={{
+                        width: '100%',
+                        fontSize: '11px',
+                        padding: '3px 6px',
+                        backgroundColor: isHoliday ? 'rgba(239, 68, 68, 0.14)' : undefined,
+                        color: isHoliday ? '#ef4444' : 'var(--text-primary)',
+                        borderColor: isHoliday ? 'rgba(239, 68, 68, 0.45)' : undefined,
+                        fontWeight: isHoliday ? 750 : 600
+                      }}
                     >
-                      <option value="KERJA">KERJA</option>
-                      <option value="LIBUR">LIBUR</option>
-                      <option value="O">OFF (O)</option>
+                      <option value="KERJA" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-secondary)' }}>KERJA</option>
+                      <option value="LIBUR" style={{ color: '#ef4444', backgroundColor: 'var(--bg-secondary)', fontWeight: 700 }}>LIBUR</option>
+                      <option value="O" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-secondary)' }}>OFF (O)</option>
                     </select>
                   </td>
                   <td style={{ textAlign: 'center', fontSize: '12px', fontWeight: 600, color: (r.OT1 || 0) > 0 ? 'var(--warning)' : 'var(--text-muted)' }}>

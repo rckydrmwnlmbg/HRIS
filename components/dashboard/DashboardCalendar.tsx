@@ -460,6 +460,9 @@ export default function DashboardCalendar() {
           const isPayroll = dateStr === payrollDateStr;
           const hasMilestone = milestones.some(m => m.date === dateStr);
 
+          // Semua hari libur (Sabtu, Minggu, terdaftar DB, maupun libur nasional) diberi teks warna MERAH
+          const isHolidayDate = isWeekend || isRegisteredHoliday || isNationalHoliday;
+
           return (
             <div
               key={dateStr}
@@ -468,17 +471,16 @@ export default function DashboardCalendar() {
                 ${!isCurrentMonth ? styles.otherMonth : ''} 
                 ${isToday ? styles.isToday : ''} 
                 ${isSelected ? styles.isSelected : ''}
-                ${isWeekend && isCurrentMonth ? styles.isWeekend : ''}
+                ${isHolidayDate && isCurrentMonth ? styles.isWeekend : ''}
               `}
               onClick={() => setSelectedDate(dateStr)}
             >
-              <span>{dayNum}</span>
+              <span className={isHolidayDate ? styles.holidayText : ''}>{dayNum}</span>
 
               {/* Dots Container */}
               <div className={styles.dotsContainer}>
                 {isPayroll && <div className={styles.dotPayroll} title="Jadwal Penggajian / Payroll" />}
-                {isRegisteredHoliday && <div className={styles.dotHoliday} title="Hari Libur Resmi Terdaftar" />}
-                {isUnregisteredNational && <div className={styles.dotUnregisteredHoliday} title="Libur Nasional (Belum Sync DB)" />}
+                {isUnregisteredNational && <div className={styles.dotHoliday} title="Libur Nasional (Belum Masuk Database)" />}
                 {hasReminder && <div className={styles.dotReminder} title="Ada Pengingat / Tugas AI" />}
                 {hasMilestone && <div className={styles.dotMilestone} title="Milestone HR" />}
               </div>
@@ -578,24 +580,20 @@ export default function DashboardCalendar() {
             <div key={r.id} className={styles.agendaItem}>
               <button
                 style={{
-                  width: '14px',
-                  height: '14px',
-                  borderRadius: '50%',
-                  border: '1.5px solid var(--accent)',
-                  background: 'transparent',
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--accent)',
                   cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
                   padding: 0,
-                  flexShrink: 0
+                  display: 'flex',
+                  alignItems: 'center'
                 }}
                 onClick={() => handleMarkReminderDone(r.id)}
                 title="Tandai Selesai"
               >
-                <Check size={9} color="var(--accent)" style={{ opacity: 0 }} />
+                <Check size={12} />
               </button>
-              <span style={{ flex: 1, color: 'var(--text-primary)', fontSize: '10.5px' }}>
+              <span style={{ flex: 1, color: 'var(--text-primary)', fontSize: '10.5px', textDecoration: r.status === 'done' ? 'line-through' : 'none' }}>
                 {r.title}
               </span>
             </div>
@@ -628,7 +626,7 @@ export default function DashboardCalendar() {
         </div>
         <div className={styles.legendItem}>
           <div className={styles.dotHoliday} />
-          <span>Libur Resmi</span>
+          <span>Libur Belum di DB</span>
         </div>
         <div className={styles.legendItem}>
           <div className={styles.dotReminder} />

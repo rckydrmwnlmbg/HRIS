@@ -9,6 +9,7 @@ import { DataTable } from '@/components/ui/DataTable';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { AbsensiFilterBar } from '@/components/absensi/AbsensiFilterBar';
 import { AbsensiRekapCards } from '@/components/absensi/AbsensiRekapCards';
+import { AbsensiWeeklyComplianceCard } from '@/components/absensi/AbsensiWeeklyComplianceCard';
 import { AbsensiMonthlyTable } from '@/components/absensi/AbsensiMonthlyTable';
 import { AbsensiSyncModal } from '@/components/absensi/AbsensiSyncModal';
 import { AbsensiShiftModal } from '@/components/absensi/AbsensiShiftModal';
@@ -374,6 +375,10 @@ function AbsensiContent() {
             rekap={rekap}
             records={records}
             masterReasons={masterReasons}
+            lang={lang}
+          />
+          <AbsensiWeeklyComplianceCard
+            records={records}
             lang={lang}
           />
           <AbsensiMonthlyTable

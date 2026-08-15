@@ -15,26 +15,27 @@
   --bg-subtle: #edf2f7;
 
   /* Liquid Glass Variables */
-  --glass-bg: rgba(255, 255, 255, 0.42);
-  --glass-bg-hover: rgba(255, 255, 255, 0.58);
-  --glass-bg-sidebar: rgba(255, 255, 255, 0.65);
-  --glass-bg-modal: rgba(255, 255, 255, 0.94);
-  --glass-border: rgba(255, 255, 255, 0.65);
-  --glass-border-hover: rgba(255, 255, 255, 0.85);
-  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.70);
-  --glass-edge-light: rgba(255, 255, 255, 0.90);
+  --glass-bg: rgba(255, 255, 255, 0.19);
+  --glass-bg-hover: rgba(255, 255, 255, 0.32);
+  --glass-bg-sidebar: rgba(255, 255, 255, 0.22);
+  --glass-bg-modal: rgba(255, 255, 255, 0.35);
+  --glass-border: rgba(255, 255, 255, 0.30);
+  --glass-border-hover: rgba(255, 255, 255, 0.55);
+  --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.50);
+  --glass-edge-light: rgba(255, 255, 255, 0.80);
   --glass-edge-dark: rgba(0, 0, 0, 0.04);
   --glass-shadow:
-    0 10px 32px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.15);
-  --glass-top-light: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
-  --glass-left-light: linear-gradient(180deg, rgba(255, 255, 255, 0.9), transparent, rgba(255, 255, 255, 0.4));
+    0 8px 32px rgba(0, 0, 0, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0px 0px rgba(255, 255, 255, 0);
+  --glass-top-light: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8), transparent);
+  --glass-left-light: linear-gradient(180deg, rgba(255, 255, 255, 0.8), transparent, rgba(255, 255, 255, 0.3));
 
   /* Legacy aliases */
-  --bg-card: rgba(255, 255, 255, 0.42);
-  --bg-card-hover: rgba(255, 255, 255, 0.58);
-  --border-color: rgba(255, 255, 255, 0.65);
+  --bg-card: rgba(255, 255, 255, 0.19);
+  --bg-card-hover: rgba(255, 255, 255, 0.32);
+  --border-color: rgba(255, 255, 255, 0.30);
 
   /* Input */
   --bg-input: #ffffff;
@@ -207,9 +208,7 @@ body {
   padding: 0;
   overflow-x: hidden;
   background-color: #0b1329;
-  background-image:
-    linear-gradient(rgba(240, 246, 255, 0.42), rgba(240, 246, 255, 0.42)),
-    url('/bg-glass-cyan.webp');
+  background-image: url('/bg-glass-cyan.webp');
   background-size: cover;
   background-position: center center;
   background-attachment: fixed;
@@ -231,7 +230,7 @@ body {
 [data-theme="dark"] body {
   background-color: #060b18;
   background-image:
-    linear-gradient(rgba(6, 12, 26, 0.78), rgba(6, 12, 26, 0.78)),
+    linear-gradient(rgba(6, 12, 26, 0.60), rgba(6, 12, 26, 0.60)),
     url('/bg-glass-cyan.webp');
   background-size: cover;
   background-position: center center;
@@ -441,17 +440,18 @@ a:hover {
 .glass-card,
 .glass-panel {
   background: var(--glass-bg);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-radius: 20px;
   border: 1px solid var(--glass-border);
-  box-shadow:
-    0 10px 32px rgba(0, 0, 0, 0.08),
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.15);
-  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition), background var(--transition);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 0 0px 0px rgba(255, 255, 255, 0);
   position: relative;
   overflow: hidden;
+  transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition), background var(--transition);
   transform: translateZ(0);
   will-change: backdrop-filter, transform;
 }
@@ -465,10 +465,12 @@ a:hover {
   left: 0;
   right: 0;
   height: 1px;
-  background: linear-gradient(90deg,
-      transparent,
-      rgba(255, 255, 255, 0.8),
-      transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.8),
+    transparent
+  );
   pointer-events: none;
   z-index: 1;
 }
@@ -482,10 +484,12 @@ a:hover {
   left: 0;
   width: 1px;
   height: 100%;
-  background: linear-gradient(180deg,
-      rgba(255, 255, 255, 0.8),
-      transparent,
-      rgba(255, 255, 255, 0.3));
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.8),
+    transparent,
+    rgba(255, 255, 255, 0.3)
+  );
   pointer-events: none;
   z-index: 1;
 }
@@ -864,6 +868,63 @@ a:hover {
 
 .row-success {
   background: rgba(5, 150, 105, 0.05) !important;
+}
+
+/* ===== HOLIDAY ROW HIGHLIGHTING (DISTINCT ROSE / CORAL TINT) ===== */
+.data-table tbody tr.row-holiday {
+  background-color: rgba(254, 226, 226, 0.50) !important;
+}
+
+.data-table tbody tr.row-holiday td {
+  background-color: rgba(254, 226, 226, 0.50) !important;
+  border-bottom-color: rgba(244, 63, 94, 0.25) !important;
+}
+
+.data-table tbody tr.row-holiday td:first-child {
+  background-color: rgba(254, 226, 226, 0.65) !important;
+  border-left: 4px solid #ef4444 !important;
+}
+
+.data-table tbody tr.row-holiday td:last-child {
+  background-color: rgba(254, 226, 226, 0.65) !important;
+}
+
+.data-table tbody tr.row-holiday:hover td {
+  background-color: rgba(254, 202, 202, 0.65) !important;
+}
+
+.data-table tbody tr.row-holiday .form-input,
+.data-table tbody tr.row-holiday .form-select {
+  background-color: rgba(255, 241, 242, 0.92) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+
+[data-theme="dark"] .data-table tbody tr.row-holiday {
+  background-color: rgba(127, 29, 29, 0.28) !important;
+}
+
+[data-theme="dark"] .data-table tbody tr.row-holiday td {
+  background-color: rgba(127, 29, 29, 0.28) !important;
+  border-bottom-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+[data-theme="dark"] .data-table tbody tr.row-holiday td:first-child {
+  background-color: rgba(127, 29, 29, 0.40) !important;
+  border-left: 4px solid #f87171 !important;
+}
+
+[data-theme="dark"] .data-table tbody tr.row-holiday td:last-child {
+  background-color: rgba(127, 29, 29, 0.40) !important;
+}
+
+[data-theme="dark"] .data-table tbody tr.row-holiday:hover td {
+  background-color: rgba(153, 27, 27, 0.38) !important;
+}
+
+[data-theme="dark"] .data-table tbody tr.row-holiday .form-input,
+[data-theme="dark"] .data-table tbody tr.row-holiday .form-select {
+  background-color: rgba(69, 10, 10, 0.65) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
 }
 
 /* ===== SOFT PILL GLOW BADGES ===== */

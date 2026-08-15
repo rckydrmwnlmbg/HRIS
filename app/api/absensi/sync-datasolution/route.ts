@@ -172,22 +172,14 @@ export async function POST(request: Request) {
 
             sendEvent('progress', { message: 'Menjalankan integrasi data presensi...', progress: 48 });
 
-            // 3. Set-Based UPDATE on TR_ABSEN (Non-Security, dengan Proteksi Koreksi Manual HR)
+            // 3. Set-Based UPDATE on TR_ABSEN (Non-Security, dengan Proteksi Mutlak Koreksi Manual HR)
             await tx(`
               UPDATE a
               SET 
-                a.WORK_IN = CASE 
-                              WHEN ISNULL(CONVERT(varchar(19), a.WORK_IN, 120), '') <> ISNULL(CONVERT(varchar(19), a.WORK_IN1, 120), '') 
-                              THEN a.WORK_IN 
-                              ELSE ISNULL(t.WorkIn, a.WORK_IN) 
-                            END,
-                a.WORK_OUT = CASE 
-                               WHEN ISNULL(CONVERT(varchar(19), a.WORK_OUT, 120), '') <> ISNULL(CONVERT(varchar(19), a.WORK_OUT1, 120), '') 
-                               THEN a.WORK_OUT 
-                               ELSE ISNULL(t.WorkOut, a.WORK_OUT) 
-                             END,
-                a.WORK_IN1 = ISNULL(t.WorkIn, a.WORK_IN1),
-                a.WORK_OUT1 = ISNULL(t.WorkOut, a.WORK_OUT1),
+                a.WORK_IN = t.WorkIn,
+                a.WORK_OUT = t.WorkOut,
+                a.WORK_IN1 = t.WorkIn,
+                a.WORK_OUT1 = t.WorkOut,
                 a.DATE_IN = CONVERT(date, t.WorkIn),
                 a.DATE_OUT = CONVERT(date, t.WorkOut),
                 a.JAM_KERJA = t.CalcJamKerja,
@@ -202,7 +194,12 @@ export async function POST(request: Request) {
                               END
               FROM TR_ABSEN a
               JOIN TMP_HRIS_SYNC t ON RTRIM(a.EMP_CD) = RTRIM(t.NIK) AND CONVERT(varchar(10), a.DATE_TRANS, 120) = t.Tanggal
-              WHERE (a.SEC_CD IS NULL OR RTRIM(a.SEC_CD) <> 'SEC');
+              WHERE (a.SEC_CD IS NULL OR RTRIM(a.SEC_CD) <> 'SEC')
+                -- 🛡️ PROTEKSI MUTLAK: LEWATI SEMUA BARIS KOREKSI MANUAL HR & ALASAN/CUTI/IZIN
+                AND (a.FLAG_ABSEN IS NULL OR RTRIM(a.FLAG_ABSEN) <> 'E')
+                AND (a.REASON IS NULL OR RTRIM(a.REASON) = '' OR RTRIM(a.REASON) = '-')
+                AND ISNULL(CONVERT(varchar(19), a.WORK_IN, 120), '') = ISNULL(CONVERT(varchar(19), a.WORK_IN1, 120), '')
+                AND ISNULL(CONVERT(varchar(19), a.WORK_OUT, 120), '') = ISNULL(CONVERT(varchar(19), a.WORK_OUT1, 120), '');
             `);
 
             // 4. Set-Based INSERT for Rows not yet in TR_ABSEN
@@ -246,7 +243,7 @@ export async function POST(request: Request) {
               );
             `);
 
-            // ── FASE 2: Hitung ulang lembur dengan otCalculator (Super Cepat) ──
+            // ── FASE 2: Hitung ulang lembur dengan otCalculator (Super Cepat & Akurat) ──
             sendEvent('progress', { message: 'Mengambil data presensi untuk kalkulasi lembur...', progress: 55 });
             
             const syncedAbsen = await tx<any>(`
@@ -300,7 +297,7 @@ export async function POST(request: Request) {
                 sendEvent('progress', { message: `Menghitung ulang jam lembur (${currentOt}/${otResults.length})...`, progress: pct });
               }
 
-              // Set-Based UPDATE Overtime
+              // Set-Based UPDATE Overtime langsung ke TR_ABSEN
               await tx(`
                 UPDATE a
                 SET 
