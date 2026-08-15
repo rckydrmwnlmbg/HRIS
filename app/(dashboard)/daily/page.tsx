@@ -37,12 +37,46 @@ export default function DailyAttendancePage() {
 
   const normalize = (s: string | null) => (s || '').trim().toUpperCase();
 
+  const getRecordStatus = (r: any): { key: 'hadir' | 'sakit' | 'izin' | 'cuti' | 'alpha' | 'libur'; label: string; badgeClass: string } => {
+    const statusHari = normalize(r.STATUS_HARI);
+    const rg = normalize(r.REASON_GROUP);
+    const reason = normalize(r.REASON);
+
+    if (statusHari === 'LIBUR' || statusHari === 'L') {
+      return { key: 'libur', label: lang === 'id' ? 'Hari Libur' : 'Holiday', badgeClass: 'badge-gray' };
+    }
+
+    if (rg === 'S' || ['15', '03'].includes(reason)) {
+      return { key: 'sakit', label: r.REASON_DESC || t(lang, 'sakit'), badgeClass: 'badge-sakit' };
+    }
+
+    if (rg === 'I' || ['04', '05', '06', '07'].includes(reason)) {
+      return { key: 'izin', label: r.REASON_DESC || t(lang, 'izin'), badgeClass: 'badge-izin' };
+    }
+
+    if (['C', 'H'].includes(rg) || ['18', '13', '17'].includes(reason)) {
+      return { key: 'cuti', label: r.REASON_DESC || t(lang, 'cuti'), badgeClass: 'badge-cuti' };
+    }
+
+    if (r.WORK_IN || r.WORK_OUT) {
+      return { key: 'hadir', label: t(lang, 'hadir'), badgeClass: 'badge-hadir' };
+    }
+
+    if (rg === 'A' || statusHari === 'KERJA') {
+      return { key: 'alpha', label: t(lang, 'alpha'), badgeClass: 'badge-alpha' };
+    }
+
+    return { key: 'libur', label: r.STATUS_HARI || '-', badgeClass: 'badge-gray' };
+  };
+
   const stats = {
     total: filtered.length,
-    hadir: filtered.filter(r => ['KERJA', 'O'].includes(normalize(r.STATUS_HARI))).length,
+    hadir: filtered.filter(r => getRecordStatus(r).key === 'hadir').length,
     telat: filtered.filter(r => r.Time_Late && r.Time_Late > 0).length,
-    absen: filtered.filter(r => ['ALPHA', 'A'].includes(normalize(r.STATUS_HARI))).length,
-    cuti: filtered.filter(r => ['CUTI', 'C', 'IJIN', 'I', 'SAKIT', 'S'].includes(normalize(r.STATUS_HARI))).length,
+    sakit: filtered.filter(r => getRecordStatus(r).key === 'sakit').length,
+    izin: filtered.filter(r => getRecordStatus(r).key === 'izin').length,
+    cuti: filtered.filter(r => getRecordStatus(r).key === 'cuti').length,
+    alpha: filtered.filter(r => getRecordStatus(r).key === 'alpha').length,
   };
 
   const fmtTime = (d: string | null) => {
@@ -79,8 +113,8 @@ export default function DailyAttendancePage() {
           <div className="stat-value" style={{ color: 'var(--warning)' }}>{stats.telat}</div>
         </div>
         <div className="glass-card stat-card">
-          <div className="stat-label">{lang === 'id' ? 'Tidak Hadir / Cuti' : 'Absent / Leave'}</div>
-          <div className="stat-value" style={{ color: 'var(--status-alpha)' }}>{stats.absen + stats.cuti}</div>
+          <div className="stat-label">{lang === 'id' ? 'Izin / Sakit / Cuti' : 'Permit / Sick / Leave'}</div>
+          <div className="stat-value" style={{ color: 'var(--accent)' }}>{stats.sakit + stats.izin + stats.cuti}</div>
         </div>
       </div>
 
@@ -116,7 +150,7 @@ export default function DailyAttendancePage() {
                   </td></tr>
                 ) : filtered.slice(0, 100).map((r, i) => {
                   const isLate = r.Time_Late && r.Time_Late > 0;
-                  const status = normalize(r.STATUS_HARI);
+                  const st = getRecordStatus(r);
                   return (
                     <tr key={`${r.EMP_CD}-${i}`}>
                       <td><span style={{ color: 'var(--accent-blue)', fontSize: '12px', fontWeight: 500 }}>{r.EMP_CD}</span></td>
@@ -136,12 +170,7 @@ export default function DailyAttendancePage() {
                         ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                       </td>
                       <td>
-                        {['KERJA', 'O'].includes(status) ? <span className="badge badge-hadir">{t(lang, 'hadir')}</span>
-                          : ['ALPHA', 'A'].includes(status) ? <span className="badge badge-alpha">{t(lang, 'alpha')}</span>
-                          : ['CUTI', 'C'].includes(status) ? <span className="badge badge-cuti">{t(lang, 'cuti')}</span>
-                          : ['SAKIT', 'S'].includes(status) ? <span className="badge badge-sakit">{t(lang, 'sakit')}</span>
-                          : ['IJIN', 'I'].includes(status) ? <span className="badge badge-izin">{t(lang, 'izin')}</span>
-                          : <span className="badge badge-gray">{r.STATUS_HARI}</span>}
+                        <span className={`badge ${st.badgeClass}`}>{st.label}</span>
                       </td>
                     </tr>
                   );

@@ -5,7 +5,7 @@ import { useApp } from '@/lib/context';
 import { t } from '@/lib/i18n';
 import {
   LayoutDashboard, Users, ClipboardList, Clock, BarChart3,
-  Settings, LogOut, Shield, ChevronRight, ChevronDown, Globe, Calendar, FileText, Sun, Moon
+  Settings, LogOut, Shield, ChevronRight, ChevronDown, Globe, Calendar, FileText, Sun, Moon, X
 } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import styles from './sidebar.module.css';
@@ -32,7 +32,11 @@ const navItems = [
   },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  onClose?: () => void;
+}
+
+export default function Sidebar({ onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, setUser, settings, setLanguage, setTheme } = useApp();
@@ -78,6 +82,7 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     setUser(null);
+    onClose?.();
     router.push('/login');
   };
 
@@ -86,17 +91,39 @@ export default function Sidebar() {
     setOpenMenus(prev => ({ ...prev, [href]: !prev[href] }));
   };
 
+  const handleLinkClick = () => {
+    onClose?.();
+  };
+
   return (
     <aside className={`${styles.sidebar} no-print`} role="navigation" aria-label="Main Navigation">
       {/* Brand */}
       <div className={styles.brand}>
-        <div className={styles.logo}>
-          <Shield size={20} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className={styles.logo}>
+            <Shield size={20} />
+          </div>
+          <div>
+            <div className={styles.brandName}>HRIS TMNB</div>
+            <div className={styles.brandSub}>{lang === 'id' ? 'Manajemen SDM Terintegrasi' : 'Integrated HR Management'}</div>
+          </div>
         </div>
-        <div>
-          <div className={styles.brandName}>HRIS TMNB</div>
-          <div className={styles.brandSub}>{lang === 'id' ? 'Manajemen SDM Terintegrasi' : 'Integrated HR Management'}</div>
-        </div>
+
+        {/* Mobile Close Button */}
+        {onClose && (
+          <button 
+            type="button"
+            className={styles.mobileCloseBtn} 
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onClose();
+            }}
+            aria-label="Tutup Menu"
+          >
+            <X size={18} />
+          </button>
+        )}
       </div>
 
       {/* Navigation */}
@@ -130,6 +157,7 @@ export default function Sidebar() {
                   <Link
                     href={item.href}
                     className={`${styles.navItem} ${isActive ? styles.navItemActive : ''}`}
+                    onClick={handleLinkClick}
                   >
                     <item.icon size={18} strokeWidth={isActive ? 2 : 1.5} />
                     <span>{t(lang, item.key)}</span>
@@ -147,6 +175,7 @@ export default function Sidebar() {
                           key={sub.href}
                           href={sub.href}
                           className={`${styles.subItem} ${isSubActive ? styles.subItemActive : ''}`}
+                          onClick={handleLinkClick}
                         >
                           {lang === 'id' ? sub.labelId : sub.labelEn}
                         </Link>

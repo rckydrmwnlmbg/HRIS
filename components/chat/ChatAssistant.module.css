@@ -26,16 +26,15 @@
   z-index: 149;
   width: 400px;
   max-height: 560px;
-  background: var(--glass-bg-modal);
+  background: var(--glass-bg-sidebar);
   border: 1px solid var(--glass-border);
   border-radius: 20px;
   box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.1),
-    inset 0 0 0px 0px rgba(255, 255, 255, 0);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+    0 16px 48px rgba(0, 0, 0, 0.16),
+    0 0 0 1px rgba(255, 255, 255, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(28px) saturate(200%);
+  -webkit-backdrop-filter: blur(28px) saturate(200%);
   transform: translateZ(0);
   will-change: backdrop-filter, transform;
   display: flex;

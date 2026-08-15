@@ -39,14 +39,15 @@
 
 @media (max-width: 1024px) {
   .sidebarWrapper {
-    width: 0;
+    width: min(300px, 85vw);
     position: fixed;
     left: 0;
     top: 0;
     bottom: 0;
-    z-index: 50;
+    z-index: 200;
     transform: translateX(-100%);
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+    pointer-events: none;
   }
   
   .main {
@@ -58,8 +59,8 @@
   }
   
   .sidebarOpen {
-    width: var(--sidebar-width);
     transform: translateX(0) !important;
+    pointer-events: auto !important;
   }
   
   .drawerOverlay {
@@ -67,19 +68,25 @@
     position: fixed;
     inset: 0;
     background: rgba(5, 11, 20, 0.65);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    z-index: 40;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    z-index: 150;
     animation: fadeIn 0.2s ease;
   }
   
   .content {
-    padding: 18px 20px;
+    padding: 16px 18px;
   }
 }
 
 @media (max-width: 768px) {
   .content {
-    padding: 14px 16px;
+    padding: 12px 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .content {
+    padding: 10px 12px;
   }
 }

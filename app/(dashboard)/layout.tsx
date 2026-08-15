@@ -47,7 +47,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className={styles.layout}>
         <a href="#main-content" className="skip-link">{settings.language === 'id' ? 'Lompat ke konten utama' : 'Skip to main content'}</a>
         <div className={`${styles.sidebarWrapper} ${isSidebarOpen ? styles.sidebarOpen : ''}`}>
-          <Sidebar />
+          <Sidebar onClose={() => setIsSidebarOpen(false)} />
         </div>
         
         {/* Overlay untuk mobile saat drawer terbuka */}

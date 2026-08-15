@@ -4,25 +4,23 @@
   left: 0;
   right: 0;
   z-index: 60;
-  background: var(--glass-bg-modal);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  margin-top: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  margin-top: 4px;
   max-height: 280px;
   overflow-y: auto;
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  animation: slideUp 0.15s ease;
+  overflow-x: hidden;
 }
 
 .dropdownItem {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 10px 12px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--text-primary);
   transition: background var(--transition);
   border-bottom: 1px solid var(--border);
@@ -33,7 +31,7 @@
 }
 
 .dropdownItem:hover {
-  background: var(--glass-bg-hover);
+  background: var(--bg-card-hover);
 }
 
 .stickyCell {
@@ -41,4 +39,55 @@
   left: 0;
   background: var(--table-sticky-bg);
   z-index: 10;
+}
+
+.filterGrid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.searchGroup {
+  position: relative;
+  min-width: 0;
+}
+
+.monthSelect {
+  width: 130px;
+}
+
+.yearSelect {
+  width: 100px;
+}
+
+.btnGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .filterGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .searchGroup {
+    grid-column: 1 / -1;
+  }
+
+  .monthSelect,
+  .yearSelect {
+    width: 100% !important;
+  }
+
+  .btnGroup {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .btnGroup button {
+    width: 100%;
+  }
 }

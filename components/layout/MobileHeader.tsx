@@ -1,56 +1,53 @@
 'use client';
 
 import React from 'react';
-import { Menu } from 'lucide-react';
+import Link from 'next/link';
+import { Menu, Shield } from 'lucide-react';
 import { useApp } from '@/lib/context';
+import styles from './MobileHeader.module.css';
 
 interface MobileHeaderProps {
   onMenuClick: () => void;
 }
 
 export default function MobileHeader({ onMenuClick }: MobileHeaderProps) {
-  const { settings } = useApp();
+  const { user } = useApp();
   
   return (
-    <div 
-      className="mobile-header" 
-      style={{ 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        padding: '12px 20px',
-        background: 'var(--bg-card)',
-        borderBottom: '1px solid var(--border)',
-        position: 'sticky',
-        top: 0,
-        zIndex: 40,
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+    <header className={styles.header}>
+      <div className={styles.leftArea}>
         <button 
           onClick={onMenuClick}
-          style={{ 
-            background: 'transparent', 
-            border: 'none', 
-            color: 'var(--text-primary)', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            padding: '4px',
-            cursor: 'pointer'
-          }}
+          className={styles.menuBtn}
+          aria-label="Buka Menu Navigasi"
         >
-          <Menu size={18} />
+          <Menu size={20} />
         </button>
-        <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
-          HRIS <span style={{ color: 'var(--accent)' }}>TMNB</span>
-        </div>
+        
+        <Link href="/dashboard" className={styles.brand}>
+          <div className={styles.logoBox}>
+            <Shield size={16} />
+          </div>
+          <div className={styles.brandText}>
+            HRIS <span className={styles.brandHighlight}>TMNB</span>
+          </div>
+        </Link>
       </div>
       
-      {/* Profil Mini placeholder */}
-      <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--bg-card-hover)', border: '1px solid var(--border)' }} />
-    </div>
+      {/* Right Area: User Profile Avatar */}
+      <div className={styles.rightArea}>
+        <div className={styles.avatarWrapper}>
+          <img
+            src="/avatar-hr.png"
+            alt={user?.nama || 'Profil'}
+            className={styles.avatar}
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          <div className={styles.onlineBadge} />
+        </div>
+      </div>
+    </header>
   );
 }

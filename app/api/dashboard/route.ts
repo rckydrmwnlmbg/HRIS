@@ -122,18 +122,19 @@ export async function GET() {
     const currentHour = new Date().getHours();
 
     rawAbsenHariIni.forEach((row: any) => {
-      const s = getStatus(row.STATUS_HARI, row.REASON);
-      const reasonGroup = (reasonMap.get((row.REASON || '').trim()) || '').toUpperCase();
+      const statusHari = (row.STATUS_HARI || '').trim().toUpperCase();
+      const reason = (row.REASON || '').trim().toUpperCase();
+      const reasonGroup = (reasonMap.get(reason) || '').trim().toUpperCase();
 
-      const isCuti = s === 'CUTI' || s === 'C' || s === 'H' || reasonGroup === 'C' || reasonGroup === 'H';
-      const isSakit = s === 'SAKIT' || s === 'S' || reasonGroup === 'S';
-      const isIzin = s === 'IJIN' || s === 'I' || reasonGroup === 'I';
-      const isLibur = s === 'LIBUR' || s === 'L';
+      const isLibur = statusHari === 'LIBUR' || statusHari === 'L';
+      const isSakit = reasonGroup === 'S' || ['15', '03'].includes(reason);
+      const isIzin = reasonGroup === 'I' || ['04', '05', '06', '07'].includes(reason);
+      const isCuti = ['C', 'H'].includes(reasonGroup) || ['18', '13', '17'].includes(reason);
 
-      if (isCuti) { cutiHariIni++; return; }
+      if (isLibur) { return; }
       if (isSakit) { sakitHariIni++; return; }
       if (isIzin) { izinHariIni++; return; }
-      if (isLibur) { return; }
+      if (isCuti) { cutiHariIni++; return; }
 
       const inRaw = row.WORK_IN || row.WORK_IN1;
       const outRaw = row.WORK_OUT || row.WORK_OUT1;

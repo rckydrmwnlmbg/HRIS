@@ -282,17 +282,18 @@ async function getQueryAwareRAG(userQuery: string): Promise<string> {
             try {
               const attQuery = await pool.request().query(`
                 SELECT 
-                  COUNT(CASE WHEN a.WORK_IN IS NOT NULL THEN 1 END) as TOTAL_HADIR,
-                  COUNT(CASE WHEN a.WORK_IN IS NULL AND UPPER(RTRIM(ISNULL(a.STATUS_HARI,''))) = 'KERJA' AND (a.REASON IS NULL OR RTRIM(a.REASON) = '' OR RTRIM(a.REASON) = '0' OR RTRIM(a.REASON) = '02') THEN 1 END) as TOTAL_ALPA,
+                  COUNT(CASE WHEN (a.WORK_IN IS NOT NULL OR a.WORK_OUT IS NOT NULL) AND UPPER(RTRIM(ISNULL(a.STATUS_HARI,''))) = 'KERJA' THEN 1 END) as TOTAL_HADIR,
+                  COUNT(CASE WHEN a.WORK_IN IS NULL AND a.WORK_OUT IS NULL AND UPPER(RTRIM(ISNULL(a.STATUS_HARI,''))) = 'KERJA' AND (a.REASON IS NULL OR RTRIM(a.REASON) = '' OR RTRIM(a.REASON) = '0' OR RTRIM(mr.REASON_GROUP) = 'A') THEN 1 END) as TOTAL_ALPA,
                   COUNT(CASE WHEN UPPER(RTRIM(ISNULL(a.STATUS_HARI,''))) LIKE '%LIBUR%' THEN 1 END) as TOTAL_LIBUR,
-                  COUNT(CASE WHEN RTRIM(a.REASON) IN ('15','03') THEN 1 END) as TOTAL_SAKIT,
-                  COUNT(CASE WHEN RTRIM(a.REASON) IN ('04','05','06','07') THEN 1 END) as TOTAL_IZIN,
-                  COUNT(CASE WHEN RTRIM(a.REASON) = '18' THEN 1 END) as TOTAL_CUTI,
+                  COUNT(CASE WHEN (RTRIM(mr.REASON_GROUP) = 'S' OR RTRIM(a.REASON) IN ('15','03')) AND UPPER(RTRIM(ISNULL(a.STATUS_HARI,''))) = 'KERJA' THEN 1 END) as TOTAL_SAKIT,
+                  COUNT(CASE WHEN (RTRIM(mr.REASON_GROUP) = 'I' OR RTRIM(a.REASON) IN ('04','05','06','07')) AND UPPER(RTRIM(ISNULL(a.STATUS_HARI,''))) = 'KERJA' THEN 1 END) as TOTAL_IZIN,
+                  COUNT(CASE WHEN (RTRIM(mr.REASON_GROUP) IN ('C','H') OR RTRIM(a.REASON) IN ('18','13','17')) AND UPPER(RTRIM(ISNULL(a.STATUS_HARI,''))) = 'KERJA' THEN 1 END) as TOTAL_CUTI,
                   SUM(ISNULL(a.OT_1,0)+ISNULL(a.OT_2,0)+ISNULL(a.OT_3,0)+ISNULL(a.OT_4,0)) as TOTAL_OT_HOURS,
                   SUM(ISNULL(a.U_MAKAN, 0)) as TOTAL_U_MAKAN,
                   SUM(ISNULL(a.U_TRANSPORT, 0)) as TOTAL_U_TRANSPORT,
                   SUM(ISNULL(a.T_OT, 0)) as TOTAL_U_LEMBUR
                 FROM TR_ABSEN a
+                LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
                 WHERE RTRIM(a.EMP_CD) = '${emp.EMP_CD}' 
                   AND a.DATE_TRANS >= '${targetYear}-${String(targetMonth).padStart(2, '0')}-01' 
                   AND a.DATE_TRANS < '${targetMonth === 12 ? targetYear + 1 : targetYear}-${String(targetMonth === 12 ? 1 : targetMonth + 1).padStart(2, '0')}-01'

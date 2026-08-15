@@ -1,0 +1,15 @@
+.cutiGrid {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 22px;
+  align-items: stretch;
+  min-height: calc(100vh - 150px);
+}
+
+@media (max-width: 1024px) {
+  .cutiGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    min-height: auto;
+  }
+}

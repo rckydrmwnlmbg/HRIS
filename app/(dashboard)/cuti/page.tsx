@@ -7,6 +7,7 @@ import type { Karyawan } from '@/types';
 import { Search, Calendar as CalendarIcon, CheckCircle, Plus, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import styles from './cuti.module.css';
 
 interface LeaveRequest {
   id: number;
@@ -226,7 +227,7 @@ export default function CutiPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '22px', alignItems: 'stretch', minHeight: 'calc(100vh - 150px)' }}>
+      <div className={styles.cutiGrid}>
         {/* FORM PANEL */}
         <div className="glass-card" style={{ overflow: 'visible', zIndex: 10, display: 'flex', flexDirection: 'column', height: '100%' }}>
           <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>

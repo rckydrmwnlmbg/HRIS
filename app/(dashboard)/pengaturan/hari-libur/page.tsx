@@ -7,6 +7,7 @@ import { Trash2 } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { useApp } from '@/lib/context';
 import { Skeleton } from '@/components/ui/Skeleton';
+import styles from './hari-libur.module.css';
 
 interface Holiday {
   tanggal: string;
@@ -101,7 +102,7 @@ export default function HariLiburPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px', alignItems: 'start' }}>
+      <div className={styles.hariLiburGrid}>
         {/* Form Tambah Libur */}
         <div className="glass-card" style={{ padding: '24px' }}>
           <h2 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '16px' }}>{lang === 'id' ? 'Tambah Hari Libur Baru' : 'Add New Holiday'}</h2>

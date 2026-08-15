@@ -1,0 +1,39 @@
+.laporanGrid {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+  gap: 20px;
+  min-height: calc(100vh - 150px);
+}
+
+.filterPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.previewPanel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .laporanGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+    min-height: auto;
+    height: auto;
+  }
+
+  .filterPanel {
+    height: auto;
+    overflow-y: visible;
+  }
+
+  .previewPanel {
+    height: auto;
+    min-height: 460px;
+  }
+}

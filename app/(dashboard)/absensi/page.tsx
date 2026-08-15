@@ -314,15 +314,21 @@ function AbsensiContent() {
   const rekap = records.reduce((acc, r) => {
     let key = 'O';
     const statusHari = (r.STATUS_HARI || '').trim().toUpperCase();
-    const reasonGroup = r.REASON_GROUP ? (r.REASON_GROUP || '').trim().toUpperCase() : '';
+    const rg = r.REASON_GROUP ? (r.REASON_GROUP || '').trim().toUpperCase() : '';
+    const reason = (r.REASON || '').trim().toUpperCase();
 
     if (statusHari === 'L' || statusHari === 'LIBUR') {
       key = 'L';
-    } else if (r.REASON && reasonGroup) {
-      if (['C', 'CUTI'].includes(reasonGroup)) key = 'C';
-      else if (['S', 'SAKIT'].includes(reasonGroup)) key = 'S';
-      else if (['A', 'ALPHA'].includes(reasonGroup)) key = 'A';
-      else if (['I', 'IJIN'].includes(reasonGroup)) key = 'I';
+    } else if (rg === 'S' || ['15', '03'].includes(reason)) {
+      key = 'S';
+    } else if (rg === 'I' || ['04', '05', '06', '07'].includes(reason)) {
+      key = 'I';
+    } else if (['C', 'H'].includes(rg) || ['18', '13', '17'].includes(reason)) {
+      key = 'C';
+    } else if (rg === 'A' || ((!r.WORK_IN && !r.WORK_OUT) && (!reason || reason === ''))) {
+      key = 'A';
+    } else {
+      key = 'O';
     }
 
     acc[key] = (acc[key] || 0) + 1;

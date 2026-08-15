@@ -26,6 +26,8 @@ export async function GET(request: Request) {
         a.WORK_OUT,
         RTRIM(a.STATUS_HARI) AS STATUS_HARI,
         RTRIM(a.REASON) AS REASON,
+        RTRIM(mr.REASON_GROUP) AS REASON_GROUP,
+        RTRIM(mr.REASON_DESC) AS REASON_DESC,
         RTRIM(a.SEC_CD) AS SEC_CD,
         RTRIM(e.DEP_CD) AS DEP_CD,
         RTRIM(d.DEP_DESC) AS DEP_DESC,
@@ -33,8 +35,14 @@ export async function GET(request: Request) {
       FROM TR_ABSEN a
       LEFT JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
       LEFT JOIN MS_DEP d ON e.DEP_CD = d.DEP_CD
+      LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
       WHERE CONVERT(date, a.DATE_TRANS) = '${date.replace(/'/g, "''")}'
-        AND (a.WORK_IN IS NOT NULL OR a.WORK_OUT IS NOT NULL OR RTRIM(ISNULL(a.STATUS_HARI, '')) <> 'KERJA')
+        AND (
+          a.WORK_IN IS NOT NULL 
+          OR a.WORK_OUT IS NOT NULL 
+          OR (a.REASON IS NOT NULL AND LTRIM(RTRIM(a.REASON)) <> '')
+          OR RTRIM(ISNULL(a.STATUS_HARI, '')) <> 'KERJA'
+        )
       ORDER BY a.EMP_NM ASC
     `);
 

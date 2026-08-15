@@ -1266,23 +1266,26 @@ export async function GET(request: Request) {
 
         const sHari = (row.STATUS_HARI || '').toUpperCase().trim();
         const rGroup = (row.REASON_GROUP || '').toUpperCase().trim();
+        const rCode = (row.REASON_CODE || row.REASON || '').toUpperCase().trim();
         const hasIn = row.WORK_IN !== null && !String(row.WORK_IN).includes('00:00:00');
         const hasOut = row.WORK_OUT !== null && !String(row.WORK_OUT).includes('00:00:00');
 
         let statusKetidakhadiran = '';
         let keteranganFinal = row.ALASAN_DESC || '-';
 
-        if (sHari === 'CUTI' || sHari === 'C' || sHari === 'H' || rGroup === 'C' || rGroup === 'H') {
-          dailyMap.get(dStr)!.cuti++;
-          statusKetidakhadiran = 'CUTI';
-        } else if (sHari === 'SAKIT' || sHari === 'S' || rGroup === 'S') {
+        if (sHari === 'LIBUR' || sHari === 'L') {
+          // Skip libur
+        } else if (rGroup === 'S' || ['15', '03'].includes(rCode)) {
           dailyMap.get(dStr)!.sakit++;
           statusKetidakhadiran = 'SAKIT';
-        } else if (sHari === 'IJIN' || sHari === 'IZIN' || sHari === 'I' || rGroup === 'I') {
+        } else if (rGroup === 'I' || ['04', '05', '06', '07'].includes(rCode)) {
           dailyMap.get(dStr)!.izin++;
           statusKetidakhadiran = 'IZIN';
-        } else if ((!hasIn && !hasOut) && (sHari === 'ALPHA' || sHari === 'MANGKIR' || sHari === 'A' || sHari === 'KERJA' || !row.REASON_CODE)) {
-          if (sHari !== 'LIBUR' && sHari !== 'L' && !namaHari.includes('Minggu')) {
+        } else if (['C', 'H'].includes(rGroup) || ['18', '13', '17'].includes(rCode)) {
+          dailyMap.get(dStr)!.cuti++;
+          statusKetidakhadiran = 'CUTI';
+        } else if (!hasIn && !hasOut && sHari === 'KERJA' && (!rCode || rGroup === 'A')) {
+          if (!namaHari.includes('Minggu') && !namaHari.includes('Sabtu')) {
             dailyMap.get(dStr)!.alpha++;
             statusKetidakhadiran = 'ALPHA';
             if (keteranganFinal === '-') keteranganFinal = 'Mangkir (Tanpa Keterangan)';

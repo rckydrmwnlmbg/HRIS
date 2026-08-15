@@ -284,66 +284,70 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
             </div>
           ) : filteredData.length > 0 ? (
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
-              <thead style={{ position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(10px)', backgroundColor: 'rgba(255, 255, 255, 0.05)' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(16px)', backgroundColor: 'var(--table-header-bg)' }}>
                 <tr>
-                  <th style={{ padding: '8px 16px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Tanggal' : 'Date'}</th>
-                  <th style={{ padding: '8px 16px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Informasi Karyawan' : 'Employee'}</th>
-                  <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Unit Kerja & Tim' : 'Section & Team'}</th>
-                  <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Waktu Masuk' : 'Clock In'}</th>
-                  <th style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Waktu Pulang' : 'Clock Out'}</th>
-                  <th style={{ padding: '8px 16px', color: 'var(--text-secondary)', fontWeight: 600, borderBottom: '1px solid var(--border)', fontSize: 11 }}>{lang === 'id' ? 'Status Presensi' : 'Attendance Status'}</th>
+                  <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Tanggal' : 'Date'}</th>
+                  <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Informasi Karyawan' : 'Employee'}</th>
+                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Unit Kerja & Tim' : 'Section & Team'}</th>
+                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Waktu Masuk' : 'Clock In'}</th>
+                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Waktu Pulang' : 'Clock Out'}</th>
+                  <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Status Presensi' : 'Attendance Status'}</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredData.map((k, i) => (
-                  <tr key={`${k.EMP_CD}-${k.DATE_TRANS}`} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-subtle)' }}>
-                    <td style={{ padding: '8px 16px', fontSize: 11.5, fontWeight: 500 }}>
+                  <tr key={`${k.EMP_CD}-${k.DATE_TRANS}`} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'var(--bg-secondary)' : 'var(--bg-subtle)' }}>
+                    <td style={{ padding: '10px 16px', fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)' }}>
                       {k.DATE_TRANS?.split('-').reverse().join('-')}
                     </td>
-                    <td style={{ padding: '8px 16px' }}>
+                    <td style={{ padding: '10px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 24, height: 24, borderRadius: '50%', background: 'var(--accent-glow)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 11 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(2, 132, 199, 0.15)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 750, fontSize: 11 }}>
                           {k.EMP_NM.charAt(0)}
                         </div>
                         <div>
-                          <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 12 }}>{k.EMP_NM}</div>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{k.EMP_CD}</div>
+                          <div style={{ fontWeight: 650, color: 'var(--text-primary)', fontSize: 12 }}>{k.EMP_NM}</div>
+                          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 500 }}>{k.EMP_CD}</div>
                         </div>
                       </div>
                     </td>
-                    <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>
-                      <div style={{ fontWeight: 500, color: 'var(--text-primary)', fontSize: 11.5 }}>{k.BAGIAN || '-'}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{k.TEAM || '-'}</div>
+                    <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 11.5 }}>{k.BAGIAN || '-'}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{k.TEAM || '-'}</div>
                     </td>
-                    <td style={{ padding: '8px 12px', fontSize: 11 }}>
+                    <td style={{ padding: '10px 12px', fontSize: 11.5 }}>
                       {k.WORK_IN ? (
-                        <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{k.WORK_IN}</span>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: 650 }}>{k.WORK_IN}</span>
                       ) : (
-                        <span style={{ color: '#ef4444', fontWeight: 600, background: 'rgba(239, 68, 68, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                        <span style={{ color: '#b91c1c', fontWeight: 650, background: '#fee2e2', border: '1px solid #fca5a5', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px' }}>
                           {lang === 'id' ? 'Belum Tercatat' : 'Missing'}
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: '8px 12px', fontSize: 11 }}>
+                    <td style={{ padding: '10px 12px', fontSize: 11.5 }}>
                       {k.WORK_OUT ? (
-                        <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{k.WORK_OUT}</span>
+                        <span style={{ color: 'var(--text-primary)', fontWeight: 650 }}>{k.WORK_OUT}</span>
                       ) : (
-                        <span style={{ color: '#ef4444', fontWeight: 600, background: 'rgba(239, 68, 68, 0.1)', padding: '2px 6px', borderRadius: '4px' }}>
+                        <span style={{ color: '#b91c1c', fontWeight: 650, background: '#fee2e2', border: '1px solid #fca5a5', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px' }}>
                           {lang === 'id' ? 'Belum Tercatat' : 'Missing'}
                         </span>
                       )}
                     </td>
-                    <td style={{ padding: '8px 16px' }}>
+                    <td style={{ padding: '10px 16px' }}>
                       <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: '4px', fontSize: 10.5, fontWeight: 550,
-                        background: k.keterangan_kosong.startsWith('Alasan') || k.keterangan_kosong.includes('(') ? 'rgba(59, 130, 246, 0.12)'
-                          : k.keterangan_kosong === 'Lupa Tap Masuk' ? 'rgba(234, 179, 8, 0.12)'
-                          : k.keterangan_kosong === 'Lupa Tap Pulang' ? 'rgba(249, 115, 22, 0.12)'
-                          : 'rgba(239, 68, 68, 0.12)',
-                        color: k.keterangan_kosong.startsWith('Alasan') || k.keterangan_kosong.includes('(') ? '#3b82f6'
-                          : k.keterangan_kosong === 'Lupa Tap Masuk' ? '#ca8a04'
-                          : k.keterangan_kosong === 'Lupa Tap Pulang' ? '#ea580c'
-                          : '#ef4444'
+                        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: '6px', fontSize: 11, fontWeight: 600,
+                        background: k.keterangan_kosong.startsWith('Alasan') || k.keterangan_kosong.includes('(') ? '#eff6ff'
+                          : k.keterangan_kosong === 'Lupa Tap Masuk' ? '#fef9c3'
+                          : k.keterangan_kosong === 'Lupa Tap Pulang' ? '#ffedd5'
+                          : '#fee2e2',
+                        color: k.keterangan_kosong.startsWith('Alasan') || k.keterangan_kosong.includes('(') ? '#1d4ed8'
+                          : k.keterangan_kosong === 'Lupa Tap Masuk' ? '#854d0e'
+                          : k.keterangan_kosong === 'Lupa Tap Pulang' ? '#9a3412'
+                          : '#991b1b',
+                        border: k.keterangan_kosong.startsWith('Alasan') || k.keterangan_kosong.includes('(') ? '1px solid #bfdbfe'
+                          : k.keterangan_kosong === 'Lupa Tap Masuk' ? '1px solid #fde047'
+                          : k.keterangan_kosong === 'Lupa Tap Pulang' ? '1px solid #fdba74'
+                          : '1px solid #fca5a5',
                       }}>
                         <AlertTriangle size={11} />
                         {k.keterangan_kosong}

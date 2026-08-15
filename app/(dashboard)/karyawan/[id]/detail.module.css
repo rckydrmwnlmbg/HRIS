@@ -183,3 +183,33 @@
   color: var(--text-primary);
   word-break: break-word;
 }
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+}
+
+@media (max-width: 1024px) {
+  .detailGrid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .profileHero {
+    flex-direction: column;
+    text-align: center;
+    align-items: center;
+    gap: 14px;
+    padding: 20px 16px;
+  }
+
+  .heroMeta {
+    justify-content: center;
+  }
+
+  .heroSub {
+    text-align: center;
+  }
+}
+

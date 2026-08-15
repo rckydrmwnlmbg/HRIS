@@ -66,9 +66,9 @@ export function AbsensiFilterBar({
         </button>
       </div>
 
-      <div className="glass-card" style={{ padding: '20px', marginBottom: '20px', overflow: 'visible', zIndex: 30 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto auto', gap: '12px', alignItems: 'end' }}>
-          <div className="form-group" style={{ position: 'relative' }}>
+      <div className="glass-card" style={{ padding: '18px 20px', marginBottom: '20px', overflow: 'visible', zIndex: 30 }}>
+        <div className={styles.filterGrid}>
+          <div className={`form-group ${styles.searchGroup}`}>
             <label className="form-label">{lang === 'id' ? 'Cari Karyawan' : 'Search Employee'}</label>
             <div className="search-wrapper">
               <Search size={15} className="search-icon" />
@@ -83,9 +83,11 @@ export function AbsensiFilterBar({
               <div className={styles.dropdown}>
                 {filteredKaryawan.map(k => (
                   <div key={k.EMP_CD} className={styles.dropdownItem} onClick={() => { setSelectedEmp(k); setSearchEmp(''); }}>
-                    <span style={{ color: 'var(--accent-blue)', fontSize: '12px', minWidth: 80, fontWeight: 600 }}>{k.EMP_CD}</span>
-                    <span style={{ fontWeight: 500 }}>{k.EMP_NM}</span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: 'auto' }}>{k.SEC_DESC || k.SEC_CD}</span>
+                    <span style={{ color: 'var(--accent)', fontWeight: 600, minWidth: 65 }}>{k.EMP_CD}</span>
+                    <span>{k.EMP_NM}</span>
+                    {(k.SEC_DESC || k.SEC_CD) && (
+                      <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: 'auto' }}>{k.SEC_DESC || k.SEC_CD}</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -93,17 +95,17 @@ export function AbsensiFilterBar({
           </div>
           <div className="form-group">
             <label className="form-label">{t(lang, 'bulan')}</label>
-            <select className="form-select" value={bulan} onChange={e => setBulan(Number(e.target.value))} style={{ width: '120px' }}>
+            <select className={`form-select ${styles.monthSelect}`} value={bulan} onChange={e => setBulan(Number(e.target.value))}>
               {months.map(m => <option key={m} value={m}>{new Date(2024, m - 1).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US', { month: 'long' })}</option>)}
             </select>
           </div>
           <div className="form-group">
             <label className="form-label">{t(lang, 'tahun')}</label>
-            <select className="form-select" value={tahun} onChange={e => setTahun(Number(e.target.value))} style={{ width: '100px' }}>
+            <select className={`form-select ${styles.yearSelect}`} value={tahun} onChange={e => setTahun(Number(e.target.value))}>
               {years.map(y => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
-          <div className="form-group" style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <div className={`form-group ${styles.btnGroup}`}>
             {loaded && isSecurity && (
               <button className="btn btn-secondary" onClick={onSyncShiftPreview} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <ShieldAlert size={14} /> {lang === 'id' ? 'Sinkronkan Shift' : 'Sync Shift'}

@@ -20,21 +20,27 @@ export function AbsensiRekapCards({
 }: AbsensiRekapCardsProps) {
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
 
-  const normalizeStatus = (s: string) => (s || '').trim().toUpperCase();
+  const normalizeStatus = (s: string | null | undefined) => (s || '').trim().toUpperCase();
 
   const filteredDetailRecords = selectedStatus
     ? records.filter(r => {
         let key = 'O'; // Default Hadir
         const statusHari = normalizeStatus(r.STATUS_HARI);
-        const reasonGroup = r.REASON_GROUP ? normalizeStatus(r.REASON_GROUP) : '';
+        const rg = r.REASON_GROUP ? normalizeStatus(r.REASON_GROUP) : '';
+        const reason = normalizeStatus(r.REASON);
 
         if (statusHari === 'L' || statusHari === 'LIBUR') {
           key = 'L';
-        } else if (r.REASON && reasonGroup) {
-          if (['C', 'CUTI'].includes(reasonGroup)) key = 'C';
-          else if (['S', 'SAKIT'].includes(reasonGroup)) key = 'S';
-          else if (['A', 'ALPHA'].includes(reasonGroup)) key = 'A';
-          else if (['I', 'IJIN'].includes(reasonGroup)) key = 'I';
+        } else if (rg === 'S' || ['15', '03'].includes(reason)) {
+          key = 'S';
+        } else if (rg === 'I' || ['04', '05', '06', '07'].includes(reason)) {
+          key = 'I';
+        } else if (['C', 'H'].includes(rg) || ['18', '13', '17'].includes(reason)) {
+          key = 'C';
+        } else if (rg === 'A' || ((!r.WORK_IN && !r.WORK_OUT) && (!reason || reason === ''))) {
+          key = 'A';
+        } else {
+          key = 'O';
         }
 
         return key === selectedStatus;

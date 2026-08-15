@@ -52,13 +52,21 @@ export async function GET(req: NextRequest) {
           CONVERT(varchar(10), a.DATE_TRANS, 120) as tgl,
           RTRIM(a.STATUS_HARI) as STATUS_HARI,
           RTRIM(a.REASON) as REASON,
+          RTRIM(mr.REASON_GROUP) as REASON_GROUP,
+          CASE WHEN (a.WORK_IN IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_IN as varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_IN, 108) != '00:00:00')
+                    OR (a.WORK_OUT IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_OUT as varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_OUT, 108) != '00:00:00')
+               THEN 1 ELSE 0 END as has_tap,
           COUNT(DISTINCT a.EMP_CD) as jumlah
         FROM TR_ABSEN a
+        LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
         JOIN EMP_TABLE e ON a.EMP_CD = e.EMP_CD
         WHERE a.DATE_TRANS >= '${startDateStr}' AND a.DATE_TRANS < '${tomorrowStr}'
           AND e.Act_NonAct = 1 
           AND (e.DT_RSG IS NULL OR YEAR(e.DT_RSG) <= 1900 OR e.DT_RSG >= GETDATE())
-        GROUP BY CONVERT(varchar(10), a.DATE_TRANS, 120), RTRIM(a.STATUS_HARI), RTRIM(a.REASON)
+        GROUP BY CONVERT(varchar(10), a.DATE_TRANS, 120), RTRIM(a.STATUS_HARI), RTRIM(a.REASON), RTRIM(mr.REASON_GROUP),
+          CASE WHEN (a.WORK_IN IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_IN as varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_IN, 108) != '00:00:00')
+                    OR (a.WORK_OUT IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_OUT as varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_OUT, 108) != '00:00:00')
+               THEN 1 ELSE 0 END
       `);
 
       const dailyMap = new Map<string, any>();
@@ -84,12 +92,25 @@ export async function GET(req: NextRequest) {
         const key = row.tgl;
         if (dailyMap.has(key)) {
           const item = dailyMap.get(key);
-          const s = getStatus(row.STATUS_HARI, row.REASON);
-          if (s === 'KERJA' || s === 'O') item.hadir += row.jumlah;
-          else if (s === 'MANGKIR' || s === 'A' || s === 'ALPHA') item.alpha += row.jumlah;
-          else if (s === 'IZIN' || s === 'I') item.izin += row.jumlah;
-          else if (s === 'CUTI' || s === 'C' || s === 'H') item.cuti += row.jumlah;
-          else if (s === 'SAKIT' || s === 'S') item.sakit += row.jumlah;
+          const statusHari = (row.STATUS_HARI || '').trim().toUpperCase();
+          const rg = (row.REASON_GROUP || '').trim().toUpperCase();
+          const reason = (row.REASON || '').trim().toUpperCase();
+
+          if (statusHari === 'LIBUR' || statusHari === 'L') {
+            return;
+          }
+
+          if (rg === 'S' || ['15', '03'].includes(reason)) {
+            item.sakit += row.jumlah;
+          } else if (rg === 'I' || ['04', '05', '06', '07'].includes(reason)) {
+            item.izin += row.jumlah;
+          } else if (['C', 'H'].includes(rg) || ['18', '13', '17'].includes(reason)) {
+            item.cuti += row.jumlah;
+          } else if (row.has_tap === 1) {
+            item.hadir += row.jumlah;
+          } else if (rg === 'A' || statusHari === 'KERJA') {
+            item.alpha += row.jumlah;
+          }
         }
       });
 
@@ -118,13 +139,21 @@ export async function GET(req: NextRequest) {
         YEAR(a.DATE_TRANS) as y,
         RTRIM(a.STATUS_HARI) as STATUS_HARI,
         RTRIM(a.REASON) as REASON,
+        RTRIM(mr.REASON_GROUP) as REASON_GROUP,
+        CASE WHEN (a.WORK_IN IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_IN as varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_IN, 108) != '00:00:00')
+                  OR (a.WORK_OUT IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_OUT as varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_OUT, 108) != '00:00:00')
+             THEN 1 ELSE 0 END as has_tap,
         COUNT(DISTINCT a.EMP_CD) as jumlah
       FROM TR_ABSEN a
+      LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
       JOIN EMP_TABLE e ON a.EMP_CD = e.EMP_CD
       WHERE a.DATE_TRANS >= '${pastMonthsStr}' AND a.DATE_TRANS < '${firstDayOfNextMonthStr}'
         AND e.Act_NonAct = 1 
         AND (e.DT_RSG IS NULL OR YEAR(e.DT_RSG) <= 1900 OR e.DT_RSG >= GETDATE())
-      GROUP BY MONTH(a.DATE_TRANS), YEAR(a.DATE_TRANS), RTRIM(a.STATUS_HARI), RTRIM(a.REASON)
+      GROUP BY MONTH(a.DATE_TRANS), YEAR(a.DATE_TRANS), RTRIM(a.STATUS_HARI), RTRIM(a.REASON), RTRIM(mr.REASON_GROUP),
+        CASE WHEN (a.WORK_IN IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_IN as varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_IN, 108) != '00:00:00')
+                  OR (a.WORK_OUT IS NOT NULL AND LTRIM(RTRIM(CAST(a.WORK_OUT as varchar(50)))) != '' AND CONVERT(varchar(8), a.WORK_OUT, 108) != '00:00:00')
+             THEN 1 ELSE 0 END
     `);
 
     const trendMap = new Map<string, any>();
@@ -143,12 +172,25 @@ export async function GET(req: NextRequest) {
       const key = `${row.y}-${mm}`;
       if (trendMap.has(key)) {
         const item = trendMap.get(key);
-        const s = getStatus(row.STATUS_HARI, row.REASON);
-        if (s === 'KERJA' || s === 'O') item.hadir += row.jumlah;
-        else if (s === 'MANGKIR' || s === 'A' || s === 'ALPHA') item.alpha += row.jumlah;
-        else if (s === 'IZIN' || s === 'I') item.izin += row.jumlah;
-        else if (s === 'CUTI' || s === 'C' || s === 'H') item.cuti += row.jumlah;
-        else if (s === 'SAKIT' || s === 'S') item.sakit += row.jumlah;
+        const statusHari = (row.STATUS_HARI || '').trim().toUpperCase();
+        const rg = (row.REASON_GROUP || '').trim().toUpperCase();
+        const reason = (row.REASON || '').trim().toUpperCase();
+
+        if (statusHari === 'LIBUR' || statusHari === 'L') {
+          return;
+        }
+
+        if (rg === 'S' || ['15', '03'].includes(reason)) {
+          item.sakit += row.jumlah;
+        } else if (rg === 'I' || ['04', '05', '06', '07'].includes(reason)) {
+          item.izin += row.jumlah;
+        } else if (['C', 'H'].includes(rg) || ['18', '13', '17'].includes(reason)) {
+          item.cuti += row.jumlah;
+        } else if (row.has_tap === 1) {
+          item.hadir += row.jumlah;
+        } else if (rg === 'A' || statusHari === 'KERJA') {
+          item.alpha += row.jumlah;
+        }
       }
     });
 

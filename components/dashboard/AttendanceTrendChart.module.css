@@ -191,3 +191,36 @@
   border-color: var(--accent);
   box-shadow: 0 2px 6px var(--accent-glow);
 }
+
+@media (max-width: 640px) {
+  .trendCard {
+    padding: 12px 14px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .controlsArea {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .legendFilterRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .filterChips {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .filterChip {
+    padding: 2.5px 6px;
+    font-size: 10px;
+  }
+}

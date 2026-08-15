@@ -143,13 +143,14 @@ export function calculateAttendanceAndOt(
       if (workOut.getTime() < workIn.getTime()) {
         effectiveOut = new Date(workOut.getTime() + 24 * 60 * 60 * 1000);
       }
-      // Force recompile 
-      // console.log("Calculating for UMUM:", workIn, workOut);
 
-      // Asumsi pulang standar jam 16:00 WIB, base on workIn date
-      const wibISO = new Date(workIn.getTime() + 7 * 60 * 60 * 1000).toISOString();
-      const scheduleOutStr = wibISO.substring(0, 11) + '16:00:00+07:00';
-      const scheduleOut = new Date(scheduleOutStr);
+      // Jadwal pulang standar jam 16:00 WIB di hari yang sama dengan jam masuk
+      const scheduleOut = new Date(
+        workIn.getFullYear(),
+        workIn.getMonth(),
+        workIn.getDate(),
+        16, 0, 0
+      );
       
       if (effectiveOut.getTime() > scheduleOut.getTime()) {
         const diffMinutes = (effectiveOut.getTime() - scheduleOut.getTime()) / 60000;

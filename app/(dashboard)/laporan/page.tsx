@@ -5,6 +5,7 @@ import { t } from '@/lib/i18n';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { Department, Seksi, Jabatan } from '@/types';
 import { FileText, Download, BarChart3, Filter, Loader2, Calendar as CalendarIcon } from 'lucide-react';
+import styles from './laporan.module.css';
 
 type Tab = 'absensi' | 'ot' | 'cuti' | 'skorsing';
 
@@ -129,9 +130,9 @@ export default function LaporanPage() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '290px minmax(0, 1fr)', gap: '20px', minHeight: 'calc(100vh - 150px)', height: 'calc(100vh - 150px)' }}>
+      <div className={styles.laporanGrid}>
         {/* Panel Filter */}
-        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflowY: 'auto' }}>
+        <div className={`glass-card ${styles.filterPanel}`}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
             <h3 style={{ margin: 0, fontWeight: 650, fontSize: '15px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Filter size={17} /> {lang === 'id' ? 'Parameter Laporan' : 'Report Parameters'}
@@ -251,7 +252,7 @@ export default function LaporanPage() {
         </div>
 
         {/* Panel Preview */}
-        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minWidth: 0, overflow: 'hidden' }}>
+        <div className={`glass-card ${styles.previewPanel}`} style={{ overflow: 'hidden' }}>
           <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
             <h3 style={{ margin: 0, fontWeight: 650, fontSize: '15px' }}>{lang === 'id' ? 'Pratinjau Data' : 'Data Preview'}</h3>
           </div>

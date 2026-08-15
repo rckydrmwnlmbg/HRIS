@@ -19,6 +19,20 @@ function logSyncFallback(message: string) {
   }
 }
 
+function formatLocalSqlDatetime(d: Date | string | null | undefined): string {
+  if (!d) return 'NULL';
+  const date = typeof d === 'string' ? new Date(d) : d;
+  if (isNaN(date.getTime())) return 'NULL';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const YYYY = date.getFullYear();
+  const MM = pad(date.getMonth() + 1);
+  const DD = pad(date.getDate());
+  const hh = pad(date.getHours());
+  const mm = pad(date.getMinutes());
+  const ss = pad(date.getSeconds());
+  return `'${YYYY}-${MM}-${DD} ${hh}:${mm}:${ss}'`;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
@@ -37,7 +51,7 @@ export async function POST(request: Request) {
         }
 
         try {
-          sendEvent('progress', { message: 'Menghubungkan ke DataSolution...', progress: 5 });
+          sendEvent('progress', { message: 'Menghubungkan ke mesin DataSolution...', progress: 5 });
           
           const dsData = await dsQuery<any>(`
             WITH RawTaps AS (
@@ -78,9 +92,8 @@ export async function POST(request: Request) {
             return;
           }
 
-          sendEvent('progress', { message: `Ditemukan ${dsData.length} data presensi. Mulai menyinkronkan...`, progress: 10 });
+          sendEvent('progress', { message: `Ditemukan ${dsData.length.toLocaleString()} data presensi. Mulai penyiapan staging...`, progress: 10 });
           
-          let processedCount = 0;
           const fallbackLogs: string[] = [];
 
           dsData.forEach((row: any) => {
@@ -93,164 +106,225 @@ export async function POST(request: Request) {
             }
             row.finalWorkIn = workIn;
             row.finalWorkOut = workOut;
+
+            let calcJamKerja = 0;
+            if (workIn && workOut) {
+              const diffMins = Math.floor((new Date(workOut).getTime() - new Date(workIn).getTime()) / 60000);
+              const netMins = diffMins > 60 ? diffMins - 60 : 0;
+              calcJamKerja = Math.max(0, Math.floor(netMins / 30) * 0.5);
+            }
+            row.calcJamKerja = calcJamKerja;
           });
 
-          // ── FASE 1: Sinkronisasi data presensi (per-row, sequential, aman dari deadlock) ──
-          const singleMergeQuery = `
-            BEGIN
-              IF NOT EXISTS (
-                SELECT 1 FROM EMP_TABLE e 
-                LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-                WHERE RTRIM(e.EMP_CD) = @nik AND (RTRIM(e.SEC_CD) = 'SEC' OR RTRIM(s.SEC_DESC) LIKE '%SECURITY%')
-              )
+          // ── EKSEKUSI TRANSAKSI DATABASE (STAGING TABLE TMP_HRIS_SYNC & TMP_HRIS_OT) ──
+          await withTransaction(async (tx) => {
+            // 1. Setup Staging Tables (Auto-create jika belum ada, lalu truncate)
+            await tx(`
+              IF OBJECT_ID('TMP_HRIS_SYNC', 'U') IS NULL
               BEGIN
-                DECLARE @diffMins INT = DATEDIFF(MINUTE, @workIn, @workOut);
-                DECLARE @netMins INT = CASE WHEN @diffMins > 60 THEN @diffMins - 60 ELSE 0 END;
-                DECLARE @calcJamKerja DECIMAL(5,2) = FLOOR(@netMins / 30.0) * 0.5;
-                IF @calcJamKerja < 0 SET @calcJamKerja = 0;
+                CREATE TABLE TMP_HRIS_SYNC (
+                  NIK VARCHAR(20) NOT NULL,
+                  Tanggal VARCHAR(10) NOT NULL,
+                  WorkIn DATETIME NULL,
+                  WorkOut DATETIME NULL,
+                  CalcJamKerja DECIMAL(5,2) DEFAULT 0
+                );
+                CREATE CLUSTERED INDEX IX_TMP_HRIS_SYNC_NT ON TMP_HRIS_SYNC (NIK, Tanggal);
+              END;
+              TRUNCATE TABLE TMP_HRIS_SYNC;
 
-                DECLARE @targetShift VARCHAR(10) = (SELECT TOP 1 SHIFT FROM TR_ABSEN WHERE EMP_CD = @nik AND CONVERT(date, DATE_TRANS) = CONVERT(date, @tanggal));
-                SET @targetShift = ISNULL(@targetShift, '1');
+              IF OBJECT_ID('TMP_HRIS_OT', 'U') IS NULL
+              BEGIN
+                CREATE TABLE TMP_HRIS_OT (
+                  EMP_CD VARCHAR(20) NOT NULL,
+                  DATE_TRANS VARCHAR(10) NOT NULL,
+                  OT_1 DECIMAL(5,2) DEFAULT 0,
+                  OT_2 DECIMAL(5,2) DEFAULT 0,
+                  OT_3 DECIMAL(5,2) DEFAULT 0,
+                  OT_4 DECIMAL(5,2) DEFAULT 0,
+                  T_OT DECIMAL(5,2) DEFAULT 0,
+                  JAM_KERJA DECIMAL(5,2) DEFAULT 0
+                );
+                CREATE CLUSTERED INDEX IX_TMP_HRIS_OT_ED ON TMP_HRIS_OT (EMP_CD, DATE_TRANS);
+              END;
+              TRUNCATE TABLE TMP_HRIS_OT;
+            `);
 
-                DECLARE @targetJamMasuk DATETIME = (SELECT TOP 1 CAST(CONVERT(varchar(10), @tanggal, 120) + ' ' + CONVERT(varchar(8), WORK_IN, 108) AS DATETIME) FROM msSHIFT WHERE RTRIM(shift_CODE) = RTRIM(@targetShift));
-                DECLARE @targetJamPulang DATETIME = (SELECT TOP 1 
-                      CASE 
-                        WHEN CONVERT(varchar(8), WORK_OUT, 108) < CONVERT(varchar(8), WORK_IN, 108) 
-                        THEN CAST(CONVERT(varchar(10), DATEADD(day, 1, CONVERT(date, @tanggal)), 120) + ' ' + CONVERT(varchar(8), WORK_OUT, 108) AS DATETIME)
-                        ELSE CAST(CONVERT(varchar(10), @tanggal, 120) + ' ' + CONVERT(varchar(8), WORK_OUT, 108) AS DATETIME)
-                      END
-                    FROM msSHIFT WHERE RTRIM(shift_CODE) = RTRIM(@targetShift));
+            // 2. Batch Bulk Insert ke TMP_HRIS_SYNC (MENGGUNAKAN LOCAL TIME TANPA PERGESERAN UTC)
+            const STAGING_BATCH = 400;
+            for (let i = 0; i < dsData.length; i += STAGING_BATCH) {
+              const chunk = dsData.slice(i, i + STAGING_BATCH);
+              const valuesSql = chunk.map(r => {
+                const pNik = `'${String(r.NIK).trim().replace(/'/g, "''")}'`;
+                const pTgl = `'${r.Tanggal}'`;
+                const pIn = formatLocalSqlDatetime(r.finalWorkIn);
+                const pOut = formatLocalSqlDatetime(r.finalWorkOut);
+                const pJam = r.calcJamKerja || 0;
+                return `(${pNik}, ${pTgl}, ${pIn}, ${pOut}, ${pJam})`;
+              }).join(',\n');
 
-                IF EXISTS (SELECT 1 FROM TR_ABSEN WHERE EMP_CD = @nik AND CONVERT(date, DATE_TRANS) = CONVERT(date, @tanggal))
-                BEGIN
-                  UPDATE TR_ABSEN SET 
-                    WORK_IN = CASE 
-                                WHEN ISNULL(CONVERT(varchar(19), WORK_IN, 120), '') <> ISNULL(CONVERT(varchar(19), WORK_IN1, 120), '') THEN WORK_IN 
-                                ELSE ISNULL(@workIn, WORK_IN) 
-                              END,
-                    WORK_OUT = CASE 
-                                WHEN ISNULL(CONVERT(varchar(19), WORK_OUT, 120), '') <> ISNULL(CONVERT(varchar(19), WORK_OUT1, 120), '') THEN WORK_OUT 
-                                ELSE ISNULL(@workOut, WORK_OUT) 
-                              END,
-                    WORK_IN1 = ISNULL(@workIn, WORK_IN1),
-                    WORK_OUT1 = ISNULL(@workOut, WORK_OUT1),
-                    DATE_IN = CONVERT(date, @workIn),
-                    DATE_OUT = CONVERT(date, @workOut),
-                    JAM_MASUK = @targetJamMasuk,
-                    JAM_PULANG = @targetJamPulang,
-                    JAM_KERJA = @calcJamKerja,
-                    HADIR = 1,
-                    STATUS_HARI = ISNULL(STATUS_HARI, 'KERJA'),
-                    SHIFT = ISNULL(SHIFT, '1'),
-                    FLAG_ABSEN = ISNULL(FLAG_ABSEN, 'M'),
-                    Time_Late = CASE 
-                      WHEN @workIn IS NOT NULL THEN CAST(DATEDIFF(MINUTE, @targetJamMasuk, @workIn) AS FLOAT)
-                      ELSE 0.0 
-                    END
-                  WHERE EMP_CD = @nik AND CONVERT(date, DATE_TRANS) = CONVERT(date, @tanggal);
-                END
-                ELSE
-                BEGIN
-                  DECLARE @defaultJamMasuk DATETIME = (SELECT TOP 1 CAST(CONVERT(varchar(10), @tanggal, 120) + ' ' + CONVERT(varchar(8), WORK_IN, 108) AS DATETIME) FROM msSHIFT WHERE RTRIM(shift_CODE) = '1');
-                  DECLARE @defaultJamPulang DATETIME = (SELECT TOP 1 
-                        CASE 
-                          WHEN CONVERT(varchar(8), WORK_OUT, 108) < CONVERT(varchar(8), WORK_IN, 108) 
-                          THEN CAST(CONVERT(varchar(10), DATEADD(day, 1, CONVERT(date, @tanggal)), 120) + ' ' + CONVERT(varchar(8), WORK_OUT, 108) AS DATETIME)
-                          ELSE CAST(CONVERT(varchar(10), @tanggal, 120) + ' ' + CONVERT(varchar(8), WORK_OUT, 108) AS DATETIME)
-                        END
-                      FROM msSHIFT WHERE RTRIM(shift_CODE) = '1');
-
-                  INSERT INTO TR_ABSEN (EMP_CD, DATE_TRANS, WORK_IN, WORK_OUT, WORK_IN1, WORK_OUT1, DATE_IN, DATE_OUT, JAM_MASUK, JAM_PULANG, JAM_KERJA, STATUS_HARI, SHIFT, HADIR, FLAG_ABSEN, Time_Late)
-                  VALUES (
-                    @nik, @tanggal, @workIn, @workOut, @workIn, @workOut, CONVERT(date, @workIn), CONVERT(date, @workOut), 
-                    @defaultJamMasuk, 
-                    @defaultJamPulang,
-                    @calcJamKerja, 'KERJA', '1', 1, 'M',
-                    CASE 
-                      WHEN @workIn IS NOT NULL THEN CAST(DATEDIFF(MINUTE, @defaultJamMasuk, @workIn) AS FLOAT)
-                      ELSE 0.0 
-                    END
-                  );
-                END
-              END
-            END;
-          `;
-
-          const CHUNK_SIZE = 50;
-          for (let i = 0; i < dsData.length; i += CHUNK_SIZE) {
-            const chunk = dsData.slice(i, i + CHUNK_SIZE);
-            let batchSql = '';
-            
-            for (let j = 0; j < chunk.length; j++) {
-              const row = chunk[j];
-              const pNik = `'${String(row.NIK).trim().replace(/'/g, "''")}'`;
-              const pTanggal = `'${row.Tanggal}'`;
-              const pIn = row.finalWorkIn ? `'${new Date(row.finalWorkIn).toISOString().replace('T', ' ').slice(0, 19)}'` : 'NULL';
-              const pOut = row.finalWorkOut ? `'${new Date(row.finalWorkOut).toISOString().replace('T', ' ').slice(0, 19)}'` : 'NULL';
+              await tx(`INSERT INTO TMP_HRIS_SYNC (NIK, Tanggal, WorkIn, WorkOut, CalcJamKerja) VALUES\n${valuesSql};`);
               
-              batchSql += singleMergeQuery
-                .replace(/@nik/g, pNik)
-                .replace(/@tanggal/g, pTanggal)
-                .replace(/@workIn/g, pIn)
-                .replace(/@workOut/g, pOut)
-                .replace(/@diffMins/g, `@diffMins_${j}`)
-                .replace(/@netMins/g, `@netMins_${j}`)
-                .replace(/@calcJamKerja/g, `@calcJamKerja_${j}`)
-                .replace(/@targetShift/g, `@targetShift_${j}`)
-                .replace(/@targetJamMasuk/g, `@targetJamMasuk_${j}`)
-                .replace(/@targetJamPulang/g, `@targetJamPulang_${j}`)
-                .replace(/@defaultJamMasuk/g, `@defaultJamMasuk_${j}`)
-                .replace(/@defaultJamPulang/g, `@defaultJamPulang_${j}`) + '\n';
+              const currentLoaded = Math.min(i + STAGING_BATCH, dsData.length);
+              const pct = 10 + Math.floor((currentLoaded / dsData.length) * 35);
+              sendEvent('progress', { message: `Menyinkronkan data presensi (${currentLoaded}/${dsData.length})...`, progress: pct });
             }
-            
-            await query(batchSql);
-            processedCount += chunk.length;
 
-            const pct = 10 + Math.floor((processedCount / dsData.length) * 40);
-            sendEvent('progress', { message: `Menyinkronkan data presensi (${processedCount}/${dsData.length})...`, progress: pct });
-          }
+            sendEvent('progress', { message: 'Menjalankan integrasi data presensi...', progress: 48 });
 
-          // ── FASE 2: Hitung ulang lembur (batched UPDATE, 30 per batch) ──
-          sendEvent('progress', { message: 'Mengambil data absen untuk divalidasi lemburnya...', progress: 55 });
-          
-          const syncedAbsen = await query<any>(`
-            SELECT a.EMP_CD, a.DATE_TRANS, a.WORK_IN, a.WORK_OUT, a.STATUS_HARI, a.SHIFT,
-                  e.JOB_CD, j.JOB_DESC, e.SEC_CD, s.SEC_DESC
-            FROM TR_ABSEN a
-            JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-            LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-            LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-            WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS < DATEADD(day, 1, @endDate)
-              AND a.WORK_IN IS NOT NULL AND a.WORK_OUT IS NOT NULL
-          `, { startDate, endDate });
+            // 3. Set-Based UPDATE on TR_ABSEN (Non-Security, dengan Proteksi Koreksi Manual HR)
+            await tx(`
+              UPDATE a
+              SET 
+                a.WORK_IN = CASE 
+                              WHEN ISNULL(CONVERT(varchar(19), a.WORK_IN, 120), '') <> ISNULL(CONVERT(varchar(19), a.WORK_IN1, 120), '') 
+                              THEN a.WORK_IN 
+                              ELSE ISNULL(t.WorkIn, a.WORK_IN) 
+                            END,
+                a.WORK_OUT = CASE 
+                               WHEN ISNULL(CONVERT(varchar(19), a.WORK_OUT, 120), '') <> ISNULL(CONVERT(varchar(19), a.WORK_OUT1, 120), '') 
+                               THEN a.WORK_OUT 
+                               ELSE ISNULL(t.WorkOut, a.WORK_OUT) 
+                             END,
+                a.WORK_IN1 = ISNULL(t.WorkIn, a.WORK_IN1),
+                a.WORK_OUT1 = ISNULL(t.WorkOut, a.WORK_OUT1),
+                a.DATE_IN = CONVERT(date, t.WorkIn),
+                a.DATE_OUT = CONVERT(date, t.WorkOut),
+                a.JAM_KERJA = t.CalcJamKerja,
+                a.HADIR = 1,
+                a.STATUS_HARI = ISNULL(a.STATUS_HARI, 'KERJA'),
+                a.SHIFT = ISNULL(a.SHIFT, '1'),
+                a.FLAG_ABSEN = ISNULL(a.FLAG_ABSEN, 'M'),
+                a.Time_Late = CASE 
+                                WHEN t.WorkIn IS NOT NULL AND a.JAM_MASUK IS NOT NULL 
+                                THEN CAST(DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) AS FLOAT)
+                                ELSE 0.0 
+                              END
+              FROM TR_ABSEN a
+              JOIN TMP_HRIS_SYNC t ON RTRIM(a.EMP_CD) = RTRIM(t.NIK) AND CONVERT(varchar(10), a.DATE_TRANS, 120) = t.Tanggal
+              WHERE (a.SEC_CD IS NULL OR RTRIM(a.SEC_CD) <> 'SEC');
+            `);
 
-          const OT_BATCH_SIZE = 30;
-          for (let i = 0; i < syncedAbsen.length; i += OT_BATCH_SIZE) {
-            const chunk = syncedAbsen.slice(i, i + OT_BATCH_SIZE);
-            let batchSql = '';
+            // 4. Set-Based INSERT for Rows not yet in TR_ABSEN
+            await tx(`
+              DECLARE @defInStr VARCHAR(8) = (SELECT TOP 1 CONVERT(varchar(8), WORK_IN, 108) FROM msSHIFT WHERE RTRIM(shift_CODE) = '1');
+              DECLARE @defOutStr VARCHAR(8) = (SELECT TOP 1 CONVERT(varchar(8), WORK_OUT, 108) FROM msSHIFT WHERE RTRIM(shift_CODE) = '1');
+              SET @defInStr = ISNULL(@defInStr, '07:00:00');
+              SET @defOutStr = ISNULL(@defOutStr, '16:00:00');
 
-            for (const row of chunk) {
-              const dateStr = new Date(row.DATE_TRANS).toISOString().split('T')[0];
-              const ot = calculateAttendanceAndOt(
-                dateStr,
-                new Date(row.WORK_IN),
-                new Date(row.WORK_OUT),
-                row.JOB_DESC || '',
-                row.SEC_DESC || '',
-                row.STATUS_HARI || '',
-                row.SHIFT || ''
+              INSERT INTO TR_ABSEN (
+                EMP_CD, DATE_TRANS, WORK_IN, WORK_OUT, WORK_IN1, WORK_OUT1, 
+                DATE_IN, DATE_OUT, JAM_MASUK, JAM_PULANG, JAM_KERJA, 
+                STATUS_HARI, SHIFT, HADIR, FLAG_ABSEN, Time_Late
+              )
+              SELECT 
+                t.NIK, 
+                CONVERT(date, t.Tanggal), 
+                t.WorkIn, 
+                t.WorkOut, 
+                t.WorkIn, 
+                t.WorkOut, 
+                CONVERT(date, t.WorkIn), 
+                CONVERT(date, t.WorkOut),
+                CAST(t.Tanggal + ' ' + @defInStr AS DATETIME),
+                CAST(t.Tanggal + ' ' + @defOutStr AS DATETIME),
+                t.CalcJamKerja,
+                'KERJA',
+                '1',
+                1,
+                'M',
+                CASE 
+                  WHEN t.WorkIn IS NOT NULL 
+                  THEN CAST(DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) AS FLOAT)
+                  ELSE 0.0 
+                END
+              FROM TMP_HRIS_SYNC t
+              WHERE NOT EXISTS (
+                SELECT 1 FROM TR_ABSEN a 
+                WHERE RTRIM(a.EMP_CD) = RTRIM(t.NIK) 
+                  AND CONVERT(varchar(10), a.DATE_TRANS, 120) = t.Tanggal
               );
-              
-              const empCd = String(row.EMP_CD).trim().replace(/'/g, "''");
-              batchSql += `UPDATE TR_ABSEN SET OT_1=${ot.OT_1||0},OT_2=${ot.OT_2||0},OT_3=${ot.OT_3||0},OT_4=${ot.OT_4||0},T_OT=${ot.T_OT||0},JAM_KERJA=${ot.JAM_KERJA||0} WHERE RTRIM(EMP_CD)=RTRIM('${empCd}') AND CONVERT(date,DATE_TRANS)=CONVERT(date,'${dateStr}');\n`;
-            }
-            
-            await query(batchSql);
+            `);
 
-            const processedOt = Math.min(i + OT_BATCH_SIZE, syncedAbsen.length);
-            const pct = 55 + Math.floor((processedOt / syncedAbsen.length) * 40);
-            sendEvent('progress', { message: `Menghitung ulang jam lembur (${processedOt}/${syncedAbsen.length})...`, progress: pct });
-          }
+            // ── FASE 2: Hitung ulang lembur dengan otCalculator (Super Cepat) ──
+            sendEvent('progress', { message: 'Mengambil data presensi untuk kalkulasi lembur...', progress: 55 });
+            
+            const syncedAbsen = await tx<any>(`
+              SELECT a.EMP_CD, CONVERT(varchar(10), a.DATE_TRANS, 120) AS DATE_TRANS, 
+                     a.WORK_IN, a.WORK_OUT, a.STATUS_HARI, a.SHIFT,
+                     e.JOB_CD, j.JOB_DESC, e.SEC_CD, s.SEC_DESC
+              FROM TR_ABSEN a
+              JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
+              LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+              LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+              WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS < DATEADD(day, 1, @endDate)
+                AND a.WORK_IN IS NOT NULL AND a.WORK_OUT IS NOT NULL;
+            `, { startDate, endDate });
+
+            if (syncedAbsen && syncedAbsen.length > 0) {
+              const otResults = syncedAbsen.map((row: any) => {
+                const ot = calculateAttendanceAndOt(
+                  row.DATE_TRANS,
+                  new Date(row.WORK_IN),
+                  new Date(row.WORK_OUT),
+                  row.JOB_DESC || '',
+                  row.SEC_DESC || '',
+                  row.STATUS_HARI || '',
+                  row.SHIFT || ''
+                );
+                return {
+                  EMP_CD: String(row.EMP_CD).trim(),
+                  DATE_TRANS: row.DATE_TRANS,
+                  OT_1: ot.OT_1 || 0,
+                  OT_2: ot.OT_2 || 0,
+                  OT_3: ot.OT_3 || 0,
+                  OT_4: ot.OT_4 || 0,
+                  T_OT: ot.T_OT || 0,
+                  JAM_KERJA: ot.JAM_KERJA || 0,
+                };
+              });
+
+              const OT_BATCH = 400;
+              for (let i = 0; i < otResults.length; i += OT_BATCH) {
+                const chunk = otResults.slice(i, i + OT_BATCH);
+                const valuesSql = chunk.map(r => {
+                  const pNik = `'${r.EMP_CD.replace(/'/g, "''")}'`;
+                  const pTgl = `'${r.DATE_TRANS}'`;
+                  return `(${pNik}, ${pTgl}, ${r.OT_1}, ${r.OT_2}, ${r.OT_3}, ${r.OT_4}, ${r.T_OT}, ${r.JAM_KERJA})`;
+                }).join(',\n');
+
+                await tx(`INSERT INTO TMP_HRIS_OT (EMP_CD, DATE_TRANS, OT_1, OT_2, OT_3, OT_4, T_OT, JAM_KERJA) VALUES\n${valuesSql};`);
+
+                const currentOt = Math.min(i + OT_BATCH, otResults.length);
+                const pct = 55 + Math.floor((currentOt / otResults.length) * 35);
+                sendEvent('progress', { message: `Menghitung ulang jam lembur (${currentOt}/${otResults.length})...`, progress: pct });
+              }
+
+              // Set-Based UPDATE Overtime
+              await tx(`
+                UPDATE a
+                SET 
+                  a.OT_1 = o.OT_1,
+                  a.OT_2 = o.OT_2,
+                  a.OT_3 = o.OT_3,
+                  a.OT_4 = o.OT_4,
+                  a.T_OT = o.T_OT,
+                  a.JAM_KERJA = o.JAM_KERJA
+                FROM TR_ABSEN a
+                JOIN TMP_HRIS_OT o ON RTRIM(a.EMP_CD) = RTRIM(o.EMP_CD) AND CONVERT(varchar(10), a.DATE_TRANS, 120) = o.DATE_TRANS;
+              `);
+            }
+
+            // 5. Bersihkan data lembur anomali di hari tanpa tap (Safety Cleanup untuk seluruh tanggal rentang)
+            await tx(`
+              UPDATE TR_ABSEN
+              SET OT_1 = 0, OT_2 = 0, OT_3 = 0, OT_4 = 0, T_OT = 0, JAM_KERJA = 0
+              WHERE DATE_TRANS >= @startDate AND DATE_TRANS < DATEADD(day, 1, @endDate)
+                AND (WORK_IN IS NULL OR RTRIM(CONVERT(varchar(19), WORK_IN, 120)) = '') 
+                AND (WORK_OUT IS NULL OR RTRIM(CONVERT(varchar(19), WORK_OUT, 120)) = '')
+                AND (REASON IS NULL OR RTRIM(REASON) = '');
+            `, { startDate, endDate });
+          });
 
           if (fallbackLogs.length > 0) {
             logSyncFallback(`Sync range ${startDate} to ${endDate}: ${fallbackLogs.length} fallbacks triggered.`);
@@ -258,9 +332,9 @@ export async function POST(request: Request) {
           }
 
           sendEvent('done', { 
-            processed: processedCount, 
+            processed: dsData.length, 
             fallbacks: fallbackLogs.length, 
-            message: `Berhasil sinkronisasi ${processedCount} data dari DataSolution.` 
+            message: `Berhasil sinkronisasi ${dsData.length.toLocaleString()} data presensi secara instan.` 
           });
           controller.close();
         } catch (error: any) {
@@ -282,3 +356,4 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+

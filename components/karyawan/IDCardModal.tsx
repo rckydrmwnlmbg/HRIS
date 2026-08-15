@@ -119,43 +119,46 @@ export default function IDCardModal({ karyawan, onClose }: Props) {
           <feDisplacementMap in="SourceGraphic" in2="lensMap" scale="50" xChannelSelector="R" yChannelSelector="G" />
         </filter>
       </svg>
-      <div className="liquid-glass-modal" onClick={(e) => e.stopPropagation()} style={{ cursor: 'default' }}>
-        <button onClick={onClose} className="liquid-glass-close" style={{ position: 'absolute', right: '12px', top: '12px', cursor: 'pointer', zIndex: 10 }}>
+      <div className="liquid-glass-modal" onClick={(e) => e.stopPropagation()} style={{ cursor: 'default', padding: '24px 26px', maxWidth: '480px' }}>
+        <button onClick={onClose} className="liquid-glass-close" style={{ position: 'absolute', right: '16px', top: '16px', cursor: 'pointer', zIndex: 10 }}>
           <X size={16} />
         </button>
 
-        <h2 className="liquid-glass-modal-title" style={{ marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 10, position: 'relative', fontSize: '14.5px', fontWeight: 700 }}>
-          <ImageIcon size={18} color="currentColor" />
+        <h2 className="liquid-glass-modal-title" style={{ marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 10, position: 'relative', fontSize: '15px', fontWeight: 750, color: 'var(--text-primary)' }}>
+          <ImageIcon size={19} color="var(--accent)" />
           {lang === 'id' ? 'Generate ID Card' : 'Generate ID Card'}
         </h2>
-        <p className="liquid-glass-modal-desc" style={{ marginBottom: '16px', zIndex: 10, position: 'relative', fontSize: '11.5px' }}>
+        <p className="liquid-glass-modal-desc" style={{ marginBottom: '18px', zIndex: 10, position: 'relative', fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.45 }}>
           {lang === 'id' ? 'Unggah foto karyawan. Sistem akan otomatis menghapus latar belakang dan memasukkannya ke template.' : 'Upload employee photo. The system will automatically remove the background and place it into the template.'}
         </p>
 
         {error && (
-          <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-light)', color: 'var(--danger)', borderRadius: 'var(--radius-sm)', marginBottom: '12px', fontSize: '11.5px', zIndex: 10, position: 'relative' }}>
+          <div style={{ padding: '10px 14px', backgroundColor: 'var(--danger-light)', color: 'var(--danger)', borderRadius: 'var(--radius-sm)', marginBottom: '14px', fontSize: '12px', zIndex: 10, position: 'relative', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
             {error}
           </div>
         )}
 
-        <div style={{ display: 'flex', gap: '14px', flexDirection: 'column', zIndex: 10, position: 'relative' }}>
+        <div style={{ display: 'flex', gap: '16px', flexDirection: 'column', zIndex: 10, position: 'relative' }}>
 
           {/* Upload Section */}
           {!resultImg && (
             <div
               style={{
-                border: '1.5px dashed var(--border)', borderRadius: 'var(--radius-md)', padding: '20px',
-                textAlign: 'center', cursor: 'pointer', backgroundColor: 'var(--bg-subtle)'
+                border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)', padding: '24px 16px',
+                textAlign: 'center', cursor: 'pointer', backgroundColor: 'var(--bg-subtle)', transition: 'all 0.2s ease'
               }}
               onClick={() => fileInputRef.current?.click()}
             >
               <input type="file" ref={fileInputRef} onChange={handleFileChange} accept="image/*" style={{ display: 'none' }} />
               {preview ? (
-                <img src={preview} alt="Preview" style={{ maxWidth: '160px', maxHeight: '160px', borderRadius: 'var(--radius-sm)', margin: '0 auto' }} />
+                <img src={preview} alt="Preview" style={{ maxWidth: '160px', maxHeight: '160px', borderRadius: 'var(--radius-sm)', margin: '0 auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: 'var(--text-muted)' }}>
-                  <Upload size={24} />
-                  <span style={{ fontSize: '12px' }}>{lang === 'id' ? 'Klik untuk memilih foto (Pas Foto)' : 'Click to select photo (Portrait)'}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', color: 'var(--text-secondary)' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(2, 132, 199, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
+                    <Upload size={22} />
+                  </div>
+                  <span style={{ fontSize: '12.5px', fontWeight: 600, color: 'var(--text-primary)' }}>{lang === 'id' ? 'Klik untuk memilih foto (Pas Foto)' : 'Click to select photo (Portrait)'}</span>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>JPG, PNG (Maks 5MB)</span>
                 </div>
               )}
             </div>
@@ -163,13 +166,13 @@ export default function IDCardModal({ karyawan, onClose }: Props) {
 
           {/* Result Section */}
           {resultImg && (
-            <div style={{ textAlign: 'center', backgroundColor: 'var(--bg-card)', padding: '16px', borderRadius: '12px' }}>
-              <img src={resultImg} alt="ID Card Final" style={{ width: '100%', maxWidth: '300px', borderRadius: '12px', boxShadow: '0 8px 16px rgba(0,0,0,0.2)' }} />
+            <div style={{ textAlign: 'center', backgroundColor: 'var(--bg-card)', padding: '16px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+              <img src={resultImg} alt="ID Card Final" style={{ width: '100%', maxWidth: '300px', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.15)' }} />
             </div>
           )}
 
           {/* Actions */}
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '12px' }}>
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '4px' }}>
             {resultImg ? (
               <>
                 <button className="btn btn-secondary" onClick={() => { setResultImg(null); setFile(null); setPreview(null); }}>
@@ -184,7 +187,7 @@ export default function IDCardModal({ karyawan, onClose }: Props) {
                 className="btn btn-primary w-full"
                 onClick={handleGenerate}
                 disabled={!file || loading}
-                style={{ justifyContent: 'center' }}
+                style={{ justifyContent: 'center', padding: '10px 16px', fontSize: '13px', fontWeight: 650 }}
               >
                 {loading ? <Loader2 size={16} className="spin" /> : <ImageIcon size={16} />}
                 {loading ? (lang === 'id' ? 'Memproses (Remove BG & Render)...' : 'Processing...') : (lang === 'id' ? 'Generate ID Card' : 'Generate ID Card')}

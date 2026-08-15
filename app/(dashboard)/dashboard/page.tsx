@@ -177,7 +177,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ========== ROW 2: Chart + Status ========== */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 18, marginBottom: 22, alignItems: 'stretch' }}>
+      <div className={styles.chartCalendarGrid}>
         {/* Trend Chart (Smooth Area Spline + Clickable Series + Export Excel) */}
         <AttendanceTrendChart />
 
@@ -186,7 +186,7 @@ export default function DashboardPage() {
       </div>
 
       {/* ========== ROW 3: Alerts + Quick Access ========== */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+      <div className={styles.bottomGrid}>
         {/* Perlu Perhatian */}
         <div className="glass-card stagger-4" style={{ padding: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
@@ -271,7 +271,7 @@ export default function DashboardPage() {
         {/* Quick Access */}
         <div className="glass-card stagger-5" style={{ padding: 24 }}>
           <h3 style={{ marginBottom: 16 }}>{t(lang, 'aksesLanjut')}</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className={styles.quickGrid}>
             {[
               { icon: Users, label: lang === 'id' ? 'Data Karyawan' : 'Employees', href: '/karyawan', color: '#3b82f6' },
               { icon: ClipboardList, label: lang === 'id' ? 'Absensi' : 'Attendance', href: '/absensi', color: '#10b981' },
