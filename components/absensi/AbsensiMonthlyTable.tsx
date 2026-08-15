@@ -110,9 +110,13 @@ export function AbsensiMonthlyTable({
               const isDraft = hasCorrection && corrStatus === 'draft';
 
               const currentShift = (disp.corrected_shift || r.SHIFT || '').trim();
-              let defaultStatus = 'KERJA';
-              if (r.STATUS_HARI === 'L' || r.STATUS_HARI === 'LIBUR') defaultStatus = 'LIBUR';
-              if (r.STATUS_HARI === 'O') defaultStatus = 'O';
+              
+              // Tampilkan status murni asli dari database tanpa manipulasi default
+              let rawDbStatus = (r.STATUS_HARI || '').trim().toUpperCase();
+              if (rawDbStatus === 'L') rawDbStatus = 'LIBUR';
+              if (rawDbStatus === 'K') rawDbStatus = 'KERJA';
+
+              const currentStatus = (disp.corrected_status !== undefined && disp.corrected_status !== null) ? disp.corrected_status : rawDbStatus;
 
               const currentInDate = (corrections.get(r.DATE_TRANS) as any)?.in_date_str ?? (disp.WORK_IN ? getFormattedDateStr(disp.WORK_IN) : getFormattedDateStr(r.DATE_TRANS));
               const currentInTime = (corrections.get(r.DATE_TRANS) as any)?.in_time_str ?? (disp.WORK_IN ? getFormattedTimeStr(disp.WORK_IN) : '-');
@@ -120,7 +124,6 @@ export function AbsensiMonthlyTable({
               const currentOutTime = (corrections.get(r.DATE_TRANS) as any)?.out_time_str ?? (disp.WORK_OUT ? getFormattedTimeStr(disp.WORK_OUT) : '-');
 
               const currentReason = (disp.corrected_reason || r.REASON || '').trim();
-              const currentStatus = disp.corrected_status || defaultStatus;
 
               const handleInlineChange = (field: string, val: string) => {
                 let updated = corrections.get(r.DATE_TRANS) || {
@@ -183,7 +186,7 @@ export function AbsensiMonthlyTable({
               const safeShifts = Array.isArray(masterShifts) ? masterShifts : [];
               const safeReasons = Array.isArray(masterReasons) ? masterReasons : [];
 
-              const isHoliday = currentStatus === 'LIBUR' || (!disp.corrected_status && (r.STATUS_HARI === 'L' || r.STATUS_HARI === 'LIBUR'));
+              const isHoliday = currentStatus === 'LIBUR';
 
               return (
                 <tr
@@ -302,11 +305,12 @@ export function AbsensiMonthlyTable({
                         fontSize: '11px',
                         padding: '3px 6px',
                         backgroundColor: isHoliday ? 'rgba(239, 68, 68, 0.14)' : undefined,
-                        color: isHoliday ? '#ef4444' : 'var(--text-primary)',
+                        color: isHoliday ? '#ef4444' : (currentStatus ? 'var(--text-primary)' : 'var(--text-muted)'),
                         borderColor: isHoliday ? 'rgba(239, 68, 68, 0.45)' : undefined,
-                        fontWeight: isHoliday ? 750 : 600
+                        fontWeight: isHoliday ? 750 : (currentStatus ? 600 : 400)
                       }}
                     >
+                      <option value="" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-secondary)' }}>-</option>
                       <option value="KERJA" style={{ color: 'var(--text-primary)', backgroundColor: 'var(--bg-secondary)' }}>KERJA</option>
                       <option value="LIBUR" style={{ color: '#ef4444', backgroundColor: 'var(--bg-secondary)', fontWeight: 700 }}>LIBUR</option>
                       <option value="O" style={{ color: 'var(--text-muted)', backgroundColor: 'var(--bg-secondary)' }}>OFF (O)</option>

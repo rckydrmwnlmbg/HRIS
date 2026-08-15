@@ -92,6 +92,14 @@ export async function POST(request: Request) {
     const detectedShift = security ? detectSecurityShift(cleanWorkIn, cleanWorkOut) : null;
     const shift = correctedShift || detectedShift?.code || employee.CURRENT_SHIFT || null;
 
+    let finalStatusHariInput = (statusHari || employee.STATUS_HARI || '').trim().toUpperCase();
+    if (!finalStatusHariInput) {
+      const holCheck = await query<any>(`
+        SELECT 1 FROM MS_LIBUR_KERJA WHERE CONVERT(varchar(10), TANGGAL, 120) = '${dateTrans}'
+      `);
+      finalStatusHariInput = holCheck.length > 0 ? 'LIBUR' : 'KERJA';
+    }
+
     // Hitung Ulang JAM_KERJA, OT, dan perbaiki status hari (jika Security Weekend)
     const calcResult = calculateAttendanceAndOt(
       dateTrans,
@@ -99,7 +107,7 @@ export async function POST(request: Request) {
       workOutDate,
       employee.JOB_DESC,
       employee.SEC_DESC,
-      statusHari || employee.STATUS_HARI || '',
+      finalStatusHariInput,
       shift
     );
 
@@ -136,9 +144,24 @@ export async function POST(request: Request) {
         JAM_MASUK = ISNULL(@targetJamMasuk, JAM_MASUK),
         JAM_PULANG = ISNULL(@targetJamPulang, JAM_PULANG),
         Time_Late = CASE 
-          WHEN @workIn IS NOT NULL AND @targetJamMasuk IS NOT NULL 
-          THEN CAST(DATEDIFF(MINUTE, @targetJamMasuk, CAST(@workIn AS DATETIME)) AS FLOAT)
-          ELSE ISNULL(Time_Late, 0.0)
+          WHEN @workIn IS NOT NULL AND @targetJamMasuk IS NOT NULL AND CAST(@workIn AS DATETIME) > @targetJamMasuk 
+          THEN 
+            CASE 
+              WHEN DATEDIFF(MINUTE, @targetJamMasuk, CAST(@workIn AS DATETIME)) <= 120
+              THEN CEILING(CAST(DATEDIFF(MINUTE, @targetJamMasuk, CAST(@workIn AS DATETIME)) AS FLOAT) / 30.0) * 0.5
+              ELSE CAST(DATEDIFF(MINUTE, @targetJamMasuk, CAST(@workIn AS DATETIME)) AS FLOAT)
+            END
+          ELSE 0.0
+        END,
+        POT_JAM = CASE 
+          WHEN @workIn IS NOT NULL AND @targetJamMasuk IS NOT NULL AND CAST(@workIn AS DATETIME) > @targetJamMasuk 
+          THEN 
+            CASE 
+              WHEN DATEDIFF(MINUTE, @targetJamMasuk, CAST(@workIn AS DATETIME)) <= 120
+              THEN CEILING(CAST(DATEDIFF(MINUTE, @targetJamMasuk, CAST(@workIn AS DATETIME)) AS FLOAT) / 30.0) * 0.5
+              ELSE 0.0
+            END
+          ELSE 0.0
         END,
         OT_1 = @ot1,
         OT_2 = @ot2,

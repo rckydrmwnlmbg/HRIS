@@ -26,7 +26,7 @@
   min-height: 100vh;
   min-width: 0;
   max-width: calc(100vw - var(--sidebar-width));
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .content {

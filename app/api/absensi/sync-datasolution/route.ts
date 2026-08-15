@@ -184,14 +184,35 @@ export async function POST(request: Request) {
                 a.DATE_OUT = CONVERT(date, t.WorkOut),
                 a.JAM_KERJA = t.CalcJamKerja,
                 a.HADIR = 1,
-                a.STATUS_HARI = ISNULL(a.STATUS_HARI, 'KERJA'),
+                a.STATUS_HARI = CASE
+                                  WHEN EXISTS (
+                                    SELECT 1 FROM MS_LIBUR_KERJA l 
+                                    WHERE CONVERT(varchar(10), l.TANGGAL, 120) = CONVERT(varchar(10), a.DATE_TRANS, 120)
+                                  ) THEN 'LIBUR'
+                                  ELSE 'KERJA'
+                                END,
                 a.SHIFT = ISNULL(a.SHIFT, '1'),
                 a.FLAG_ABSEN = ISNULL(a.FLAG_ABSEN, 'M'),
                 a.Time_Late = CASE 
-                                WHEN t.WorkIn IS NOT NULL AND a.JAM_MASUK IS NOT NULL 
-                                THEN CAST(DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) AS FLOAT)
+                                WHEN t.WorkIn IS NOT NULL AND a.JAM_MASUK IS NOT NULL AND t.WorkIn > a.JAM_MASUK
+                                THEN 
+                                  CASE 
+                                    WHEN DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) <= 120
+                                    THEN CEILING(CAST(DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) AS FLOAT) / 30.0) * 0.5
+                                    ELSE CAST(DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) AS FLOAT)
+                                  END
                                 ELSE 0.0 
-                              END
+                              END,
+                a.POT_JAM = CASE 
+                              WHEN t.WorkIn IS NOT NULL AND a.JAM_MASUK IS NOT NULL AND t.WorkIn > a.JAM_MASUK
+                              THEN 
+                                CASE 
+                                  WHEN DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) <= 120
+                                  THEN CEILING(CAST(DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) AS FLOAT) / 30.0) * 0.5
+                                  ELSE 0.0
+                                END
+                              ELSE 0.0 
+                            END
               FROM TR_ABSEN a
               JOIN TMP_HRIS_SYNC t ON RTRIM(a.EMP_CD) = RTRIM(t.NIK) AND CONVERT(varchar(10), a.DATE_TRANS, 120) = t.Tanggal
               WHERE (a.SEC_CD IS NULL OR RTRIM(a.SEC_CD) <> 'SEC')
@@ -212,7 +233,7 @@ export async function POST(request: Request) {
               INSERT INTO TR_ABSEN (
                 EMP_CD, DATE_TRANS, WORK_IN, WORK_OUT, WORK_IN1, WORK_OUT1, 
                 DATE_IN, DATE_OUT, JAM_MASUK, JAM_PULANG, JAM_KERJA, 
-                STATUS_HARI, SHIFT, HADIR, FLAG_ABSEN, Time_Late
+                STATUS_HARI, SHIFT, HADIR, FLAG_ABSEN, Time_Late, POT_JAM
               )
               SELECT 
                 t.NIK, 
@@ -226,13 +247,34 @@ export async function POST(request: Request) {
                 CAST(t.Tanggal + ' ' + @defInStr AS DATETIME),
                 CAST(t.Tanggal + ' ' + @defOutStr AS DATETIME),
                 t.CalcJamKerja,
-                'KERJA',
+                CASE
+                  WHEN EXISTS (
+                    SELECT 1 FROM MS_LIBUR_KERJA l 
+                    WHERE CONVERT(varchar(10), l.TANGGAL, 120) = t.Tanggal
+                  ) THEN 'LIBUR'
+                  ELSE 'KERJA'
+                END,
                 '1',
                 1,
                 'M',
                 CASE 
-                  WHEN t.WorkIn IS NOT NULL 
-                  THEN CAST(DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) AS FLOAT)
+                  WHEN t.WorkIn IS NOT NULL AND t.WorkIn > CAST(t.Tanggal + ' ' + @defInStr AS DATETIME)
+                  THEN 
+                    CASE 
+                      WHEN DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) <= 120
+                      THEN CEILING(CAST(DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) AS FLOAT) / 30.0) * 0.5
+                      ELSE CAST(DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) AS FLOAT)
+                    END
+                  ELSE 0.0 
+                END,
+                CASE 
+                  WHEN t.WorkIn IS NOT NULL AND t.WorkIn > CAST(t.Tanggal + ' ' + @defInStr AS DATETIME)
+                  THEN 
+                    CASE 
+                      WHEN DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) <= 120
+                      THEN CEILING(CAST(DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) AS FLOAT) / 30.0) * 0.5
+                      ELSE 0.0
+                    END
                   ELSE 0.0 
                 END
               FROM TMP_HRIS_SYNC t
@@ -242,6 +284,36 @@ export async function POST(request: Request) {
                   AND CONVERT(varchar(10), a.DATE_TRANS, 120) = t.Tanggal
               );
             `);
+
+            // 4b. JAMINAN MUTLAK: Pastikan STATUS_HARI, SHIFT, dan FLAG_ABSEN TIDAK BOLEH NULL/KOSONG
+            // Hanya mengisi kolom yang masih kosong, TANPA menyentuh jam masuk/pulang hasil koreksi HR!
+            await tx(`
+              UPDATE a
+              SET 
+                a.STATUS_HARI = CASE
+                                  WHEN a.STATUS_HARI IS NOT NULL AND RTRIM(a.STATUS_HARI) <> '' THEN a.STATUS_HARI
+                                  WHEN EXISTS (
+                                    SELECT 1 FROM MS_LIBUR_KERJA l 
+                                    WHERE CONVERT(varchar(10), l.TANGGAL, 120) = CONVERT(varchar(10), a.DATE_TRANS, 120)
+                                  ) THEN 'LIBUR'
+                                  ELSE 'KERJA'
+                                END,
+                a.SHIFT = CASE
+                            WHEN a.SHIFT IS NOT NULL AND RTRIM(a.SHIFT) <> '' THEN a.SHIFT
+                            ELSE '1'
+                          END,
+                a.FLAG_ABSEN = CASE
+                                 WHEN a.FLAG_ABSEN IS NOT NULL AND RTRIM(a.FLAG_ABSEN) <> '' THEN a.FLAG_ABSEN
+                                 ELSE 'M'
+                               END
+              FROM TR_ABSEN a
+              WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS < DATEADD(day, 1, @endDate)
+                AND (
+                  a.STATUS_HARI IS NULL OR RTRIM(a.STATUS_HARI) = ''
+                  OR a.SHIFT IS NULL OR RTRIM(a.SHIFT) = ''
+                  OR a.FLAG_ABSEN IS NULL OR RTRIM(a.FLAG_ABSEN) = ''
+                );
+            `, { startDate, endDate });
 
             // ── FASE 2: Hitung ulang lembur dengan otCalculator (Super Cepat & Akurat) ──
             sendEvent('progress', { message: 'Mengambil data presensi untuk kalkulasi lembur...', progress: 55 });

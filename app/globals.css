@@ -201,18 +201,19 @@
   padding: 0;
 }
 
-html,
+html {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  background-color: #0b1329;
+}
+
 body {
   min-height: 100vh;
   margin: 0;
   padding: 0;
-  overflow-x: hidden;
-  background-color: #0b1329;
-  background-image: url('/bg-glass-cyan.webp');
-  background-size: cover;
-  background-position: center center;
-  background-attachment: fixed;
-  background-repeat: no-repeat;
+  background: transparent !important;
+  background-color: transparent !important;
   color: var(--text-primary);
   font-family: var(--font-sans);
   font-size: 13px;
@@ -226,20 +227,28 @@ body {
   position: relative;
 }
 
-[data-theme="dark"] html,
-[data-theme="dark"] body {
+.app-wallpaper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  pointer-events: none;
+  background-color: #0b1329;
+  background-image: url('/bg-glass-cyan.webp');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+[data-theme="dark"] .app-wallpaper {
   background-color: #060b18;
   background-image:
     linear-gradient(rgba(6, 12, 26, 0.60), rgba(6, 12, 26, 0.60)),
     url('/bg-glass-cyan.webp');
-  background-size: cover;
-  background-position: center center;
-  background-attachment: fixed;
-  background-repeat: no-repeat;
-}
-
-.app-wallpaper {
-  display: none;
 }
 
 /* ===== ACCESSIBILITY SKIP LINK ===== */
@@ -452,8 +461,6 @@ a:hover {
   position: relative;
   overflow: hidden;
   transition: transform var(--transition), box-shadow var(--transition), border-color var(--transition), background var(--transition);
-  transform: translateZ(0);
-  will-change: backdrop-filter, transform;
 }
 
 /* Top Specular Chamfer Light */
