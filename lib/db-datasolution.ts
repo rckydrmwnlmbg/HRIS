@@ -23,6 +23,9 @@ if (serverHost === '.' || serverHost === '(local)' || serverHost === 'localhost'
   serverHost = 'localhost';
 }
 
+const dsAppName = (process.env.DS_DB_APP_NAME || process.env.DB_APP_NAME || 'Payroll Management Support').replace(/^["']|["']$/g, '');
+const dsWorkstationId = (process.env.DS_DB_WORKSTATION_ID || process.env.DB_WORKSTATION_ID || 'TMNB-D101-NILA').replace(/^["']|["']$/g, '');
+
 const sqlConfig: any = {
   server: serverHost,
   database: process.env.DS_DB_NAME || 'DataSolution',
@@ -35,7 +38,9 @@ const sqlConfig: any = {
   options: {
     useUTC: false,
     encrypt: false,
-    trustServerCertificate: true
+    trustServerCertificate: true,
+    appName: dsAppName,
+    workstationId: dsWorkstationId
   }
 };
 
@@ -50,7 +55,7 @@ if (process.env.NODE_ENV === 'development') {
   const odbcDriver = process.env.DB_ODBC_DRIVER || 'ODBC Driver 18 for SQL Server';
   const odbcServer = instanceName ? `${serverHost}\\${instanceName}` : serverHost;
 
-  let cs = `Driver={${odbcDriver}};Server=${odbcServer};Database=${sqlConfig.database};`;
+  let cs = `Driver={${odbcDriver}};Server=${odbcServer};Database=${sqlConfig.database};APP=${dsAppName};WSID=${dsWorkstationId};`;
 
   const useWindowsAuth = process.env.DB_TRUSTED === '1' || !process.env.DS_DB_USER;
 

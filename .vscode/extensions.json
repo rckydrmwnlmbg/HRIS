@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-mssql.mssql",
+    "GrapeCity.gc-excelviewer",
+    "mikestead.dotenv",
+    "formulahendry.auto-rename-tag",
+    "formulahendry.auto-close-tag",
+    "christian-kohler.path-intellisense",
+    "dsznajder.es7-react-js-snippets"
+  ]
+}

@@ -73,14 +73,47 @@ export function isValidAttendancePair(
   return sameDate && workOut.getTime() < workIn.getTime() && inferredOvernightMinutes > 0 && inferredOvernightMinutes <= 22 * 60;
 }
 
+/**
+ * Menghitung jam lembur Security secara akurat berdasarkan jadwal selesai shift.
+ * Datang lebih awal sebelum jam shift dimulai TIDAK dihitung sebagai lembur.
+ * Lembur hanya dihitung jika jam pulang aktual melebihi jam selesai shift (dengan toleransi minimal 30 menit).
+ */
 export function calculateSecurityOtHours(workIn: Date, workOut: Date, shift: SecurityShift | null): number {
-  const durationMinutes = getDurationMinutes(workIn, workOut);
-  const paidMinutes = Math.max(0, durationMinutes - 60);
-  if (!shift) return Math.max(0, Math.floor((paidMinutes / 60) * 2) / 2);
-  return Math.max(0, Math.floor(((paidMinutes / 60) - shift.standardHours) * 2) / 2);
+  if (!shift) {
+    const durationMinutes = getDurationMinutes(workIn, workOut);
+    const paidMinutes = Math.max(0, durationMinutes - 60);
+    return Math.max(0, Math.floor((paidMinutes / 60) * 2) / 2);
+  }
+
+  // Tentukan jam selesai shift standar (misal: 2S = 20:30 -> 1230 menit, 3S = 24:00 -> 1440 menit, 4S = 08:00 -> 1920 menit)
+  const shiftEndMinutes = shift.endMinutes;
+  
+  // Hitung menit workOut relatif terhadap hari masuk
+  let outMinutes = workOut.getHours() * 60 + workOut.getMinutes() + (workOut.getSeconds() / 60);
+  const inMinutes = workIn.getHours() * 60 + workIn.getMinutes();
+
+  // Jika lintas hari (workOut tanggal berikutnya atau outMinutes < inMinutes)
+  if (workOut.getDate() !== workIn.getDate() || outMinutes < inMinutes) {
+    outMinutes += 1440;
+  }
+
+  // Lembur dihitung HANYA jika pulang melebihi jam selesai shift
+  if (outMinutes > shiftEndMinutes) {
+    const otMinutes = outMinutes - shiftEndMinutes;
+    // Minimal 30 menit untuk dihitung 0.5 jam lembur
+    if (otMinutes >= 30) {
+      return Math.floor((otMinutes / 60) * 2) / 2;
+    }
+  }
+
+  return 0;
 }
 
-export function isSecurityJob(jobDesc?: string | null, sectionDesc?: string | null): boolean {
+export function isSecurityJob(jobDesc?: string | null, sectionDesc?: string | null, shift?: string | null): boolean {
+  const shiftStr = String(shift || '').trim().toUpperCase();
+  if (['2S', '3S', '4S', '1S'].includes(shiftStr) || shiftStr.endsWith('S')) {
+    return true;
+  }
   const value = `${jobDesc || ''} ${sectionDesc || ''}`.toUpperCase();
-  return value.includes('SECURITY') || value.includes('SATPAM');
+  return value.includes('SECURITY') || value.includes('SATPAM') || value.includes('SEC');
 }

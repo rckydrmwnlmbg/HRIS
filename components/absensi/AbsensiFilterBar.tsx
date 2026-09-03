@@ -81,15 +81,23 @@ export function AbsensiFilterBar({
             </div>
             {searchEmp && !selectedEmp && filteredKaryawan.length > 0 && (
               <div className={styles.dropdown}>
-                {filteredKaryawan.map(k => (
-                  <div key={k.EMP_CD} className={styles.dropdownItem} onClick={() => { setSelectedEmp(k); setSearchEmp(''); }}>
-                    <span style={{ color: 'var(--accent)', fontWeight: 600, minWidth: 65 }}>{k.EMP_CD}</span>
-                    <span>{k.EMP_NM}</span>
-                    {(k.SEC_DESC || k.SEC_CD) && (
-                      <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: 'auto' }}>{k.SEC_DESC || k.SEC_CD}</span>
-                    )}
-                  </div>
-                ))}
+                {filteredKaryawan.map(k => {
+                  const isNonActive = !k.Act_NonAct || String(k.Act_NonAct) === '0';
+                  return (
+                    <div key={k.EMP_CD} className={styles.dropdownItem} onClick={() => { setSelectedEmp(k); setSearchEmp(''); }}>
+                      <span style={{ color: 'var(--accent)', fontWeight: 600, minWidth: 65 }}>{k.EMP_CD}</span>
+                      <span>{k.EMP_NM}</span>
+                      {isNonActive && (
+                        <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', fontWeight: 600, marginLeft: '6px' }}>
+                          Non-Aktif
+                        </span>
+                      )}
+                      {(k.SEC_DESC || k.SEC_CD) && (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: 'auto' }}>{k.SEC_DESC || k.SEC_CD}</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -123,7 +131,14 @@ export function AbsensiFilterBar({
               {selectedEmp.EMP_NM.charAt(0)}
             </div>
             <div>
-              <div style={{ fontWeight: 600, fontSize: '14px' }}>{selectedEmp.EMP_NM}</div>
+              <div style={{ fontWeight: 600, fontSize: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span>{selectedEmp.EMP_NM}</span>
+                {(!selectedEmp.Act_NonAct || String(selectedEmp.Act_NonAct) === '0') && (
+                  <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', fontWeight: 600 }}>
+                    Non-Aktif
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                 {selectedEmp.EMP_CD} · {['1', 'Y', 'TRUE'].includes(String(selectedEmp.ALL_IN).toUpperCase()) ? 'ALL IN' : 'HARIAN'} · {selectedEmp.TEAM || selectedEmp.JOB_DESC || selectedEmp.JOB_CD} · {selectedEmp.SEC_DESC || selectedEmp.SEC_CD}
               </div>

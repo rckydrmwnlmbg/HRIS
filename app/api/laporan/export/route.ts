@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import ExcelJS from 'exceljs';
 import { query } from '@/lib/db';
 import { calculateSecurityOtHours, detectSecurityShift, getDurationMinutes, getSecurityShiftByCode, isSecurityJob, isValidAttendancePair } from '@/lib/securitySchedule';
-import { TEAM_NAME_CASE } from '@/lib/queries';
+import { TEAM_NAME_CASE, getActiveEmployeeFilter } from '@/lib/queries';
+import { calculateAttendanceAndOt } from '@/lib/otCalculator';
 
 const addTitleAndHeader = (sheet: any, columns: any[], title: string, subtitle: string, fgColor: string = 'FF00B050') => {
   sheet.columns = columns;
@@ -102,8 +103,9 @@ export async function GET(request: Request) {
           CASE 
             WHEN a.WORK_IN IS NOT NULL AND RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') THEN 
                  CASE WHEN a.JAM_KERJA IS NOT NULL AND a.JAM_KERJA < 8 THEN a.JAM_KERJA ELSE 8 END
-            WHEN RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') OR RTRIM(mr.REASON_GROUP) = 'O' THEN 8 
-            WHEN RTRIM(a.STATUS_HARI) IN ('CUTI', 'C', 'H', 'HAID') OR RTRIM(mr.REASON_GROUP) IN ('C', 'H') THEN 8
+            WHEN a.WORK_IN IS NOT NULL THEN 8
+            WHEN RTRIM(a.REASON) = '21' THEN 8 -- Dinas Luar
+            WHEN RTRIM(a.STATUS_HARI) IN ('CUTI', 'C', 'H', 'HAID') OR RTRIM(mr.REASON_GROUP) IN ('C', 'H') OR RTRIM(a.REASON) IN ('08', '09', '10', '11', '12', '13', '14', '17', '18') THEN 8
             ELSE 0 
           END AS BASIC,
           CAST(ISNULL(a.OT_1, 0) AS DECIMAL(10,1)) AS OT1,
@@ -114,8 +116,9 @@ export async function GET(request: Request) {
             (CASE 
               WHEN a.WORK_IN IS NOT NULL AND RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') THEN 
                    CASE WHEN a.JAM_KERJA IS NOT NULL AND a.JAM_KERJA < 8 THEN a.JAM_KERJA ELSE 8 END
-              WHEN RTRIM(a.STATUS_HARI) IN ('KERJA', 'O') OR RTRIM(mr.REASON_GROUP) = 'O' THEN 8 
-              WHEN RTRIM(a.STATUS_HARI) IN ('CUTI', 'C', 'H', 'HAID') OR RTRIM(mr.REASON_GROUP) IN ('C', 'H') THEN 8
+              WHEN a.WORK_IN IS NOT NULL THEN 8
+              WHEN RTRIM(a.REASON) = '21' THEN 8 -- Dinas Luar
+              WHEN RTRIM(a.STATUS_HARI) IN ('CUTI', 'C', 'H', 'HAID') OR RTRIM(mr.REASON_GROUP) IN ('C', 'H') OR RTRIM(a.REASON) IN ('08', '09', '10', '11', '12', '13', '14', '17', '18') THEN 8
               ELSE 0 
             END) + ISNULL(a.OT_1, 0) + ISNULL(a.OT_2, 0) + ISNULL(a.OT_3, 0) + ISNULL(a.OT_4, 0)
             AS DECIMAL(10,1)
@@ -161,6 +164,9 @@ export async function GET(request: Request) {
 
       const monthNames = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
       const monthStr = monthNames[bulan - 1] || String(bulan);
+      const periodeTitle = (startParam && endParam)
+        ? `PERIODE: ${formatDate(startParam)} S/D ${formatDate(endParam)}`
+        : `PERIODE: ${monthStr.toUpperCase()} ${tahun}`;
 
       worksheet.columns = headers.map(h => ({
         ...h,
@@ -177,7 +183,7 @@ export async function GET(request: Request) {
       worksheet.spliceRows(1, 0,
         ['PT. TPINC Trading Jakarta'],
         ['LAPORAN ABSENSI KARYAWAN'],
-        [`PERIODE: ${monthStr.toUpperCase()} ${tahun}`],
+        [periodeTitle],
         []
       );
 
@@ -220,7 +226,8 @@ export async function GET(request: Request) {
       });
 
       // Style Data Rows
-      previewData.forEach((row: any) => {
+      previewData.forEach((row: any, idx: number) => {
+        const rowNum = 6 + idx;
         const addedRow = worksheet.addRow({
           TANGGAL: row.TANGGAL,
           NIK: row.NIK,
@@ -234,22 +241,38 @@ export async function GET(request: Request) {
           PULANG: row.PULANG || '',
           STATUS_HARI: row.STATUS_HARI || '',
           ALASAN: row.ALASAN || '',
-          BASIC: Number(row.BASIC).toFixed(1),
-          OT1: Number(row.OT1).toFixed(1),
-          OT2: Number(row.OT2).toFixed(1),
-          OT3: Number(row.OT3).toFixed(1),
-          OT4: Number(row.OT4).toFixed(1),
-          TOTAL: Number(row.TOTAL).toFixed(1)
+          BASIC: Number(row.BASIC),
+          OT1: Number(row.OT1),
+          OT2: Number(row.OT2),
+          OT3: Number(row.OT3),
+          OT4: Number(row.OT4),
+          TOTAL: Number(row.TOTAL)
         });
         addedRow.height = 19;
+        
+        // Sisipkan Rumus Excel untuk Kolom TOTAL (BASIC + OT1 + OT2 + OT3 + OT4)
+        addedRow.getCell(18).value = {
+          formula: `M${rowNum}+N${rowNum}+O${rowNum}+P${rowNum}+Q${rowNum}`,
+          result: Number(row.TOTAL)
+        };
+        addedRow.getCell(13).numFmt = '0.0';
+        addedRow.getCell(14).numFmt = '0.0';
+        addedRow.getCell(15).numFmt = '0.0';
+        addedRow.getCell(16).numFmt = '0.0';
+        addedRow.getCell(17).numFmt = '0.0';
+        addedRow.getCell(18).numFmt = '0.0';
       });
 
       const buffer = await workbook.xlsx.writeBuffer();
+      const outFilename = (startParam && endParam)
+        ? `Laporan_Absensi_${startParam}_sd_${endParam}.xlsx`
+        : `Laporan_${type}_${tahun}${String(bulan).padStart(2, '0')}.xlsx`;
+
       return new NextResponse(buffer, {
         status: 200,
         headers: {
           'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-          'Content-Disposition': `attachment; filename="Laporan_${type}_${tahun}${String(bulan).padStart(2, '0')}.xlsx"`,
+          'Content-Disposition': `attachment; filename="${outFilename}"`,
         },
       });
 
@@ -287,7 +310,7 @@ export async function GET(request: Request) {
           RTRIM(d.DEP_DESC) AS DEP_DESC,
           RTRIM(s.SEC_DESC) AS SEC_DESC,
           RTRIM(j.JOB_DESC) AS JOB_DESC,
-          CASE   WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'   WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'   WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'   WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'   WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'   WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'   WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'   WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'   WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'   WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'   WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'   WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'   WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'   WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'   WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'   WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'   WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'   ELSE RTRIM(d.DEP_DESC) END AS TEAM,
+          ${TEAM_NAME_CASE} AS TEAM,
           CASE WHEN UPPER(ISNULL(RTRIM(e.ALL_IN), '0')) IN ('1', 'Y', 'TRUE') THEN 1 ELSE 0 END AS isAllIn,
           e.DT_RSG,
           e.DT_ENTRY,
@@ -310,8 +333,7 @@ export async function GET(request: Request) {
           WHERE DATE_TRANS >= '${startStr}' AND DATE_TRANS <= '${endStr}'
         ) a ON e.EMP_CD = a.EMP_CD
         LEFT JOIN Ms_Reason mr ON a.REASON = mr.REASON_CODE
-        WHERE (e.DT_ENTRY IS NULL OR e.DT_ENTRY <= '${endStr}')
-          AND (e.DT_RSG IS NULL OR e.DT_RSG >= '${startStr}')
+        WHERE ${getActiveEmployeeFilter({ startDate: startStr, endDate: endStr })}
           ${extraCondition}
         ORDER BY s.SEC_DESC, e.EMP_NM, a.DATE_TRANS
       `);
@@ -358,52 +380,40 @@ export async function GET(request: Request) {
           let computedOt: number | null = null;
           const outDate = row.WORK_OUT ? new Date(row.WORK_OUT) : null;
           const inDate = row.WORK_IN ? new Date(row.WORK_IN) : null;
-          const isSecurityHoliday = security && (status === 'LIBUR' || status === 'OFF') && !isSecurityWeekend;
           const securityShift = security ? (detectSecurityShift(row.WORK_IN, row.WORK_OUT) || getSecurityShiftByCode(row.SHIFT)) : null;
           const attendanceValid = isValidAttendancePair(row.dateStr, inDate, outDate, securityShift);
+
           if (attendanceValid && inDate && outDate) {
-            if (isSecurityHoliday) {
-              const workedMinutes = getDurationMinutes(inDate, outDate);
-              computedOt = Math.max(0, Math.floor(((workedMinutes - 60) / 60) * 2) / 2);
-            } else if (isHolidayCalculation) {
-              computedOt = Math.max(0, Math.floor((getDurationMinutes(inDate, outDate) / 60) * 2) / 2);
-            } else if (security && securityShift) {
-              computedOt = calculateSecurityOtHours(inDate, outDate, securityShift);
-            } else {
-              let schOutHour = 16;
-              let schOutMin = 0;
-              if (row.JAM_PULANG) {
-                const pDate = new Date(row.JAM_PULANG);
-                if (!isNaN(pDate.getTime())) {
-                  schOutHour = pDate.getHours();
-                  schOutMin = pDate.getMinutes();
-                }
-              }
-              // Normalize outDate for overnight workers (outDate < inDate means next day)
-              let effectiveOut = outDate;
-              if (inDate && outDate && outDate.getTime() <= inDate.getTime()) {
-                effectiveOut = new Date(outDate.getTime() + 24 * 60 * 60 * 1000);
-              }
-              const scheduleOut = new Date(inDate!);
-              scheduleOut.setHours(schOutHour, schOutMin, 0, 0);
-              const diffMinutes = (effectiveOut.getTime() - scheduleOut.getTime()) / 60000;
-              const breakMinutes = diffMinutes >= 210 ? 30 : 0;
-              computedOt = Math.max(0, Math.floor(((diffMinutes - breakMinutes) / 60) * 2) / 2);
-            }
+            const otRes = calculateAttendanceAndOt(
+              row.dateStr,
+              inDate,
+              outDate,
+              row.JOB_DESC || '',
+              row.SEC_DESC || '',
+              status || '',
+              row.SHIFT || null
+            );
+            computedOt = otRes.T_OT;
           }
+
+          const hasDbDailyOt = row.dailyOt !== null && row.dailyOt !== undefined && !isNaN(Number(row.dailyOt));
+          const effectiveOt = hasDbDailyOt ? Number(row.dailyOt) : (computedOt ?? 0);
 
           if (isHolidayCalculation) {
             kerjaHours = 0;
-            otHours = attendanceValid ? (computedOt ?? (row.JAM_KERJA && !isNaN(Number(row.JAM_KERJA)) ? Number(row.JAM_KERJA) : 0)) : 0;
+            otHours = attendanceValid ? effectiveOt : 0;
           } else {
             if (isCuti) {
               kerjaHours = 8;
               otHours = 0;
-            } else if (isKerjaNormal && attendanceValid) {
-              const actDur = (inDate && outDate) ? getDurationMinutes(inDate, outDate) / 60 : 0;
+            } else if (attendanceValid && inDate && outDate) {
+              const actDur = getDurationMinutes(inDate, outDate) / 60;
               const roundedDur = Math.round(actDur * 10) / 10;
               kerjaHours = Math.min(8, roundedDur);
-              otHours = computedOt ?? 0;
+              otHours = effectiveOt;
+            } else if (row.REASON === '21') {
+              kerjaHours = 8;
+              otHours = 0;
             } else {
               kerjaHours = 0;
               otHours = 0;
@@ -534,8 +544,10 @@ export async function GET(request: Request) {
           let ci = 6;
           weekDates.forEach((d) => {
             const dayData = row.days[d] || { kerja: 0, ot: 0 };
-            excelRow.getCell(ci).value = Number(dayData.kerja.toFixed(1)).toFixed(1);
-            excelRow.getCell(ci + 1).value = Number(dayData.ot.toFixed(1)).toFixed(1);
+            excelRow.getCell(ci).value = Number(dayData.kerja);
+            excelRow.getCell(ci).numFmt = '0.0';
+            excelRow.getCell(ci + 1).value = Number(dayData.ot);
+            excelRow.getCell(ci + 1).numFmt = '0.0';
             ci += 2;
           });
 
@@ -544,15 +556,25 @@ export async function GET(request: Request) {
           const totKerjaCol = getColName(colIndex - 4);
           const totOtCol = getColName(colIndex - 3);
 
-          excelRow.getCell(ci).value = Number(row.totalKerja.toFixed(1)).toFixed(1);
-          excelRow.getCell(ci + 1).value = Number(row.totalOt.toFixed(1)).toFixed(1);
-          excelRow.getCell(ci + 2).value = Number((row.totalKerja + row.totalOt).toFixed(1)).toFixed(1);
+          // Sisipkan Rumus Excel untuk TOTAL KERJA, TOTAL OT, TOTAL KERJA+OT
+          excelRow.getCell(ci).value = { formula: kerjaCols, result: Number(row.totalKerja.toFixed(1)) };
+          excelRow.getCell(ci).numFmt = '0.0';
+          
+          excelRow.getCell(ci + 1).value = { formula: otCols, result: Number(row.totalOt.toFixed(1)) };
+          excelRow.getCell(ci + 1).numFmt = '0.0';
+          
+          excelRow.getCell(ci + 2).value = { formula: `${totKerjaCol}${startRow}+${totOtCol}${startRow}`, result: Number((row.totalKerja + row.totalOt).toFixed(1)) };
+          excelRow.getCell(ci + 2).numFmt = '0.0';
           ci += 3;
 
           excelRow.getCell(ci).value = row.A;
+          excelRow.getCell(ci).numFmt = '0';
           excelRow.getCell(ci + 1).value = row.I;
+          excelRow.getCell(ci + 1).numFmt = '0';
           excelRow.getCell(ci + 2).value = row.S;
+          excelRow.getCell(ci + 2).numFmt = '0';
           excelRow.getCell(ci + 3).value = row.C;
+          excelRow.getCell(ci + 3).numFmt = '0';
 
           for (let c = 1; c < colIndex + 4; c++) {
             const cell = excelRow.getCell(c);
@@ -579,39 +601,65 @@ export async function GET(request: Request) {
         const sumRowIndex = startRow;
         const sumRow = ws.getRow(startRow);
 
-        ws.mergeCells(sumRowIndex, 1, sumRowIndex, colIndex - 4);
+        ws.mergeCells(sumRowIndex, 1, sumRowIndex, 5);
         const totalCell = sumRow.getCell(1);
         totalCell.value = 'TOTAL';
         totalCell.font = { bold: true };
         totalCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-        // Sum columns: TOTAL KERJA, TOTAL OT, TOTAL KERJA+OT, KETERANGAN (A, I, S, C)
-        const sumColumns = [
-          colIndex - 3, colIndex - 2, colIndex - 1,
-          colIndex, colIndex + 1, colIndex + 2, colIndex + 3
-        ];
+        const dataStartRow = 15;
+        const dataEndRow = Math.max(15, sumRowIndex - 1);
 
-        const sumValues: Record<number, string | number> = {
-          [colIndex - 3]: grandTotalKerja.toFixed(1),
-          [colIndex - 2]: grandTotalOt.toFixed(1),
-          [colIndex - 1]: (grandTotalKerja + grandTotalOt).toFixed(1),
-          [colIndex]: grandA,
-          [colIndex + 1]: grandI,
-          [colIndex + 2]: grandS,
-          [colIndex + 3]: grandC,
-        };
-
-        for (let c = 1; c < colIndex + 4; c++) {
+        // Daily totals formulas
+        for (let c = 6; c <= colIndex - 4; c++) {
+          const colLet = getColName(c - 1);
           const cell = sumRow.getCell(c);
-          setBorder(cell);
-          if (sumColumns.includes(c)) {
-            cell.value = sumValues[c];
-            cell.font = { bold: true };
-            cell.alignment = { horizontal: 'center' };
-          }
+          cell.value = { formula: `SUM(${colLet}${dataStartRow}:${colLet}${dataEndRow})` };
+          cell.numFmt = '0.0';
+          cell.font = { bold: true };
+          cell.alignment = { horizontal: 'center' };
         }
 
+        const totKerjaColLetter = getColName(colIndex - 4);
+        const totOtColLetter = getColName(colIndex - 3);
         const totKerjaOtColLetter = getColName(colIndex - 2);
+
+        // Total Kerja column formula
+        const cellTotKerja = sumRow.getCell(colIndex - 3);
+        cellTotKerja.value = { formula: `SUM(${totKerjaColLetter}${dataStartRow}:${totKerjaColLetter}${dataEndRow})`, result: grandTotalKerja };
+        cellTotKerja.numFmt = '0.0';
+        cellTotKerja.font = { bold: true };
+        cellTotKerja.alignment = { horizontal: 'center' };
+
+        // Total OT column formula
+        const cellTotOt = sumRow.getCell(colIndex - 2);
+        cellTotOt.value = { formula: `SUM(${totOtColLetter}${dataStartRow}:${totOtColLetter}${dataEndRow})`, result: grandTotalOt };
+        cellTotOt.numFmt = '0.0';
+        cellTotOt.font = { bold: true };
+        cellTotOt.alignment = { horizontal: 'center' };
+
+        // Total Kerja+OT column formula
+        const cellTotBoth = sumRow.getCell(colIndex - 1);
+        cellTotBoth.value = { formula: `${totKerjaColLetter}${sumRowIndex}+${totOtColLetter}${sumRowIndex}`, result: grandTotalKerja + grandTotalOt };
+        cellTotBoth.numFmt = '0.0';
+        cellTotBoth.font = { bold: true };
+        cellTotBoth.alignment = { horizontal: 'center' };
+
+        // Keterangan columns A, I, S, C formulas
+        const ketCols = [colIndex, colIndex + 1, colIndex + 2, colIndex + 3];
+        const ketTotals = [grandA, grandI, grandS, grandC];
+        ketCols.forEach((c, idx) => {
+          const colLet = getColName(c - 1);
+          const cell = sumRow.getCell(c);
+          cell.value = { formula: `SUM(${colLet}${dataStartRow}:${colLet}${dataEndRow})`, result: ketTotals[idx] };
+          cell.numFmt = '0';
+          cell.font = { bold: true };
+          cell.alignment = { horizontal: 'center' };
+        });
+
+        for (let c = 1; c < colIndex + 4; c++) {
+          setBorder(sumRow.getCell(c));
+        }
 
         // Compute MAX WT and Working time breakdown server-side
         const kerjaOtValues = filteredData.map(row => Number((row.totalKerja + row.totalOt).toFixed(1)));
@@ -623,7 +671,8 @@ export async function GET(request: Request) {
         startRow += 3;
         ws.getCell(startRow, colIndex - 3).value = 'MAX WT';
         ws.getCell(startRow, colIndex - 3).font = { bold: true };
-        ws.getCell(startRow, colIndex - 2).value = maxWt.toFixed(1);
+        ws.getCell(startRow, colIndex - 2).value = { formula: `MAX(${totKerjaOtColLetter}${dataStartRow}:${totKerjaOtColLetter}${dataEndRow})`, result: maxWt };
+        ws.getCell(startRow, colIndex - 2).numFmt = '0.0';
         ws.getCell(startRow, colIndex - 2).font = { bold: true };
 
         startRow += 2;
@@ -632,21 +681,28 @@ export async function GET(request: Request) {
 
         startRow++;
         ws.getCell(startRow, colIndex - 3).value = '<= 40';
-        ws.getCell(startRow, colIndex - 2).value = countLte40;
+        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIF(${totKerjaOtColLetter}${dataStartRow}:${totKerjaOtColLetter}${dataEndRow}, "<=40")`, result: countLte40 };
+        ws.getCell(startRow, colIndex - 2).numFmt = '0';
         const b1Cell = `${getColName(colIndex - 3)}${startRow}`;
+        const b1RowNum = startRow;
 
         startRow++;
         ws.getCell(startRow, colIndex - 3).value = '40.5 - 60';
-        ws.getCell(startRow, colIndex - 2).value = countGt40Lte60;
+        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIFS(${totKerjaOtColLetter}${dataStartRow}:${totKerjaOtColLetter}${dataEndRow}, ">40", ${totKerjaOtColLetter}${dataStartRow}:${totKerjaOtColLetter}${dataEndRow}, "<=60")`, result: countGt40Lte60 };
+        ws.getCell(startRow, colIndex - 2).numFmt = '0';
         const b2Cell = `${getColName(colIndex - 3)}${startRow}`;
 
         startRow++;
         ws.getCell(startRow, colIndex - 3).value = '>60';
-        ws.getCell(startRow, colIndex - 2).value = countGt60;
+        ws.getCell(startRow, colIndex - 2).value = { formula: `COUNTIF(${totKerjaOtColLetter}${dataStartRow}:${totKerjaOtColLetter}${dataEndRow}, ">60")`, result: countGt60 };
+        ws.getCell(startRow, colIndex - 2).numFmt = '0';
         const b3Cell = `${getColName(colIndex - 3)}${startRow}`;
+        const b3RowNum = startRow;
 
         startRow++;
-        ws.getCell(startRow, colIndex - 2).value = filteredData.length;
+        ws.getCell(startRow, colIndex - 3).value = 'Total';
+        ws.getCell(startRow, colIndex - 2).value = { formula: `SUM(${getColName(colIndex - 3)}${b1RowNum}:${getColName(colIndex - 3)}${b3RowNum})`, result: filteredData.length };
+        ws.getCell(startRow, colIndex - 2).numFmt = '0';
         const totalEmpCell = `${getColName(colIndex - 3)}${startRow}`;
 
         const targetStat = isAllInFilter ? stats.ALL_IN : stats.HARIAN;
@@ -841,7 +897,7 @@ export async function GET(request: Request) {
           RTRIM(s.SEC_DESC) AS SEC_DESC,
           RTRIM(e.DEP_CD) AS DEP_CD,
           RTRIM(d.DEP_DESC) AS DEP_DESC,
-          CASE   WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'   WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'   WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'   WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'   WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'   WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'   WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'   WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'   WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'   WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'   WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'   WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'   WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'   WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'   WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'   WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'   WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'   ELSE RTRIM(d.DEP_DESC) END AS TEAM
+          ${TEAM_NAME_CASE} AS TEAM
         FROM TR_ABSEN a
         LEFT JOIN EMP_TABLE e ON a.EMP_CD = e.EMP_CD
         LEFT JOIN MS_SEC s ON e.SEC_CD = s.SEC_CD
@@ -1032,7 +1088,7 @@ export async function GET(request: Request) {
           RTRIM(e.EMP_NM) AS EMP_NM,
           RTRIM(d.DEP_DESC) AS DEP_DESC,
           RTRIM(s.SEC_DESC) AS SEC_DESC,
-          CASE   WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'   WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'   WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'   WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'   WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'   WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'   WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'   WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'   WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'   WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'   WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'   WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'   WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'   WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'   WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'   WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'   WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'   WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'   ELSE RTRIM(d.DEP_DESC) END AS TEAM,
+          ${TEAM_NAME_CASE} AS TEAM,
           CONVERT(varchar(10), a.DATE_TRANS, 120) AS dateStr,
           CONVERT(varchar(8), a.WORK_IN, 108) AS WORK_IN_STR,
           CONVERT(varchar(8), a.WORK_OUT, 108) AS WORK_OUT_STR,

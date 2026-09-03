@@ -82,7 +82,7 @@ export function calculateAttendanceAndOt(
   inputShift: string | null
 ): OtCalculationResult {
 
-  const isSecurity = isSecurityJob(empJobDesc, empSecDesc);
+  const isSecurity = isSecurityJob(empJobDesc, empSecDesc, inputShift);
   const transactionDate = new Date(`${dateTrans}T00:00:00`);
   const dayOfWeek = transactionDate.getDay();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
@@ -91,20 +91,20 @@ export function calculateAttendanceAndOt(
   let JAM_KERJA: number | null = null;
   let totalOtHours = 0;
 
-  // 1. Perbaiki Bug Weekend Security (Override STATUS_HARI)
-  if (isSecurity && isWeekend && (finalStatusHari === 'LIBUR' || finalStatusHari === 'OFF' || finalStatusHari === 'L' || finalStatusHari === '')) {
+  // 1. Bug Weekend Security: HANYA otomatis jika status kosong/belum ditentukan (jangan timpa pilihan manual user)
+  if (isSecurity && isWeekend && (!inputStatusHari || inputStatusHari === '')) {
     finalStatusHari = 'KERJA';
   }
 
   const isHoliday = finalStatusHari === 'LIBUR' || finalStatusHari === 'OFF' || finalStatusHari === 'L' || finalStatusHari === 'H';
-  const isSecurityHoliday = isSecurity && isHoliday; // Hanya berlaku jika benar-benar libur nasional / cuti
+  const isSecurityHoliday = isSecurity && isHoliday; // Berlaku jika libur/cuti
 
   // 2. Jika Fingerprint Kosong (TIDAK ADA DATA)
   if (!workIn || !workOut) {
     return {
-      JAM_KERJA: isHoliday ? 0 : null,
+      JAM_KERJA: isHoliday ? 0 : 0,
       OT_1: 0, OT_2: 0, OT_3: 0, OT_4: 0, T_OT: 0,
-      STATUS_HARI: finalStatusHari
+      STATUS_HARI: finalStatusHari || (isHoliday ? 'LIBUR' : 'KERJA')
     };
   }
 
@@ -112,7 +112,7 @@ export function calculateAttendanceAndOt(
   const workedMinutes = getDurationMinutes(workIn, workOut);
 
   // 4. Kalkulasi Jam Kerja & Lembur berdasarkan Tipe Karyawan
-  // Jika dia Security, TAPI di-assign ke Shift 1 (Pagi normal), maka perhitungannya ikut aturan UMUM (cut-off 16:00)
+  // Jika dia Security atau memiliki shift security (2S, 3S, 4S), hitung berdasarkan jadwal shift security
   if (isSecurity && inputShift !== '1') {
     // --- SECURITY ---
     const secShift = inputShift ? getSecurityShiftByCode(inputShift) : detectSecurityShift(workIn, workOut);
@@ -121,20 +121,22 @@ export function calculateAttendanceAndOt(
       JAM_KERJA = 0;
       totalOtHours = Math.max(0, Math.floor(((workedMinutes - 60) / 60) * 2) / 2); // Pengurangan 1 jam istirahat
     } else {
-      JAM_KERJA = secShift ? secShift.standardHours : Math.max(0, (workedMinutes / 60) - 1); // 1 jam istirahat
+      JAM_KERJA = secShift ? secShift.standardHours : 8.0;
       
-      // Hitung Lembur (OT)
+      // Hitung Lembur (OT) secara ketat berdasarkan jam selesai shift
       if (secShift) {
         totalOtHours = calculateSecurityOtHours(workIn, workOut, secShift);
       } else {
-        totalOtHours = Math.max(0, Math.floor(((workedMinutes - 60) / 60) * 2) / 2 - JAM_KERJA);
+        totalOtHours = Math.max(0, Math.floor(((workedMinutes - 60) / 60) * 2) / 2 - 8.0);
       }
     }
   } else {
     // --- KARYAWAN UMUM (HARIAN & ALL-IN) ---
     if (isHoliday) {
       JAM_KERJA = 0;
-      totalOtHours = Math.max(0, Math.floor((workedMinutes / 60) * 2) / 2);
+      // Jika lembur hari libur >= 5 jam (300 menit), kurangi 60 menit (1 jam) untuk istirahat makan siang
+      const netMinutes = workedMinutes >= 300 ? workedMinutes - 60 : workedMinutes;
+      totalOtHours = Math.max(0, Math.floor((netMinutes / 60) * 2) / 2);
     } else {
       JAM_KERJA = 8; // Default jam kerja kantoran
       

@@ -1,3 +1,17 @@
+/**
+ * ==============================================================================
+ * BACKUP LOGIKA RESMI DARI LAPORAN OT ANALYSIS (ORIGINAL SOURCE OF TRUTH)
+ * ==============================================================================
+ * 1. Filter Karyawan Aktif (Laporan OT Asli):
+ *    (e.DT_ENTRY IS NULL OR e.DT_ENTRY <= @endDate)
+ *    AND (e.DT_RSG IS NULL OR YEAR(e.DT_RSG) <= 1900 OR e.DT_RSG >= @startDate)
+ *    AND e.Act_NonAct = 1
+ *
+ * 2. Pemetaan TEAM (Laporan OT Asli):
+ *    Mengelompokkan MS_SEC ke dalam payung departemen pabrik (SEWING, CUTTING, dll)
+ * ==============================================================================
+ */
+
 export const TEAM_NAME_CASE = `
   CASE   
     WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'   
@@ -22,3 +36,30 @@ export const TEAM_NAME_CASE = `
     ELSE RTRIM(d.DEP_DESC) 
   END
 `;
+
+/**
+ * Menghasilkan klausa SQL WHERE untuk memfilter karyawan aktif pada suatu periode/tanggal
+ * Berdasarkan standar baku Laporan OT Analysis.
+ */
+export function getActiveEmployeeFilter(options?: {
+  startDate?: string;
+  endDate?: string;
+  date?: string;
+  alias?: string;
+}): string {
+  const a = options?.alias || 'e';
+  const start = options?.startDate || options?.date;
+  const end = options?.endDate || options?.date;
+
+  let clause = `${a}.Act_NonAct = 1`;
+
+  if (end) {
+    clause += ` AND (${a}.DT_ENTRY IS NULL OR CONVERT(varchar(10), ${a}.DT_ENTRY, 120) <= '${end}')`;
+  }
+
+  if (start) {
+    clause += ` AND (${a}.DT_RSG IS NULL OR YEAR(${a}.DT_RSG) <= 1900 OR CONVERT(varchar(10), ${a}.DT_RSG, 120) >= '${start}')`;
+  }
+
+  return clause;
+}

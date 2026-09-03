@@ -13,6 +13,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'emp parameter required' }, { status: 400 });
     }
 
+    const lastDayOfMonth = new Date(tahun, bulan, 0).getDate();
+    const startDateStr = `${tahun}-${String(bulan).padStart(2, '0')}-01`;
+    const endDateStr = `${tahun}-${String(bulan).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`;
+
     const result = await query<any>(`
       SELECT 
         CONVERT(varchar(10), a.DATE_TRANS, 120) AS DATE_TRANS,
@@ -42,11 +46,11 @@ export async function GET(request: Request) {
         CAST(ISNULL(a.T_OT, 0) AS DECIMAL(10,1)) AS T_OT,
         RTRIM(a.SEC_CD) AS SEC_CD,
         a.Time_Late
-      FROM TR_ABSEN a
-      LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
+      FROM TR_ABSEN a WITH (NOLOCK)
+      LEFT JOIN Ms_Reason mr WITH (NOLOCK) ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
       WHERE RTRIM(a.EMP_CD) = '${emp.replace(/'/g, "''")}'
-        AND MONTH(a.DATE_TRANS) = ${bulan}
-        AND YEAR(a.DATE_TRANS) = ${tahun}
+        AND a.DATE_TRANS >= '${startDateStr}'
+        AND a.DATE_TRANS <= '${endDateStr}'
       ORDER BY a.DATE_TRANS ASC
     `);
 

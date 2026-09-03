@@ -53,67 +53,107 @@ export async function POST(request: Request) {
         try {
           sendEvent('progress', { message: 'Menghubungkan ke mesin DataSolution...', progress: 5 });
           
-          const dsData = await dsQuery<any>(`
-            WITH RawTaps AS (
-              SELECT 
-                u.Badgenumber AS NIK,
-                CAST(c.CHECKTIME AS DATE) AS Tanggal,
-                c.CHECKTIME,
-                c.CHECKTYPE
-              FROM CHECKINOUT c
-              JOIN USERINFO u ON c.USERID = u.USERID
-              WHERE c.CHECKTIME >= @startDate AND c.CHECKTIME < DATEADD(day, 1, @endDate)
-            ),
-            AggregatedTaps AS (
-              SELECT 
-                NIK,
-                Tanggal,
-                MIN(CASE WHEN CHECKTYPE = 'I' THEN CHECKTIME END) AS JamMasuk_I,
-                MAX(CASE WHEN CHECKTYPE = 'O' THEN CHECKTIME END) AS JamKeluar_O,
-                MIN(CHECKTIME) AS JamMasuk_Fallback,
-                MAX(CHECKTIME) AS JamKeluar_Fallback
-              FROM RawTaps
-              GROUP BY NIK, Tanggal
-            )
+          const rawTaps = await dsQuery<any>(`
             SELECT 
-              NIK,
-              CONVERT(varchar(10), Tanggal, 120) as Tanggal,
-              JamMasuk_I,
-              JamKeluar_O,
-              JamMasuk_Fallback,
-              JamKeluar_Fallback
-            FROM AggregatedTaps
-            WHERE NIK IS NOT NULL AND RTRIM(NIK) <> ''
+              RTRIM(u.Badgenumber) AS NIK,
+              c.CHECKTIME,
+              RTRIM(ISNULL(c.CHECKTYPE, '')) AS CHECKTYPE
+            FROM CHECKINOUT c
+            JOIN USERINFO u ON c.USERID = u.USERID
+            WHERE c.CHECKTIME >= @startDate AND c.CHECKTIME < DATEADD(hour, 27, CAST(@endDate AS DATETIME))
+              AND u.Badgenumber IS NOT NULL AND RTRIM(u.Badgenumber) <> ''
+            ORDER BY u.Badgenumber, c.CHECKTIME ASC
           `, { startDate, endDate });
 
-          if (!dsData || dsData.length === 0) {
+          if (!rawTaps || rawTaps.length === 0) {
             sendEvent('done', { processed: 0, message: 'Tidak ada data dari DataSolution di rentang tanggal ini' });
             controller.close();
             return;
           }
 
-          sendEvent('progress', { message: `Ditemukan ${dsData.length.toLocaleString()} data presensi. Mulai penyiapan staging...`, progress: 10 });
+          sendEvent('progress', { message: `Ditemukan ${rawTaps.length.toLocaleString()} rekaman log mesin. Mulai penataan shift & lembur...`, progress: 10 });
           
+          // Kelompokkan tap mentah per NIK
+          const tapsByNik = new Map<string, Array<{ time: Date; type: string }>>();
+          rawTaps.forEach((row: any) => {
+            if (!row.NIK || !row.CHECKTIME) return;
+            const list = tapsByNik.get(row.NIK) || [];
+            list.push({ time: new Date(row.CHECKTIME), type: row.CHECKTYPE });
+            tapsByNik.set(row.NIK, list);
+          });
+
+          // Bangun daftar tanggal kalender dalam rentang [startDate s/d endDate]
+          const targetDates: string[] = [];
+          let currD = new Date(startDate + 'T00:00:00');
+          const endD = new Date(endDate + 'T00:00:00');
+          while (currD <= endD) {
+            const y = currD.getFullYear();
+            const m = String(currD.getMonth() + 1).padStart(2, '0');
+            const d = String(currD.getDate()).padStart(2, '0');
+            targetDates.push(`${y}-${m}-${d}`);
+            currD.setDate(currD.getDate() + 1);
+          }
+
+          const dsData: any[] = [];
           const fallbackLogs: string[] = [];
 
-          dsData.forEach((row: any) => {
-            let workIn = row.JamMasuk_I;
-            let workOut = row.JamKeluar_O;
-            if (!workIn || !workOut) {
-              workIn = row.JamMasuk_Fallback;
-              workOut = row.JamKeluar_Fallback;
-              fallbackLogs.push(`Fallback: NIK ${row.NIK} tanggal ${row.Tanggal} (Taps: IN=${row.JamMasuk_I ? 'Yes' : 'No'}, OUT=${row.JamKeluar_O ? 'Yes' : 'No'})`);
-            }
-            row.finalWorkIn = workIn;
-            row.finalWorkOut = workOut;
+          tapsByNik.forEach((taps, nik) => {
+            const consumedTimestamps = new Set<number>();
 
-            let calcJamKerja = 0;
-            if (workIn && workOut) {
-              const diffMins = Math.floor((new Date(workOut).getTime() - new Date(workIn).getTime()) / 60000);
-              const netMins = diffMins > 60 ? diffMins - 60 : 0;
-              calcJamKerja = Math.max(0, Math.floor(netMins / 30) * 0.5);
-            }
-            row.calcJamKerja = calcJamKerja;
+            targetDates.forEach(tglStr => {
+              const tglStart = new Date(`${tglStr}T00:00:00`);
+              const tglEnd = new Date(`${tglStr}T23:59:59.999`);
+              const nextDayCutoff = new Date(`${tglStr}T03:00:00`);
+              nextDayCutoff.setDate(nextDayCutoff.getDate() + 1); // Cutoff 03:00 AM keesokan harinya
+
+              // Tap pada hari berjalan yang belum dikonsumsi
+              const dayTaps = taps.filter(t => t.time >= tglStart && t.time <= tglEnd && !consumedTimestamps.has(t.time.getTime()));
+
+              if (dayTaps.length === 0) return;
+
+              let workIn: Date | null = null;
+              let workOut: Date | null = null;
+
+              // 1. Tentukan Jam Masuk (Prioritaskan 'I' atau tap paling awal hari itu)
+              const inCandidate = dayTaps.find(t => t.type === 'I') || dayTaps[0];
+              workIn = inCandidate.time;
+              consumedTimestamps.add(workIn.getTime());
+
+              // 2. Tentukan Jam Pulang pada hari yang sama (tap setelah jam masuk)
+              const outCandidatesSameDay = dayTaps.filter(t => t.time.getTime() > workIn!.getTime());
+              
+              if (outCandidatesSameDay.length > 0) {
+                const outCandidate = outCandidatesSameDay.filter(t => t.type === 'O').pop() || outCandidatesSameDay[outCandidatesSameDay.length - 1];
+                workOut = outCandidate.time;
+                consumedTimestamps.add(workOut.getTime());
+              } else {
+                // 3. OVERNIGHT HEURISTIC (Cutoff s/d 03:00 Pagi):
+                // Jika tidak ada tap pulang di hari H, cek apakah ada tap keluar di hari esoknya s/d pukul 03:00 pagi
+                const overnightTaps = taps.filter(t => t.time > tglEnd && t.time <= nextDayCutoff && !consumedTimestamps.has(t.time.getTime()));
+                if (overnightTaps.length > 0) {
+                  const outCandidate = overnightTaps.filter(t => t.type === 'O').pop() || overnightTaps[overnightTaps.length - 1];
+                  workOut = outCandidate.time;
+                  consumedTimestamps.add(workOut.getTime());
+                  fallbackLogs.push(`Overnight OT (Cutoff 03:00): NIK ${nik} tanggal ${tglStr} pulang jam ${workOut.toTimeString().substring(0, 5)}`);
+                }
+              }
+
+              // Kalkulasi durasi kotor
+              let calcJamKerja = 0;
+              if (workIn && workOut) {
+                const diffMins = Math.floor((workOut.getTime() - workIn.getTime()) / 60000);
+                const netMins = diffMins > 60 ? diffMins - 60 : 0;
+                calcJamKerja = Math.max(0, Math.floor(netMins / 30) * 0.5);
+              }
+
+              dsData.push({
+                NIK: nik,
+                Tanggal: tglStr,
+                finalWorkIn: workIn,
+                finalWorkOut: workOut,
+                calcJamKerja
+              });
+            });
           });
 
           // ── EKSEKUSI TRANSAKSI DATABASE (STAGING TABLE TMP_HRIS_SYNC & TMP_HRIS_OT) ──
@@ -216,7 +256,9 @@ export async function POST(request: Request) {
               FROM TR_ABSEN a
               JOIN TMP_HRIS_SYNC t ON RTRIM(a.EMP_CD) = RTRIM(t.NIK) AND CONVERT(varchar(10), a.DATE_TRANS, 120) = t.Tanggal
               WHERE (a.SEC_CD IS NULL OR RTRIM(a.SEC_CD) <> 'SEC')
-                -- 🛡️ PROTEKSI MUTLAK: LEWATI SEMUA BARIS KOREKSI MANUAL HR & ALASAN/CUTI/IZIN
+                -- 🛡️ PROTEKSI MUTLAK: LEWATI SEMUA BARIS KOREKSI MANUAL HR (JAMEDIT/USERNAME) & ALASAN/CUTI/IZIN
+                AND a.JAMEDIT IS NULL
+                AND (a.USERNAME IS NULL OR RTRIM(a.USERNAME) = '')
                 AND (a.FLAG_ABSEN IS NULL OR RTRIM(a.FLAG_ABSEN) <> 'E')
                 AND (a.REASON IS NULL OR RTRIM(a.REASON) = '' OR RTRIM(a.REASON) = '-')
                 AND ISNULL(CONVERT(varchar(19), a.WORK_IN, 120), '') = ISNULL(CONVERT(varchar(19), a.WORK_IN1, 120), '')

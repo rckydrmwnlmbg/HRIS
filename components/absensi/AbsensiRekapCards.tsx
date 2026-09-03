@@ -31,13 +31,13 @@ export function AbsensiRekapCards({
 
         if (statusHari === 'L' || statusHari === 'LIBUR') {
           key = 'L';
-        } else if (rg === 'S' || ['15', '03'].includes(reason)) {
+        } else if (rg === 'S' || ['15', '16'].includes(reason)) {
           key = 'S';
-        } else if (rg === 'I' || ['04', '05', '06', '07'].includes(reason)) {
+        } else if (rg === 'I' || ['05', '06', '07'].includes(reason)) {
           key = 'I';
-        } else if (['C', 'H'].includes(rg) || ['18', '13', '17'].includes(reason)) {
+        } else if (['C', 'H'].includes(rg) || ['08', '09', '10', '11', '12', '13', '14', '17', '18'].includes(reason)) {
           key = 'C';
-        } else if (rg === 'A' || ((!r.WORK_IN && !r.WORK_OUT) && (!reason || reason === ''))) {
+        } else if (rg === 'A' || reason === '02' || ((!r.WORK_IN && !r.WORK_OUT) && (!reason || reason === ''))) {
           key = 'A';
         } else {
           key = 'O';

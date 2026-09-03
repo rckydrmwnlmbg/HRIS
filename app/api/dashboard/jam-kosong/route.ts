@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { TEAM_NAME_CASE, getActiveEmployeeFilter } from '@/lib/queries';
 
 export async function GET(request: Request) {
   try {
@@ -55,26 +56,7 @@ export async function GET(request: Request) {
         RTRIM(s.SEC_DESC) as SEC_DESC, 
         RTRIM(e.SEC_CD) as SEC_CD,
         RTRIM(s.SEC_DESC) as BAGIAN,
-        CASE WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING' 
-             WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'
-             WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'
-             WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'
-             WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'
-             WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'
-             WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'
-             WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'
-             WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'
-             WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'
-             WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'
-             WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'
-             WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'
-             WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'
-             WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'
-             WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'
-             WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'
-             WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'
-             WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'
-             ELSE RTRIM(dp.DEP_DESC) END AS TEAM,
+        ${TEAM_NAME_CASE} AS TEAM,
         RTRIM(a.STATUS_HARI) as STATUS_HARI,
         RTRIM(a.REASON) as REASON,
         CONVERT(varchar(10), a.DATE_TRANS, 120) as DATE_TRANS,
@@ -85,14 +67,13 @@ export async function GET(request: Request) {
         a.EMP_CD as TR_EMP_CD
       FROM EMP_TABLE e
       LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-      LEFT JOIN MS_DEP dp ON RTRIM(e.DEP_CD) = RTRIM(dp.DEP_CD)
+      LEFT JOIN MS_DEP d ON RTRIM(e.DEP_CD) = RTRIM(d.DEP_CD)
       LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
       -- LEFT JOIN supaya karyawan yang TIDAK punya baris TR_ABSEN sama sekali
       -- (belum di-sync, atau memang tidak ada data) tetap muncul di daftar jam kosong.
       LEFT JOIN TR_ABSEN a ON RTRIM(e.EMP_CD) = RTRIM(a.EMP_CD) 
         AND CONVERT(date, a.DATE_TRANS) >= '${startDateStr}' AND CONVERT(date, a.DATE_TRANS) <= '${endDateStr}'
-      WHERE (e.DT_ENTRY IS NULL OR CONVERT(varchar(10), e.DT_ENTRY, 120) <= '${endDateStr}')
-        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${startDateStr}')
+      WHERE ${getActiveEmployeeFilter({ startDate: startDateStr, endDate: endDateStr })}
     `);
 
     const reasonResult = await query<any>(`SELECT RTRIM(REASON_CODE) as REASON_CODE, RTRIM(REASON_GROUP) as REASON_GROUP FROM Ms_Reason`);

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbConnection } from '@/lib/db';
 import { calculateSecurityOtHours, detectSecurityShift, getDurationMinutes, getSecurityShiftByCode, isSecurityJob, isValidAttendancePair } from '@/lib/securitySchedule';
+import { TEAM_NAME_CASE, getActiveEmployeeFilter } from '@/lib/queries';
+import { calculateAttendanceAndOt } from '@/lib/otCalculator';
 import ExcelJS from 'exceljs';
 
 const DANGEROUS_SQL = /(INSERT|UPDATE|DELETE|DROP|ALTER|TRUNCATE|CREATE|EXEC|EXECUTE|MERGE|GRANT|REVOKE)\s/i;
@@ -163,28 +165,7 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
       RTRIM(d.DEP_DESC) AS DEP_DESC,
       RTRIM(s.SEC_DESC) AS SEC_DESC,
       RTRIM(j.JOB_DESC) AS JOB_DESC,
-      CASE 
-        WHEN UPPER(RTRIM(s.SEC_DESC)) LIKE '%LINE%' THEN 'SEWING'
-        WHEN RTRIM(s.SEC_DESC) IN ('BUTTON', 'PATTERN SEAMER') THEN 'SEWING'
-        WHEN RTRIM(s.SEC_DESC) IN ('BANDLELING', 'CUTTING', 'GANTI BS', 'GELAR', 'GELAR INTERLINING', 'LOADING', 'MARKER', 'NUMBERING', 'PIPING', 'PRESS', 'RELAX') THEN 'CUTTING'
-        WHEN RTRIM(s.SEC_DESC) IN ('MEKANIK') THEN 'MECHANIC'
-        WHEN RTRIM(s.SEC_DESC) IN ('LAB', 'PSO', 'QA', 'QC ACCURACY') THEN 'QA'
-        WHEN RTRIM(s.SEC_DESC) IN ('IE') THEN 'IE'
-        WHEN RTRIM(s.SEC_DESC) IN ('ACCESSORIES', 'FABRIC', 'IT INVENTORY', 'MATERIAL MGMT', 'TRANSFER') THEN 'WAREHOUSE'
-        WHEN RTRIM(s.SEC_DESC) IN ('IRONING') THEN 'FINISHING'
-        WHEN RTRIM(s.SEC_DESC) IN ('PACKING', 'WAREHOUSE') THEN 'PACKING'
-        WHEN RTRIM(s.SEC_DESC) IN ('END LINE', 'END LINE SPARE', 'IN LINE', 'QC CUTTING', 'QC FABRIC', 'QC FINISHING', 'QC SEWING', 'QC SIZESPEC') THEN 'QC'
-        WHEN RTRIM(s.SEC_DESC) IN ('ORDER MGMT.') THEN 'PPIC'
-        WHEN RTRIM(s.SEC_DESC) IN ('CAD MARKER', 'CAD PATTERN', 'SAMPLE', 'SEWING PATTERN') THEN 'SAMPLE'
-        WHEN RTRIM(s.SEC_DESC) IN ('OFFICE PRODUKSI') THEN 'PROD.  OFFICE'
-        WHEN RTRIM(s.SEC_DESC) IN ('CLINIC', 'COMPLIANCE', 'HR') THEN 'HRC'
-        WHEN RTRIM(s.SEC_DESC) IN ('ACC/FIN', 'ACCOUNTING', 'FINANCE', 'PURCHASE') THEN 'ACCOUNTING'
-        WHEN RTRIM(s.SEC_DESC) IN ('EXIM', 'EXPORT', 'IMPORT', 'SUB-CON') THEN 'EXIM'
-        WHEN RTRIM(s.SEC_DESC) IN ('5 S', 'IT') THEN 'GA'
-        WHEN RTRIM(s.SEC_DESC) IN ('COOK', 'CS', 'DRIVER', 'SECURITY') THEN 'GA SERVICE'
-        WHEN RTRIM(s.SEC_DESC) IN ('UMUM', 'UTILITY') THEN 'MAINTENANCE'
-        ELSE RTRIM(d.DEP_DESC) 
-      END AS TEAM,
+      ${TEAM_NAME_CASE} AS TEAM,
       CASE WHEN UPPER(ISNULL(RTRIM(e.ALL_IN), '0')) IN ('1', 'Y', 'TRUE') THEN 1 ELSE 0 END AS isAllIn,
       e.DT_RSG,
       e.DT_ENTRY,
@@ -207,9 +188,7 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
       WHERE DATE_TRANS >= '${startStr}' AND DATE_TRANS <= '${endStr}'
     ) a ON e.EMP_CD = a.EMP_CD
     LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
-    WHERE (e.DT_ENTRY IS NULL OR e.DT_ENTRY <= '${endStr}')
-      AND (e.DT_RSG IS NULL OR e.DT_RSG >= '${startStr}')
-      AND (e.Act_NonAct = 1 OR e.Act_NonAct IS NULL)
+    WHERE ${getActiveEmployeeFilter({ startDate: startStr, endDate: endStr })}
     ORDER BY RTRIM(s.SEC_DESC), RTRIM(e.EMP_NM), a.DATE_TRANS
   `);
 
@@ -257,45 +236,35 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
       let computedOt: number | null = null;
       const outDate = row.WORK_OUT ? new Date(row.WORK_OUT) : null;
       const inDate = row.WORK_IN ? new Date(row.WORK_IN) : null;
-      const isSecurityHoliday = security && (status === 'LIBUR' || status === 'OFF') && !isSecurityWeekend;
       const securityShift = security ? (detectSecurityShift(row.WORK_IN, row.WORK_OUT) || getSecurityShiftByCode(row.SHIFT)) : null;
       const attendanceValid = isValidAttendancePair(row.dateStr, inDate, outDate, securityShift);
+
       if (attendanceValid && inDate && outDate) {
-        if (isSecurityHoliday) {
-          const workedMinutes = getDurationMinutes(inDate, outDate);
-          computedOt = Math.max(0, Math.floor(((workedMinutes - 60) / 60) * 2) / 2);
-        } else if (isHolidayCalculation) {
-          computedOt = Math.max(0, Math.floor((getDurationMinutes(inDate, outDate) / 60) * 2) / 2);
-        } else if (security && securityShift) {
-          computedOt = calculateSecurityOtHours(inDate, outDate, securityShift);
-        } else {
-          let schOutHour = 16;
-          let schOutMin = 0;
-          if (row.JAM_PULANG) {
-            const pDate = new Date(row.JAM_PULANG);
-            if (!isNaN(pDate.getTime())) {
-              schOutHour = pDate.getHours();
-              schOutMin = pDate.getMinutes();
-            }
-          }
-          const scheduleOut = new Date(outDate);
-          scheduleOut.setHours(schOutHour, schOutMin, 0, 0);
-          const diffMinutes = (outDate.getTime() - scheduleOut.getTime()) / 60000;
-          const breakMinutes = diffMinutes >= 210 ? 30 : 0;
-          computedOt = Math.max(0, Math.floor(((diffMinutes - breakMinutes) / 60) * 2) / 2);
-        }
+        const otRes = calculateAttendanceAndOt(
+          row.dateStr,
+          inDate,
+          outDate,
+          row.JOB_DESC || '',
+          row.SEC_DESC || '',
+          status || '',
+          row.SHIFT || null
+        );
+        computedOt = otRes.T_OT;
       }
+
+      const hasDbDailyOt = row.dailyOt !== null && row.dailyOt !== undefined && !isNaN(Number(row.dailyOt));
+      const effectiveOt = hasDbDailyOt ? Number(row.dailyOt) : (computedOt ?? 0);
 
       if (isHolidayCalculation) {
         kerjaHours = 0;
-        otHours = attendanceValid ? (computedOt ?? (row.JAM_KERJA && !isNaN(Number(row.JAM_KERJA)) ? Number(row.JAM_KERJA) : 0)) : 0;
+        otHours = attendanceValid ? effectiveOt : 0;
       } else {
         if (isCuti) {
           kerjaHours = 8;
           otHours = 0;
         } else if (isKerjaNormal && attendanceValid) {
           kerjaHours = 8;
-          otHours = computedOt ?? 0;
+          otHours = effectiveOt;
         } else {
           kerjaHours = 0;
           otHours = 0;

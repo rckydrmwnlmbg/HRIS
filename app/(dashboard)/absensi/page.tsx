@@ -29,6 +29,7 @@ function AbsensiContent() {
   const [records, setRecords] = useState<AbsensiRecord[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [corrections, setCorrections] = useState<Map<string, AbsensiRecord>>(new Map());
+  const [applyingAll, setApplyingAll] = useState(false);
   const [masterReasons, setMasterReasons] = useState<Reason[]>([]);
   const [masterShifts, setMasterShifts] = useState<Shift[]>([]);
   const [karyawanList, setKaryawanList] = useState<Karyawan[]>([]);
@@ -52,7 +53,7 @@ function AbsensiContent() {
       try {
         const [mRes, kRes] = await Promise.all([
           fetch('/api/master'),
-          fetch('/api/karyawan?status=aktif&limit=10000')
+          fetch('/api/karyawan?status=semua&limit=10000')
         ]);
         if (mRes.ok) {
           const mData = await mRes.json();
@@ -80,7 +81,9 @@ function AbsensiContent() {
   const loadAbsensi = useCallback(async (empCd: string, bln: number, thn: number) => {
     setLoaded(false);
     try {
-      const res = await fetch(`/api/absensi?emp=${empCd}&bulan=${bln}&tahun=${thn}`);
+      const res = await fetch(`/api/absensi?emp=${encodeURIComponent(empCd)}&bulan=${bln}&tahun=${thn}&_t=${Date.now()}`, {
+        cache: 'no-store'
+      });
       if (res.ok) {
         setRecords(await res.json());
       } else {
@@ -122,24 +125,26 @@ function AbsensiContent() {
         body: JSON.stringify({
           DATE_TRANS: rec.DATE_TRANS,
           EMP_CD: rec.EMP_CD,
+          DATE_IN: (rec as any).in_date_str || rec.DATE_IN,
+          DATE_OUT: (rec as any).out_date_str || rec.DATE_OUT,
           WORK_IN: rec.WORK_IN,
           WORK_OUT: rec.WORK_OUT,
           corrected_status: rec.corrected_status,
           corrected_reason: rec.corrected_reason,
           corrected_shift: rec.corrected_shift,
           notes: '',
-          correction_by: user?.nama || 'Admin'
+          correction_by: 'lusi'
         })
       });
 
       if (res.ok) {
         setCorrections(prev => {
           const map = new Map(prev);
-          map.set(key, { ...rec, correction_status: 'applied' });
+          map.delete(key);
           return map;
         });
         showToast(lang === 'id' ? 'Penyesuaian presensi berhasil diterapkan!' : 'Attendance adjustment applied successfully!', 'success');
-        if (selectedEmp) loadAbsensi(selectedEmp.EMP_CD, bulan, tahun);
+        if (selectedEmp) await loadAbsensi(selectedEmp.EMP_CD, bulan, tahun);
       } else {
         const err = await res.json();
         showToast(lang === 'id' ? 'Gagal menyimpan: ' + err.error : 'Failed to save: ' + err.error, 'warning');
@@ -154,41 +159,56 @@ function AbsensiContent() {
     const drafts = Array.from(corrections.entries()).filter(([_, rec]) => rec.correction_status !== 'applied');
     if (drafts.length === 0) return;
 
-    let successCount = 0;
-    for (const [key, rec] of drafts) {
-      try {
-        const res = await fetch('/api/absensi/koreksi', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            DATE_TRANS: rec.DATE_TRANS,
-            EMP_CD: rec.EMP_CD,
-            WORK_IN: rec.WORK_IN,
-            WORK_OUT: rec.WORK_OUT,
-            corrected_status: rec.corrected_status,
-            corrected_reason: rec.corrected_reason,
-            corrected_shift: rec.corrected_shift,
-            notes: '',
-            correction_by: user?.nama || 'Admin'
-          })
+    setApplyingAll(true);
+    try {
+      const payload = {
+        items: drafts.map(([_, rec]) => ({
+          DATE_TRANS: rec.DATE_TRANS,
+          EMP_CD: rec.EMP_CD,
+          DATE_IN: (rec as any).in_date_str || rec.DATE_IN,
+          DATE_OUT: (rec as any).out_date_str || rec.DATE_OUT,
+          WORK_IN: rec.WORK_IN,
+          WORK_OUT: rec.WORK_OUT,
+          corrected_status: rec.corrected_status,
+          corrected_reason: rec.corrected_reason,
+          corrected_shift: rec.corrected_shift,
+          notes: '',
+          correction_by: 'lusi'
+        }))
+      };
+
+      const res = await fetch('/api/absensi/koreksi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        setCorrections(prev => {
+          const next = new Map(prev);
+          for (const [key] of drafts) {
+            next.delete(key);
+          }
+          return next;
         });
-
-        if (res.ok) {
-          setCorrections(prev => {
-            const map = new Map(prev);
-            map.set(key, { ...rec, correction_status: 'applied' });
-            return map;
-          });
-          successCount++;
+        showToast(
+          lang === 'id'
+            ? `Sukses menerapkan ${drafts.length} koreksi sekaligus secara instan!`
+            : `Successfully applied ${drafts.length} corrections instantly!`,
+          'success'
+        );
+        if (selectedEmp) {
+          await loadAbsensi(selectedEmp.EMP_CD, bulan, tahun);
         }
-      } catch (e) {
-        console.error(e);
+      } else {
+        const err = await res.json();
+        showToast(lang === 'id' ? 'Gagal menyimpan: ' + err.error : 'Failed to save: ' + err.error, 'warning');
       }
-    }
-
-    if (successCount > 0) {
-      showToast(lang === 'id' ? `${successCount} koreksi berhasil diterapkan!` : `${successCount} corrections applied!`, 'success');
-      if (selectedEmp) loadAbsensi(selectedEmp.EMP_CD, bulan, tahun);
+    } catch (e) {
+      console.error(e);
+      showToast(lang === 'id' ? 'Terjadi kesalahan koneksi' : 'Connection error', 'error');
+    } finally {
+      setApplyingAll(false);
     }
   };
 
@@ -320,13 +340,13 @@ function AbsensiContent() {
 
     if (statusHari === 'L' || statusHari === 'LIBUR') {
       key = 'L';
-    } else if (rg === 'S' || ['15', '03'].includes(reason)) {
+    } else if (rg === 'S' || ['15', '16'].includes(reason)) {
       key = 'S';
-    } else if (rg === 'I' || ['04', '05', '06', '07'].includes(reason)) {
+    } else if (rg === 'I' || ['05', '06', '07'].includes(reason)) {
       key = 'I';
-    } else if (['C', 'H'].includes(rg) || ['18', '13', '17'].includes(reason)) {
+    } else if (['C', 'H'].includes(rg) || ['08', '09', '10', '11', '12', '13', '14', '17', '18'].includes(reason)) {
       key = 'C';
-    } else if (rg === 'A' || ((!r.WORK_IN && !r.WORK_OUT) && (!reason || reason === ''))) {
+    } else if (rg === 'A' || reason === '02' || ((!r.WORK_IN && !r.WORK_OUT) && (!reason || reason === ''))) {
       key = 'A';
     } else {
       key = 'O';
@@ -389,6 +409,7 @@ function AbsensiContent() {
             masterShifts={masterShifts}
             onApply={handleApplyCorrection}
             onApplyAll={handleApplyAllCorrections}
+            applyingAll={applyingAll}
             lang={lang}
             user={user}
           />

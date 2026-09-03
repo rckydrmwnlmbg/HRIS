@@ -25,6 +25,9 @@ if (serverHost === '.' || serverHost === '(local)' || serverHost === 'localhost'
   serverHost = 'localhost'; // tedious requires 'localhost' instead of '.'
 }
 
+const appName = (process.env.DB_APP_NAME || 'Payroll Management Support').replace(/^["']|["']$/g, '');
+const workstationId = (process.env.DB_WORKSTATION_ID || 'TMNB-D101-NILA').replace(/^["']|["']$/g, '');
+
 const sqlConfig: any = {
   server: serverHost,
   database: process.env.DB_NAME,
@@ -37,7 +40,9 @@ const sqlConfig: any = {
   options: {
     useUTC: false,
     encrypt: false,
-    trustServerCertificate: true
+    trustServerCertificate: true,
+    appName: appName,
+    workstationId: workstationId
   }
 };
 
@@ -66,7 +71,7 @@ if (process.env.NODE_ENV === 'development') {
   // Nama server untuk ODBC memakai format 'HOST\INSTANCE'.
   const odbcServer = instanceName ? `${serverHost}\\${instanceName}` : serverHost;
 
-  let cs = `Driver={${odbcDriver}};Server=${odbcServer};Database=${process.env.DB_NAME};`;
+  let cs = `Driver={${odbcDriver}};Server=${odbcServer};Database=${process.env.DB_NAME};APP=${appName};WSID=${workstationId};`;
 
   // DB_TRUSTED=1 memaksa Windows Auth. Dipakai di laptop, karena login SQL 'sa'
   // milik server kantor tidak berlaku di SQLEXPRESS lokal (error 18456 Login failed).

@@ -14,17 +14,21 @@ export default function LaporanPage() {
   const lang = settings.language;
 
   const [tab, setTab] = useState<Tab>('absensi');
+  const [absensiDateMode, setAbsensiDateMode] = useState<'range' | 'month'>('range');
   const [bulan, setBulan] = useState(new Date().getMonth() + 1);
   const [tahun, setTahun] = useState(new Date().getFullYear());
   const [filterSec, setFilterSec] = useState('');
   const [filterJob, setFilterJob] = useState('');
   const [filterShift, setFilterShift] = useState('');
 
-  const today = new Date().toISOString().split('T')[0];
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
+  const now = new Date();
+  const firstDayOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  const lastDayOfMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
+  
+  const [startDate, setStartDate] = useState(firstDayOfMonth);
+  const [endDate, setEndDate] = useState(lastDayOfMonth);
 
-  const [otDate, setOtDate] = useState(today);
+  const [otDate, setOtDate] = useState(now.toISOString().split('T')[0]);
   const [generating, setGenerating] = useState(false);
   const [previewData, setPreviewData] = useState<any[] | null>(null);
 
@@ -41,7 +45,14 @@ export default function LaporanPage() {
       .catch(err => console.error(err));
   }, []);
 
-  const seksiForDep = masterSec;
+  const handleMonthYearChange = (newBulan: number, newTahun: number) => {
+    setBulan(newBulan);
+    setTahun(newTahun);
+    const lastDay = new Date(newTahun, newBulan, 0).getDate();
+    setStartDate(`${newTahun}-${String(newBulan).padStart(2, '0')}-01`);
+    setEndDate(`${newTahun}-${String(newBulan).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`);
+    setPreviewData(null);
+  };
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -52,8 +63,12 @@ export default function LaporanPage() {
         url += `&start=${startDate}&end=${endDate}`;
       } else if (tab === 'ot') {
         url += `&date=${otDate}`;
-      } else {
-        url += `&bulan=${bulan}&tahun=${tahun}`;
+      } else if (tab === 'absensi') {
+        if (absensiDateMode === 'range') {
+          url += `&start=${startDate}&end=${endDate}`;
+        } else {
+          url += `&bulan=${bulan}&tahun=${tahun}`;
+        }
         if (filterShift) url += `&shift=${filterShift}`;
       }
       const res = await fetch(url, { cache: 'no-store' });
@@ -77,8 +92,12 @@ export default function LaporanPage() {
         url += `&start=${startDate}&end=${endDate}`;
       } else if (tab === 'ot') {
         url += `&date=${otDate}`;
-      } else {
-        url += `&bulan=${bulan}&tahun=${tahun}`;
+      } else if (tab === 'absensi') {
+        if (absensiDateMode === 'range') {
+          url += `&start=${startDate}&end=${endDate}`;
+        } else {
+          url += `&bulan=${bulan}&tahun=${tahun}`;
+        }
         if (filterShift) url += `&shift=${filterShift}`;
       }
       const res = await fetch(url, { cache: 'no-store' });
@@ -106,8 +125,14 @@ export default function LaporanPage() {
         };
 
         a.download = `Laporan Analysis OT ${fmt(startD)} sd ${fmt(endD)}.xlsx`;
+      } else if (tab === 'absensi') {
+        if (absensiDateMode === 'range') {
+          a.download = `Laporan_Absensi_${startDate}_sd_${endDate}.xlsx`;
+        } else {
+          a.download = `Laporan_Absensi_${tahun}${String(bulan).padStart(2, '0')}.xlsx`;
+        }
       } else {
-        a.download = `Laporan_${tab}_${tahun}${String(bulan).padStart(2, '0')}.xlsx`;
+        a.download = `Laporan_${tab}_${startDate}_sd_${endDate}.xlsx`;
       }
 
       a.click();
@@ -177,7 +202,56 @@ export default function LaporanPage() {
               </div>
             </div>
 
-            {tab === 'cuti' || tab === 'skorsing' ? (
+            {tab === 'absensi' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', gap: '6px', backgroundColor: 'var(--bg-secondary)', padding: '3px', borderRadius: '6px' }}>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${absensiDateMode === 'range' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1, fontSize: '11px', padding: '4px 6px' }}
+                    onClick={() => { setAbsensiDateMode('range'); setPreviewData(null); }}
+                  >
+                    {lang === 'id' ? 'Rentang Tanggal' : 'Date Range'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-sm ${absensiDateMode === 'month' ? 'btn-primary' : 'btn-secondary'}`}
+                    style={{ flex: 1, fontSize: '11px', padding: '4px 6px' }}
+                    onClick={() => { setAbsensiDateMode('month'); setPreviewData(null); }}
+                  >
+                    {lang === 'id' ? 'Pilihan Bulan' : 'Monthly'}
+                  </button>
+                </div>
+
+                {absensiDateMode === 'range' ? (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
+                    <div className="form-group">
+                      <label className="form-label">{lang === 'id' ? 'Dari Tanggal' : 'Start Date'}</label>
+                      <input type="date" className="form-input" value={startDate} onChange={e => { setStartDate(e.target.value); setPreviewData(null); }} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">{lang === 'id' ? 'Sampai Tanggal' : 'End Date'}</label>
+                      <input type="date" className="form-input" value={endDate} onChange={e => { setEndDate(e.target.value); setPreviewData(null); }} />
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div className="form-group">
+                      <label className="form-label">{t(lang, 'bulan')}</label>
+                      <select className="form-select" value={bulan} onChange={e => handleMonthYearChange(Number(e.target.value), tahun)}>
+                        {months.map(m => <option key={m} value={m}>{new Date(2024, m - 1).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US', { month: 'long' })}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">{t(lang, 'tahun')}</label>
+                      <select className="form-select" value={tahun} onChange={e => handleMonthYearChange(bulan, Number(e.target.value))}>
+                        {years.map(y => <option key={y} value={y}>{y}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : tab === 'cuti' || tab === 'skorsing' ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: '10px' }}>
                 <div className="form-group">
                   <label className="form-label">{lang === 'id' ? 'Dari Tanggal' : 'Start Date'}</label>
@@ -188,27 +262,11 @@ export default function LaporanPage() {
                   <input type="date" className="form-input" value={endDate} onChange={e => { setEndDate(e.target.value); setPreviewData(null); }} />
                 </div>
               </div>
-            ) : tab === 'ot' ? (
+            ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 <div className="form-group">
                   <label className="form-label">{lang === 'id' ? 'Pilih Tanggal (Rentang 1 Pekan)' : 'Select Date (1 Week)'}</label>
                   <input type="date" className="form-input" value={otDate} onChange={e => { setOtDate(e.target.value); setPreviewData(null); }} />
-                </div>
-
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                <div className="form-group">
-                  <label className="form-label">{t(lang, 'bulan')}</label>
-                  <select className="form-select" value={bulan} onChange={e => { setBulan(Number(e.target.value)); setPreviewData(null); }}>
-                    {months.map(m => <option key={m} value={m}>{new Date(2024, m - 1).toLocaleString(lang === 'id' ? 'id-ID' : 'en-US', { month: 'long' })}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">{t(lang, 'tahun')}</label>
-                  <select className="form-select" value={tahun} onChange={e => { setTahun(Number(e.target.value)); setPreviewData(null); }}>
-                    {years.map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
                 </div>
               </div>
             )}

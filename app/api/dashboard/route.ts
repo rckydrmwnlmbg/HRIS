@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getCache, setCache } from '@/lib/cache';
-import { TEAM_NAME_CASE } from '@/lib/queries';
+import { TEAM_NAME_CASE, getActiveEmployeeFilter } from '@/lib/queries';
 
 // GET /api/dashboard — Fetch dashboard statistics
 export async function GET() {
@@ -40,8 +40,7 @@ export async function GET() {
     const aktifResult = await query<any>(`
       SELECT COUNT(*) as total 
       FROM EMP_TABLE e 
-      WHERE (CONVERT(varchar(10), e.DT_ENTRY, 120) <= '${todayStr}')
-        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${todayStr}')
+      WHERE ${getActiveEmployeeFilter({ date: todayStr })}
     `);
     const fingerprintSyncResult = await query<any>(`
       SELECT COUNT(*) as syncedCount
@@ -70,8 +69,7 @@ export async function GET() {
       LEFT JOIN TR_ABSEN a ON RTRIM(e.EMP_CD) = RTRIM(a.EMP_CD) AND a.DATE_TRANS >= '${todayStr}' AND a.DATE_TRANS < '${tomorrowStr}'
       LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
       LEFT JOIN MS_DEP d ON RTRIM(e.DEP_CD) = RTRIM(d.DEP_CD)
-      WHERE (CONVERT(varchar(10), e.DT_ENTRY, 120) <= '${todayStr}')
-        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${todayStr}')
+      WHERE ${getActiveEmployeeFilter({ date: todayStr })}
     `);
 
     const lemburResult = await query<any>(`
@@ -88,8 +86,7 @@ export async function GET() {
         SUM(CASE WHEN RTRIM(SX) = 'L' THEN 1 ELSE 0 END) as totalPria,
         SUM(CASE WHEN RTRIM(SX) = 'P' THEN 1 ELSE 0 END) as totalWanita
       FROM EMP_TABLE e
-      WHERE (CONVERT(varchar(10), e.DT_ENTRY, 120) <= '${todayStr}')
-        AND (e.DT_RSG IS NULL OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${todayStr}')
+      WHERE ${getActiveEmployeeFilter({ date: todayStr })}
     `);
 
     const topLemburResult = await query<any>(`
@@ -258,7 +255,7 @@ export async function GET() {
               SEC_DESC: row.SEC_DESC,
               SEC_CD: row.SEC_CD,
               BAGIAN: row.BAGIAN,
-              TEAM: row.TEAM,
+              TEAM: row.TEAM_NAME,
               WORK_IN: inStr,
               WORK_OUT: outStr,
               jam_kerja: jk,
@@ -273,7 +270,7 @@ export async function GET() {
               SEC_DESC: row.SEC_DESC,
               SEC_CD: row.SEC_CD,
               BAGIAN: row.BAGIAN,
-              TEAM: row.TEAM,
+              TEAM: row.TEAM_NAME,
               WORK_IN: inStr,
               WORK_OUT: outStr,
               jam_kerja: jk,
@@ -288,7 +285,7 @@ export async function GET() {
               SEC_DESC: row.SEC_DESC,
               SEC_CD: row.SEC_CD,
               BAGIAN: row.BAGIAN,
-              TEAM: row.TEAM,
+              TEAM: row.TEAM_NAME,
               WORK_IN: inStr,
               WORK_OUT: outStr,
               jam_kerja: jk,
