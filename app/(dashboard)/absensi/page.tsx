@@ -399,6 +399,7 @@ function AbsensiContent() {
           />
           <AbsensiWeeklyComplianceCard
             records={records}
+            corrections={corrections}
             lang={lang}
           />
           <AbsensiMonthlyTable

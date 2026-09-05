@@ -259,7 +259,6 @@ export async function POST(request: Request) {
                 -- 🛡️ PROTEKSI MUTLAK: LEWATI SEMUA BARIS KOREKSI MANUAL HR (JAMEDIT/USERNAME) & ALASAN/CUTI/IZIN
                 AND a.JAMEDIT IS NULL
                 AND (a.USERNAME IS NULL OR RTRIM(a.USERNAME) = '')
-                AND (a.FLAG_ABSEN IS NULL OR RTRIM(a.FLAG_ABSEN) <> 'E')
                 AND (a.REASON IS NULL OR RTRIM(a.REASON) = '' OR RTRIM(a.REASON) = '-')
                 AND ISNULL(CONVERT(varchar(19), a.WORK_IN, 120), '') = ISNULL(CONVERT(varchar(19), a.WORK_IN1, 120), '')
                 AND ISNULL(CONVERT(varchar(19), a.WORK_OUT, 120), '') = ISNULL(CONVERT(varchar(19), a.WORK_OUT1, 120), '');

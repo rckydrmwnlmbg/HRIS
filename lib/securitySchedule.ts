@@ -62,15 +62,15 @@ export function isValidAttendancePair(
   if (workIn.getFullYear() !== transactionDate.getFullYear() || workIn.getMonth() !== transactionDate.getMonth() || workIn.getDate() !== transactionDate.getDate()) return false;
 
   const sameDate = workOut.getFullYear() === workIn.getFullYear() && workOut.getMonth() === workIn.getMonth() && workOut.getDate() === workIn.getDate();
-  const nextDate = workOut.getTime() >= workIn.getTime() && getDurationMinutes(workIn, workOut) <= 16 * 60;
+  const nextDate = workOut.getTime() >= workIn.getTime() && getDurationMinutes(workIn, workOut) <= 24 * 60;
   if (sameDate && workOut.getTime() >= workIn.getTime()) return true;
-  if (!sameDate && nextDate && getDurationMinutes(workIn, workOut) <= 16 * 60) return true;
+  if (!sameDate && nextDate && getDurationMinutes(workIn, workOut) <= 24 * 60) return true;
 
   const inMinutes = minutesSinceMidnight(workIn) ?? -1;
   const outMinutes = minutesSinceMidnight(workOut) ?? -1;
   const inferredOvernightMinutes = outMinutes >= 0 && inMinutes >= 0 ? outMinutes + 1440 - inMinutes : 0;
-  // If sameDate but workOut < workIn, assume they worked past midnight. Tolerate up to 22 hours.
-  return sameDate && workOut.getTime() < workIn.getTime() && inferredOvernightMinutes > 0 && inferredOvernightMinutes <= 22 * 60;
+  // If sameDate but workOut < workIn, assume they worked past midnight. Tolerate up to 24 hours.
+  return sameDate && workOut.getTime() < workIn.getTime() && inferredOvernightMinutes > 0 && inferredOvernightMinutes <= 24 * 60;
 }
 
 /**

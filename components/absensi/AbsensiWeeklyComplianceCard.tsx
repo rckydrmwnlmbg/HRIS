@@ -5,6 +5,7 @@ import { AlertTriangle, CheckCircle2, Clock, ShieldAlert, Zap } from 'lucide-rea
 
 interface AbsensiWeeklyComplianceCardProps {
   records: AbsensiRecord[];
+  corrections?: Map<string, AbsensiRecord>;
   lang: Language;
 }
 
@@ -16,43 +17,44 @@ interface WeekGroup {
   regularHours: number;
   otHours: number;
   totalHours: number;
+  maxRegularLimit: number;
+  maxOtLimit: number;
+  maxTotalLimit: number;
   isOverLimit: boolean;
+  isWarning: boolean;
   excessHours: number;
   daysCount: number;
 }
 
-export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComplianceCardProps) {
+export function AbsensiWeeklyComplianceCard({ records, corrections, lang }: AbsensiWeeklyComplianceCardProps) {
   const weeklyData = useMemo(() => {
     if (!records || records.length === 0) return [];
 
-    // Urutkan records berdasarkan tanggal
+    // Helper aman untuk parse YYYY-MM-DD tanpa terkena timezone shift
+    const parseDateOnly = (dStr: string) => {
+      const parts = dStr.split('-');
+      if (parts.length === 3) {
+        return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      }
+      return new Date(dStr);
+    };
+
+    // Urutkan records secara kronologis
     const sorted = [...records].sort((a, b) => {
-      const tA = new Date(a.DATE_TRANS).getTime();
-      const tB = new Date(b.DATE_TRANS).getTime();
-      return tA - tB;
+      return parseDateOnly(a.DATE_TRANS).getTime() - parseDateOnly(b.DATE_TRANS).getTime();
     });
 
-    // Temukan tanggal hari Senin pertama di bulan ini
-    // Hari sebelum Senin pertama (misal tgl 1-2 Agustus) otomatis masuk ke Minggu 1 bersama Senin pertama (3-9 Agustus)
-    let firstMondayDate = 1;
-    for (const r of sorted) {
-      const d = new Date(r.DATE_TRANS);
-      if (d.getDay() === 1) { // Monday
-        firstMondayDate = d.getDate();
-        break;
-      }
-    }
-
+    // ── PENGELOMPOKAN MINGGU DINAMIS (SENIN s/d MINGGU, MAKSIMAL 7 HARI) ──
     const weekGroups: AbsensiRecord[][] = [];
     let currentWeek: AbsensiRecord[] = [];
 
     sorted.forEach(r => {
-      const d = new Date(r.DATE_TRANS);
-      const dayOfWeek = d.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
-      const dateNum = d.getDate();
+      const d = parseDateOnly(r.DATE_TRANS);
+      const dayOfWeek = d.getDay(); // 0 = Minggu, 1 = Senin, ..., 6 = Sabtu
 
-      // Jika hari Senin (dan bukan Senin pertama), buat grup minggu baru
-      if (dayOfWeek === 1 && dateNum > firstMondayDate && currentWeek.length > 0) {
+      // Setiap kali bertemu hari Senin dan minggu sebelumnya sudah berisi hari,
+      // tutup minggu sebelumnya dan buat kelompok minggu baru!
+      if (dayOfWeek === 1 && currentWeek.length > 0) {
         weekGroups.push(currentWeek);
         currentWeek = [];
       }
@@ -72,36 +74,58 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
       let otH = 0;
 
       recordsInWeek.forEach(r => {
-        const isHoliday = r.STATUS_HARI === 'LIBUR' || r.STATUS_HARI === 'L';
-        const hasReason = Boolean(r.REASON && r.REASON.trim() !== '' && r.REASON.trim() !== '-');
-        const isPresent = Boolean(r.WORK_IN || r.WORK_OUT || (typeof r.JAM_KERJA === 'number' && r.JAM_KERJA > 0));
-        
-        // Hitung jam kerja reguler
-        if (typeof r.JAM_KERJA === 'number' && r.JAM_KERJA > 0) {
-          regH += r.JAM_KERJA;
+        // Ambil data draft koreksi real-time jika sedang diedit oleh HR
+        const eff = corrections?.get(r.DATE_TRANS) || r;
+
+        const isHoliday = eff.STATUS_HARI === 'LIBUR' || eff.STATUS_HARI === 'L';
+        const hasReason = Boolean(eff.REASON && eff.REASON.trim() !== '' && eff.REASON.trim() !== '-');
+        const isPresent = Boolean(eff.WORK_IN || eff.WORK_OUT || (typeof eff.JAM_KERJA === 'number' && eff.JAM_KERJA > 0));
+
+        // Jam kerja reguler
+        if (typeof eff.JAM_KERJA === 'number' && eff.JAM_KERJA > 0) {
+          regH += eff.JAM_KERJA;
         } else if (isPresent && !isHoliday && !hasReason) {
           regH += 8;
         }
 
-        // Hitung total lembur
-        const ot1 = Number(r.OT1 || 0);
-        const ot2 = Number(r.OT2 || 0);
-        const ot3 = Number(r.OT3 || 0);
-        const ot4 = Number(r.OT4 || 0);
-        otH += (ot1 + ot2 + ot3 + ot4);
+        // Jam lembur (OT)
+        const ot1 = Number(eff.OT1 ?? (eff as any).OT_1 ?? 0);
+        const ot2 = Number(eff.OT2 ?? (eff as any).OT_2 ?? 0);
+        const ot3 = Number(eff.OT3 ?? (eff as any).OT_3 ?? 0);
+        const ot4 = Number(eff.OT4 ?? (eff as any).OT_4 ?? 0);
+        const dailyOt = (eff as any).T_OT !== undefined && (eff as any).T_OT !== null
+          ? Number((eff as any).T_OT)
+          : (ot1 + ot2 + ot3 + ot4);
+
+        otH += dailyOt;
       });
 
       const firstRec = recordsInWeek[0];
       const lastRec = recordsInWeek[recordsInWeek.length - 1];
 
-      const dStart = new Date(firstRec.DATE_TRANS);
-      const dEnd = new Date(lastRec.DATE_TRANS);
+      const dStart = parseDateOnly(firstRec.DATE_TRANS);
+      const dEnd = parseDateOnly(lastRec.DATE_TRANS);
 
       const startStr = `${dStart.getDate()} ${monthNames[dStart.getMonth()]}`;
       const endStr = `${dEnd.getDate()} ${monthNames[dEnd.getMonth()]}`;
 
       const totalH = Math.round((regH + otH) * 10) / 10;
-      const isOver = totalH > 50;
+      const daysCount = recordsInWeek.length;
+
+      // ── BATAS REGULASI RESMI (PP No. 35 Tahun 2021) ──
+      // Standar 1 minggu penuh: Reguler 40 Jam, Lembur Maks. 18 Jam, Total Maks. 58 Jam.
+      // Untuk minggu parsial (< 6 hari kerja): dihitung proporsional agar adil.
+      let maxReg = 40;
+      let maxOt = 18;
+      if (daysCount < 6) {
+        maxReg = Math.min(40, daysCount * 8);
+        maxOt = Math.min(18, daysCount * 4); // Maksimal lembur 4 jam/hari (Pasal 26 PP 35/2021)
+      }
+      const maxTotal = maxReg + maxOt;
+
+      const isOver = totalH > maxTotal || otH > maxOt;
+      const isWarn = !isOver && (totalH >= maxTotal * 0.85 || otH >= maxOt * 0.8);
+      const excess = isOver ? Math.max(Math.round((totalH - maxTotal) * 10) / 10, Math.round((otH - maxOt) * 10) / 10) : 0;
       const weekNumber = idx + 1;
 
       result.push({
@@ -112,14 +136,18 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
         regularHours: Math.round(regH * 10) / 10,
         otHours: Math.round(otH * 10) / 10,
         totalHours: totalH,
+        maxRegularLimit: maxReg,
+        maxOtLimit: maxOt,
+        maxTotalLimit: maxTotal,
         isOverLimit: isOver,
-        excessHours: isOver ? Math.round((totalH - 50) * 10) / 10 : 0,
-        daysCount: recordsInWeek.length
+        isWarning: isWarn,
+        excessHours: excess,
+        daysCount
       });
     });
 
     return result;
-  }, [records, lang]);
+  }, [records, corrections, lang]);
 
   if (weeklyData.length === 0) return null;
 
@@ -128,7 +156,7 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
 
   return (
     <div style={{ marginBottom: '20px' }}>
-      {/* ⚠️ Alert Banner jika ada minggu yang melebihi 50 Jam */}
+      {/* ⚠️ Alert Banner jika ada minggu yang melebihi batas regulasi */}
       {overLimitWeeks.length > 0 && (
         <div
           style={{
@@ -164,20 +192,19 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: '13.5px', fontWeight: 800, color: '#ef4444', letterSpacing: '-0.01em', marginBottom: '2px' }}>
               {lang === 'id'
-                ? `PERHATIAN HR: Karyawan Melebihi Batas 50 Jam Kerja/Minggu (${overLimitWeeks.length} Minggu Melebihi Batas)`
-                : `HR COMPLIANCE ALERT: Employee Exceeded 50 Hours/Week Limit (${overLimitWeeks.length} Over-limit Weeks)`}
+                ? `PERINGATAN HR: Karyawan Melebihi Batas Regulasi PP 35/2021 (${overLimitWeeks.length} Minggu Melebihi Batas)`
+                : `HR COMPLIANCE ALERT: Employee Exceeded PP 35/2021 Legal Limit (${overLimitWeeks.length} Over-limit Weeks)`}
             </div>
             <div style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
               {lang === 'id' ? (
                 <>
-                  Terdeteksi total jam kerja reguler + lembur mencapai{' '}
-                  <b style={{ color: '#ef4444' }}>{maxWeeklyHours} Jam/Minggu</b>. Sesuai aturan internal, karyawan ini
-                  berada dalam status <b>peringatan / evaluasi skorsing beban kerja lembur berlebih</b>.
+                  Terdeteksi beban kerja/lembur melebihi ambang batas hukum (Maks. <b>18 Jam Lembur</b> atau <b>58 Jam Beban Total/Minggu</b>).
+                  Karyawan ini berisiko mengalami kelelahan ekstrem dan <b>wajib dievaluasi beban kerjanya / memenuhi kriteria skorsing lembur</b>.
                 </>
               ) : (
                 <>
-                  Weekly work + overtime hours reached <b style={{ color: '#ef4444' }}>{maxWeeklyHours} Hours/Week</b>.
-                  This employee is eligible for workload warning / overtime suspension review.
+                  Weekly work/overtime hours exceeded legal limits (Max <b>18h Overtime</b> or <b>58h Total Workload/Week</b>).
+                  This employee is subject to workload review and overtime suspension criteria.
                 </>
               )}
             </div>
@@ -194,7 +221,7 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
               whiteSpace: 'nowrap'
             }}
           >
-            Maks. {maxWeeklyHours} Jam / 50 Jam
+            Maks. {maxWeeklyHours} Jam / Minggu
           </div>
         </div>
       )}
@@ -215,12 +242,12 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
             <Clock size={16} color="var(--accent)" />
             <span style={{ fontSize: '13px', fontWeight: 750, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
               {lang === 'id'
-                ? 'Monitoring Beban Jam Kerja & Lembur Mingguan (Batas Maks. 50 Jam/Minggu)'
-                : 'Weekly Workload & Overtime Compliance Monitor (Max Limit 50 Hours/Week)'}
+                ? 'Monitoring Beban Jam Kerja & Lembur Mingguan (Regulasi PP No. 35/2021)'
+                : 'Weekly Workload & Overtime Compliance Monitor (PP No. 35/2021)'}
             </span>
           </div>
           <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 550 }}>
-            {lang === 'id' ? 'Standar: 40 Jam Reguler + Maks. 10 Jam OT' : 'Standard: 40h Regular + Max 10h OT'}
+            {lang === 'id' ? 'Standar Resmi: Maks. 40h Reguler + Maks. 18h Lembur (Batas 58h/Minggu)' : 'Official: Max 40h Regular + Max 18h OT (Limit 58h/Week)'}
           </span>
         </div>
 
@@ -232,21 +259,21 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
           }}
         >
           {weeklyData.map(w => {
-            const pct = Math.min(100, Math.round((w.totalHours / 50) * 100));
+            const pct = Math.min(100, Math.round((w.totalHours / w.maxTotalLimit) * 100));
             const isDanger = w.isOverLimit;
-            const isWarning = !isDanger && w.totalHours >= 45;
+            const isWarning = w.isWarning;
 
-            const accentColor = isDanger ? '#ef4444' : isWarning ? '#f59e0b' : '#0ea5e9';
+            const accentColor = isDanger ? '#ef4444' : isWarning ? '#f59e0b' : '#059669';
             const bgBadge = isDanger
               ? 'rgba(239, 68, 68, 0.12)'
               : isWarning
               ? 'rgba(245, 158, 11, 0.12)'
-              : 'rgba(14, 165, 233, 0.1)';
+              : 'rgba(16, 185, 129, 0.1)';
             const borderBadge = isDanger
               ? 'rgba(239, 68, 68, 0.35)'
               : isWarning
               ? 'rgba(245, 158, 11, 0.35)'
-              : 'rgba(14, 165, 233, 0.25)';
+              : 'rgba(16, 185, 129, 0.25)';
 
             return (
               <div
@@ -273,7 +300,7 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
                       {w.label}
                     </div>
                     <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '1px' }}>
-                      {w.startDate} - {w.endDate}
+                      {w.startDate} - {w.endDate} <span style={{ opacity: 0.7 }}>({w.daysCount}h)</span>
                     </div>
                   </div>
 
@@ -288,7 +315,7 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
                       border: `1px solid ${borderBadge}`
                     }}
                   >
-                    {isDanger ? `+${w.excessHours} Jam` : `${w.totalHours}/50 Jam`}
+                    {isDanger ? `+${w.excessHours} Jam` : `${w.totalHours}/${w.maxTotalLimit} Jam`}
                   </span>
                 </div>
 
@@ -342,8 +369,14 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
                     paddingTop: '2px'
                   }}
                 >
-                  <span>Kerja: <b>{w.regularHours}h</b></span>
-                  <span>Lembur: <b style={{ color: w.otHours > 0 ? 'var(--warning)' : 'inherit' }}>+{w.otHours}h</b></span>
+                  <span>Kerja: <b>{w.regularHours}h</b> / {w.maxRegularLimit}h</span>
+                  <span>
+                    Lembur:{' '}
+                    <b style={{ color: w.otHours > w.maxOtLimit ? '#ef4444' : w.otHours > 0 ? 'var(--warning)' : 'inherit' }}>
+                      +{w.otHours}h
+                    </b>{' '}
+                    / {w.maxOtLimit}h
+                  </span>
                 </div>
 
                 {/* Status Footer */}
@@ -359,7 +392,21 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
                       marginTop: '2px'
                     }}
                   >
-                    <AlertTriangle size={11} /> Melebihi Batas 50 Jam
+                    <AlertTriangle size={11} /> Melebihi Batas (Risiko Skorsing)
+                  </div>
+                ) : isWarning ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      fontSize: '9.5px',
+                      fontWeight: 650,
+                      color: '#d97706',
+                      marginTop: '2px'
+                    }}
+                  >
+                    <AlertTriangle size={11} /> Waspada Beban Lembur Tinggi
                   </div>
                 ) : (
                   <div
@@ -373,7 +420,7 @@ export function AbsensiWeeklyComplianceCard({ records, lang }: AbsensiWeeklyComp
                       marginTop: '2px'
                     }}
                   >
-                    <CheckCircle2 size={11} /> Sesuai Aturan (Aman)
+                    <CheckCircle2 size={11} /> Sesuai Regulasi (Aman)
                   </div>
                 )}
               </div>

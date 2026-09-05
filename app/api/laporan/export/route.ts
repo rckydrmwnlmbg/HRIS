@@ -382,8 +382,9 @@ export async function GET(request: Request) {
           const inDate = row.WORK_IN ? new Date(row.WORK_IN) : null;
           const securityShift = security ? (detectSecurityShift(row.WORK_IN, row.WORK_OUT) || getSecurityShiftByCode(row.SHIFT)) : null;
           const attendanceValid = isValidAttendancePair(row.dateStr, inDate, outDate, securityShift);
+          const hasPair = Boolean(inDate && outDate);
 
-          if (attendanceValid && inDate && outDate) {
+          if (inDate && outDate) {
             const otRes = calculateAttendanceAndOt(
               row.dateStr,
               inDate,
@@ -401,15 +402,21 @@ export async function GET(request: Request) {
 
           if (isHolidayCalculation) {
             kerjaHours = 0;
-            otHours = attendanceValid ? effectiveOt : 0;
+            otHours = (hasPair || attendanceValid) ? effectiveOt : 0;
           } else {
             if (isCuti) {
               kerjaHours = 8;
               otHours = 0;
-            } else if (attendanceValid && inDate && outDate) {
-              const actDur = getDurationMinutes(inDate, outDate) / 60;
-              const roundedDur = Math.round(actDur * 10) / 10;
-              kerjaHours = Math.min(8, roundedDur);
+            } else if (hasPair || (attendanceValid && inDate && outDate)) {
+              if (row.JAM_KERJA !== null && row.JAM_KERJA !== undefined && !isNaN(Number(row.JAM_KERJA)) && Number(row.JAM_KERJA) > 0) {
+                kerjaHours = Math.min(8, Number(row.JAM_KERJA));
+              } else if (inDate && outDate) {
+                const actDur = getDurationMinutes(inDate, outDate) / 60;
+                const roundedDur = Math.round(actDur * 10) / 10;
+                kerjaHours = Math.min(8, roundedDur);
+              } else {
+                kerjaHours = 8;
+              }
               otHours = effectiveOt;
             } else if (row.REASON === '21') {
               kerjaHours = 8;

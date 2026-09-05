@@ -48,6 +48,50 @@ export function AbsensiFilterBar({
   onClearEmp,
   lang,
 }: AbsensiFilterBarProps) {
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+  const [activeIndex, setActiveIndex] = React.useState<number>(0);
+
+  // ⌨️ SHORTCUT GLOBAL CTRL + K: Fokus langsung ke kolom pencarian karyawan
+  React.useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, []);
+
+  // Reset indeks aktif ke 0 setiap kali teks pencarian berubah
+  React.useEffect(() => {
+    setActiveIndex(0);
+  }, [searchEmp]);
+
+  // ⬇️⬆️ Navigasi keyboard pada dropdown pencarian karyawan (Panah Bawah, Panah Atas, Enter, Escape)
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!searchEmp || filteredKaryawan.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex(prev => (prev + 1) % filteredKaryawan.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex(prev => (prev - 1 + filteredKaryawan.length) % filteredKaryawan.length);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (activeIndex >= 0 && activeIndex < filteredKaryawan.length) {
+        const chosen = filteredKaryawan[activeIndex];
+        setSelectedEmp(chosen);
+        setSearchEmp('');
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setSearchEmp('');
+    }
+  };
+
   return (
     <>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
@@ -73,27 +117,42 @@ export function AbsensiFilterBar({
             <div className="search-wrapper">
               <Search size={15} className="search-icon" />
               <input
+                ref={searchInputRef}
                 className="form-input"
-                placeholder={t(lang, 'cariKaryawanAbs')}
+                placeholder={`${t(lang, 'cariKaryawanAbs')} (Ctrl + K)`}
                 value={searchEmp}
+                onKeyDown={handleSearchKeyDown}
                 onChange={e => { setSearchEmp(e.target.value); setSelectedEmp(null); }}
               />
             </div>
             {searchEmp && !selectedEmp && filteredKaryawan.length > 0 && (
               <div className={styles.dropdown}>
-                {filteredKaryawan.map(k => {
+                {filteredKaryawan.map((k, idx) => {
                   const isNonActive = !k.Act_NonAct || String(k.Act_NonAct) === '0';
+                  const isActive = idx === activeIndex;
                   return (
-                    <div key={k.EMP_CD} className={styles.dropdownItem} onClick={() => { setSelectedEmp(k); setSearchEmp(''); }}>
+                    <div
+                      key={k.EMP_CD}
+                      className={`${styles.dropdownItem} ${isActive ? styles.dropdownItemActive : ''}`}
+                      onMouseEnter={() => setActiveIndex(idx)}
+                      onClick={() => { setSelectedEmp(k); setSearchEmp(''); }}
+                    >
                       <span style={{ color: 'var(--accent)', fontWeight: 600, minWidth: 65 }}>{k.EMP_CD}</span>
-                      <span>{k.EMP_NM}</span>
+                      <span style={{ fontWeight: isActive ? 600 : 400 }}>{k.EMP_NM}</span>
                       {isNonActive && (
                         <span style={{ fontSize: '10px', padding: '1px 6px', borderRadius: '4px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', fontWeight: 600, marginLeft: '6px' }}>
                           Non-Aktif
                         </span>
                       )}
                       {(k.SEC_DESC || k.SEC_CD) && (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: 'auto' }}>{k.SEC_DESC || k.SEC_CD}</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '11px', marginLeft: 'auto', marginRight: isActive ? '8px' : '0' }}>
+                          {k.SEC_DESC || k.SEC_CD}
+                        </span>
+                      )}
+                      {isActive && (
+                        <span style={{ fontSize: '11px', color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '2px' }}>
+                          ↵ Enter
+                        </span>
                       )}
                     </div>
                   );
