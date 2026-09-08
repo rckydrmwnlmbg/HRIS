@@ -6,6 +6,7 @@ import { t } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { DataTable } from '@/components/ui/DataTable';
+import { MarqueeBadge, BadgeVariant } from '@/components/ui/Badge';
 import type { Karyawan, Department, Seksi, JenisKaryawan, Jabatan } from '@/types';
 import { Search, Plus, Eye, Edit2, Trash2, Users, Filter, X, MoreVertical } from 'lucide-react';
 import styles from './karyawan.module.css';
@@ -96,15 +97,22 @@ export default function KaryawanPage() {
   const seksiForDep = masterSec;
 
   const getStatusBadge = (k: Karyawan) => {
-    if (!k.Act_NonAct) return <span className="badge badge-danger">{t(lang, 'tidakAktif')}</span>;
-    return <span className="badge badge-success">{t(lang, 'aktif')}</span>;
+    return (
+      <MarqueeBadge variant={k.Act_NonAct ? 'success' : 'danger'} width={80} height={23}>
+        {k.Act_NonAct ? t(lang, 'aktif') : t(lang, 'tidakAktif')}
+      </MarqueeBadge>
+    );
   };
 
   const getJnsBadge = (jns: string | null) => {
-    const map: Record<string, string> = { '100': 'badge-info', '101': 'badge-warning', '102': 'badge-purple' };
-    const cls = map[jns || ''] || 'badge-gray';
+    const map: Record<string, BadgeVariant> = { '100': 'info', '101': 'warning', '102': 'purple' };
+    const variant = map[jns || ''] || 'gray';
     const jnsItem = masterJns.find(j => j.JNS_CODE === jns);
-    return <span className={`badge ${cls}`}>{jnsItem?.JNS_DESC || jns || '-'}</span>;
+    return (
+      <MarqueeBadge variant={variant} width={130} height={23}>
+        {jnsItem?.JNS_DESC || jns || '-'}
+      </MarqueeBadge>
+    );
   };
 
   return (

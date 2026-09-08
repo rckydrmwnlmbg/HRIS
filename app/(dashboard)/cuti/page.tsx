@@ -7,6 +7,7 @@ import type { Karyawan } from '@/types';
 import { Search, Calendar as CalendarIcon, CheckCircle, Plus, Trash2 } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { MarqueeBadge } from '@/components/ui/Badge';
 import styles from './cuti.module.css';
 
 interface LeaveRequest {
@@ -383,10 +384,17 @@ export default function CutiPage() {
                         <div style={{ fontSize: '12px', fontWeight: 500 }}>{r.TEAM || r.JOB_DESC || r.JOB_CD || '-'}</div>
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{r.SEC_DESC || r.SEC_CD || '-'}</div>
                       </td>
-                      <td>
-                        <span className={`badge ${r.type?.toLowerCase().includes('sakit') ? 'badge-sakit' :
-                          r.type?.toLowerCase().includes('cuti') ? 'badge-cuti' : 'badge-gray'
-                          }`}>{r.type}</span>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <MarqueeBadge
+                          variant={
+                            r.type?.toLowerCase().includes('sakit') ? 'sakit' :
+                            r.type?.toLowerCase().includes('cuti') ? 'cuti' : 'gray'
+                          }
+                          width={140}
+                          height={23}
+                        >
+                          {r.type}
+                        </MarqueeBadge>
                       </td>
                       <td>
                         <div style={{ fontSize: '12px' }}>
@@ -395,10 +403,10 @@ export default function CutiPage() {
                         <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>{r.days} {lang === 'id' ? 'hari' : 'days'}</div>
                       </td>
 
-                      <td style={{ textAlign: 'center' }}>
-                        <span className={`badge badge-success`}>
+                      <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                        <MarqueeBadge variant="success" width={90} height={23}>
                           {lang === 'id' ? 'Disetujui' : 'Approved'}
-                        </span>
+                        </MarqueeBadge>
                       </td>
                       <td style={{ textAlign: 'center' }}>
                         <button

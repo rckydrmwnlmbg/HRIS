@@ -948,7 +948,9 @@ a:hover {
   letter-spacing: 0.01em;
   white-space: nowrap !important;
   border: 1px solid transparent;
-  line-height: 1.35;
+  line-height: 1;
+  height: 23px;
+  max-height: 23px;
   transition: all var(--transition);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -963,11 +965,15 @@ a:hover {
 .badge-sm {
   padding: 2px 7px;
   font-size: 10px;
+  height: 20px;
+  max-height: 20px;
 }
 
 .badge-lg {
   padding: 4.5px 14px;
   font-size: 12px;
+  height: 27px;
+  max-height: 27px;
 }
 
 .badge-success {

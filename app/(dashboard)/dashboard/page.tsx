@@ -19,6 +19,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import WelcomeBriefing from '@/components/dashboard/WelcomeBriefing';
 import DashboardCalendar from '@/components/dashboard/DashboardCalendar';
 import AttendanceTrendChart from '@/components/dashboard/AttendanceTrendChart';
+import { MarqueeBadge } from '@/components/ui/Badge';
 
 export default function DashboardPage() {
   const { user, settings, setTheme } = useApp();
@@ -241,18 +242,20 @@ export default function DashboardPage() {
                     <div style={{ fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.EMP_NM}</div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{k.EMP_CD} · {k.SEC_DESC || k.SEC_CD}</div>
                   </div>
-                  <span
-                    className={
+                  <MarqueeBadge
+                    variant={
                       k.jenis_anomali === 'PULANG_CEPAT'
-                        ? 'badge badge-warning'
+                        ? 'warning'
                         : k.jenis_anomali === 'TERLAMBAT'
-                          ? 'badge badge-danger'
-                          : 'badge badge-info'
+                          ? 'danger'
+                          : 'info'
                     }
-                    style={{ fontSize: 10, maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    width={140}
+                    height={22}
+                    size="sm"
                   >
                     {k.keterangan || (k.jenis_anomali === 'PULANG_CEPAT' ? 'Pulang Lebih Awal' : k.jenis_anomali === 'TERLAMBAT' ? 'Terlambat Hadir' : 'Durasi Singkat')}
-                  </span>
+                  </MarqueeBadge>
                 </div>
               ))}
               {perluPerhatian.length > 5 && (

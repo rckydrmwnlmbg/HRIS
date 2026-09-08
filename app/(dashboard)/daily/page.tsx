@@ -4,6 +4,7 @@ import { useApp } from '@/lib/context';
 import { t } from '@/lib/i18n';
 import { Search } from 'lucide-react';
 import { SkeletonTable } from '@/components/ui/Skeleton';
+import { MarqueeBadge } from '@/components/ui/Badge';
 
 export default function DailyAttendancePage() {
   const { settings } = useApp();
@@ -140,7 +141,7 @@ export default function DailyAttendancePage() {
                   <th>{t(lang, 'departemen')}</th>
                   <th>{t(lang, 'jamMasuk')}</th>
                   <th>{t(lang, 'jamPulang')}</th>
-                  <th>{t(lang, 'statusHari')}</th>
+                  <th style={{ minWidth: 120, width: 120, whiteSpace: 'nowrap' }}>{t(lang, 'statusHari')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -158,7 +159,7 @@ export default function DailyAttendancePage() {
                       <td style={{ fontSize: '12px' }}>{r.DEP_DESC || r.DEP_CD || '-'}</td>
                       <td>
                         {r.WORK_IN ? (
-                          <span style={{ fontSize: '13px', color: isLate ? 'var(--warning)' : 'var(--success)' }}>
+                           <span style={{ fontSize: '13px', color: isLate ? 'var(--warning)' : 'var(--success)' }}>
                             {fmtTime(r.WORK_IN)}
                             {isLate && <span style={{ marginLeft: '6px', fontSize: '10px' }}>⚠ {lang === 'id' ? 'Terlambat' : 'Late'}</span>}
                           </span>
@@ -169,8 +170,14 @@ export default function DailyAttendancePage() {
                           <span style={{ fontSize: '13px', color: 'var(--info)' }}>{fmtTime(r.WORK_OUT)}</span>
                         ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                       </td>
-                      <td>
-                        <span className={`badge ${st.badgeClass}`}>{st.label}</span>
+                      <td style={{ whiteSpace: 'nowrap' }}>
+                        <MarqueeBadge
+                          variant={st.key === 'libur' ? 'gray' : st.key}
+                          width={110}
+                          height={23}
+                        >
+                          {st.label}
+                        </MarqueeBadge>
                       </td>
                     </tr>
                   );

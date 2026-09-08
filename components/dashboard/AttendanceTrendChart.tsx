@@ -378,48 +378,24 @@ export default function AttendanceTrendChart() {
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={trendData} margin={{ top: 12, right: 8, left: -22, bottom: 2 }}>
               <defs>
-                {/* Modern Abstract Geometric Background Pattern (area-charts-2) */}
-                <pattern id="modernPattern" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
-                  <path
-                    d="M0,16 L32,16 M16,0 L16,32"
-                    stroke="var(--text-muted)"
-                    strokeWidth="0.5"
-                    strokeOpacity={isDark ? 0.08 : 0.05}
-                  />
-                  <path
-                    d="M0,0 L32,32 M0,32 L32,0"
-                    stroke="var(--text-muted)"
-                    strokeWidth="0.3"
-                    strokeOpacity={isDark ? 0.06 : 0.03}
-                  />
-                  <circle cx="8" cy="8" r="1.5" fill="var(--text-muted)" fillOpacity={isDark ? 0.08 : 0.05} />
-                  <circle cx="24" cy="24" r="1.5" fill="var(--text-muted)" fillOpacity={isDark ? 0.08 : 0.05} />
-                  <rect x="12" y="4" width="8" height="2" rx="1" fill="var(--text-muted)" fillOpacity={isDark ? 0.07 : 0.04} />
-                  <rect x="4" y="26" width="8" height="2" rx="1" fill="var(--text-muted)" fillOpacity={isDark ? 0.07 : 0.04} />
-                  <rect x="20" y="12" width="2" height="8" rx="1" fill="var(--text-muted)" fillOpacity={isDark ? 0.07 : 0.04} />
-                  <circle cx="6" cy="20" r="0.5" fill="var(--text-muted)" fillOpacity={isDark ? 0.12 : 0.08} />
-                  <circle cx="26" cy="10" r="0.5" fill="var(--text-muted)" fillOpacity={isDark ? 0.12 : 0.08} />
-                  <circle cx="14" cy="28" r="0.5" fill="var(--text-muted)" fillOpacity={isDark ? 0.12 : 0.08} />
-                </pattern>
-
                 <linearGradient id="gradientAlpha" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={colors.alpha.top} stopOpacity={colors.alpha.topOpacity} />
-                  <stop offset="55%" stopColor={colors.alpha.top} stopOpacity={colors.alpha.midOpacity} />
+                  <stop offset="60%" stopColor={colors.alpha.top} stopOpacity={colors.alpha.midOpacity} />
                   <stop offset="100%" stopColor={colors.alpha.top} stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="gradientIzin" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={colors.izin.top} stopOpacity={colors.izin.topOpacity} />
-                  <stop offset="55%" stopColor={colors.izin.top} stopOpacity={colors.izin.midOpacity} />
+                  <stop offset="60%" stopColor={colors.izin.top} stopOpacity={colors.izin.midOpacity} />
                   <stop offset="100%" stopColor={colors.izin.top} stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="gradientSakit" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={colors.sakit.top} stopOpacity={colors.sakit.topOpacity} />
-                  <stop offset="55%" stopColor={colors.sakit.top} stopOpacity={colors.sakit.midOpacity} />
+                  <stop offset="60%" stopColor={colors.sakit.top} stopOpacity={colors.sakit.midOpacity} />
                   <stop offset="100%" stopColor={colors.sakit.top} stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="gradientCuti" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={colors.cuti.top} stopOpacity={colors.cuti.topOpacity} />
-                  <stop offset="55%" stopColor={colors.cuti.top} stopOpacity={colors.cuti.midOpacity} />
+                  <stop offset="60%" stopColor={colors.cuti.top} stopOpacity={colors.cuti.midOpacity} />
                   <stop offset="100%" stopColor={colors.cuti.top} stopOpacity={0.0} />
                 </linearGradient>
               </defs>
@@ -452,65 +428,15 @@ export default function AttendanceTrendChart() {
                 content={<CustomTooltip />} 
               />
 
-              {/* Background Pattern Areas (Underlay pattern fill) */}
-              {showCuti && (
-                <Area 
-                  type="monotone" 
-                  dataKey="cuti" 
-                  fill="url(#modernPattern)" 
-                  fillOpacity={1} 
-                  stroke="transparent" 
-                  dot={false} 
-                  activeDot={false} 
-                  isAnimationActive={false} 
-                />
-              )}
-              {showAlpha && (
-                <Area 
-                  type="monotone" 
-                  dataKey="alpha" 
-                  fill="url(#modernPattern)" 
-                  fillOpacity={1} 
-                  stroke="transparent" 
-                  dot={false} 
-                  activeDot={false} 
-                  isAnimationActive={false} 
-                />
-              )}
-              {showSakit && (
-                <Area 
-                  type="monotone" 
-                  dataKey="sakit" 
-                  fill="url(#modernPattern)" 
-                  fillOpacity={1} 
-                  stroke="transparent" 
-                  dot={false} 
-                  activeDot={false} 
-                  isAnimationActive={false} 
-                />
-              )}
-              {showIzin && (
-                <Area 
-                  type="monotone" 
-                  dataKey="izin" 
-                  fill="url(#modernPattern)" 
-                  fillOpacity={1} 
-                  stroke="transparent" 
-                  dot={false} 
-                  activeDot={false} 
-                  isAnimationActive={false} 
-                />
-              )}
-
-              {/* Colored Gradient Areas with Active Glow Dots */}
+              {/* Clean Silky Gradient Areas with Active Glow Dots */}
               {showCuti && (
                 <Area 
                   type="monotone" 
                   dataKey="cuti" 
                   stroke={colors.cuti.stroke} 
                   strokeWidth={2}
-                  fillOpacity={0.35}
-                  fill={colors.cuti.fill} 
+                  fillOpacity={1}
+                  fill="url(#gradientCuti)" 
                   name="Cuti" 
                   dot={false}
                   activeDot={{
@@ -527,8 +453,8 @@ export default function AttendanceTrendChart() {
                   dataKey="alpha" 
                   stroke={colors.alpha.stroke} 
                   strokeWidth={2}
-                  fillOpacity={0.35}
-                  fill={colors.alpha.fill} 
+                  fillOpacity={1}
+                  fill="url(#gradientAlpha)" 
                   name="Alpha" 
                   dot={false}
                   activeDot={{
@@ -545,8 +471,8 @@ export default function AttendanceTrendChart() {
                   dataKey="sakit" 
                   stroke={colors.sakit.stroke} 
                   strokeWidth={2}
-                  fillOpacity={0.35}
-                  fill={colors.sakit.fill} 
+                  fillOpacity={1}
+                  fill="url(#gradientSakit)" 
                   name="Sakit" 
                   dot={false}
                   activeDot={{
@@ -563,8 +489,8 @@ export default function AttendanceTrendChart() {
                   dataKey="izin" 
                   stroke={colors.izin.stroke} 
                   strokeWidth={2}
-                  fillOpacity={0.35}
-                  fill={colors.izin.fill} 
+                  fillOpacity={1}
+                  fill="url(#gradientIzin)" 
                   name="Izin" 
                   dot={false}
                   activeDot={{

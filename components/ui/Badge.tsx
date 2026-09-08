@@ -22,57 +22,84 @@ export type BadgeSize = 'sm' | 'md' | 'lg';
 export interface BadgeProps {
   variant?: BadgeVariant;
   size?: BadgeSize;
-  children: ReactNode;
+  children?: ReactNode;
+  text?: string;
   icon?: ReactNode;
   dot?: boolean;
   className?: string;
   style?: React.CSSProperties;
   title?: string;
   maxWidth?: number | string;
+  minWidth?: number | string;
+  width?: number | string;
+  height?: number | string;
 }
 
 export function Badge({
   variant = 'gray',
   size = 'md',
   children,
+  text,
   icon,
   dot = false,
   className = '',
   style,
   title,
-  maxWidth
+  maxWidth,
+  minWidth,
+  width,
+  height
 }: BadgeProps) {
+  const content = text !== undefined ? text : children;
   const sizeClass = size === 'sm' ? 'badge-sm' : size === 'lg' ? 'badge-lg' : '';
-  const containerRef = useRef<HTMLSpanElement>(null);
+  const textContainerRef = useRef<HTMLSpanElement>(null);
   const textRef = useRef<HTMLSpanElement>(null);
   const [marqueeOffset, setMarqueeOffset] = useState<number>(0);
 
-  const textContent = typeof children === 'string' ? children : undefined;
+  const textContent = typeof content === 'string' ? content : undefined;
 
   useEffect(() => {
-    if (containerRef.current && textRef.current) {
-      const paddingReduction = dot || icon ? 26 : 18;
-      const cW = containerRef.current.clientWidth - paddingReduction;
-      const tW = textRef.current.scrollWidth;
-      if (tW > cW && cW > 0) {
-        setMarqueeOffset(cW - tW);
-      } else {
-        setMarqueeOffset(0);
+    const measure = () => {
+      if (textContainerRef.current && textRef.current) {
+        const availableW = textContainerRef.current.clientWidth;
+        const textW = textRef.current.scrollWidth;
+        if (textW > availableW && availableW > 0) {
+          setMarqueeOffset(availableW - textW - 2);
+        } else {
+          setMarqueeOffset(0);
+        }
       }
-    }
-  }, [children, maxWidth, dot, icon]);
+    };
+
+    measure();
+    const raf = requestAnimationFrame(measure);
+    const timer = setTimeout(measure, 150);
+
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+    };
+  }, [content, maxWidth, minWidth, width]);
 
   const isMarquee = marqueeOffset < 0;
 
   return (
     <span
-      ref={containerRef}
       className={`badge badge-${variant} ${sizeClass} ${className}`.trim()}
       style={{
+        width: width || undefined,
         maxWidth: maxWidth || undefined,
+        minWidth: minWidth || undefined,
+        height: height || undefined,
+        minHeight: height || undefined,
+        maxHeight: height || undefined,
         whiteSpace: 'nowrap',
         overflow: 'hidden',
+        display: 'inline-flex',
+        alignItems: 'center',
         flexShrink: 0,
+        boxSizing: 'border-box',
+        lineHeight: 1,
         ...style
       }}
       title={title || textContent}
@@ -85,23 +112,44 @@ export function Badge({
             borderRadius: '50%',
             backgroundColor: 'currentColor',
             display: 'inline-block',
-            flexShrink: 0
+            flexShrink: 0,
+            marginRight: 5
           }}
         />
       )}
-      {icon && <span style={{ display: 'inline-flex', flexShrink: 0 }}>{icon}</span>}
+      {icon && (
+        <span style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0, marginRight: 4 }}>
+          {icon}
+        </span>
+      )}
       <span
-        ref={textRef}
+        ref={textContainerRef}
         style={{
           display: 'inline-block',
-          whiteSpace: 'nowrap',
-          willChange: isMarquee ? 'transform' : 'auto',
-          animation: isMarquee ? 'marqueeBadge 4.5s ease-in-out infinite alternate' : 'none',
-          ['--marquee-offset' as any]: `${marqueeOffset}px`
+          overflow: 'hidden',
+          flex: 1,
+          minWidth: 0,
+          textAlign: isMarquee ? 'left' : 'center',
+          whiteSpace: 'nowrap'
         }}
       >
-        {children}
+        <span
+          ref={textRef}
+          style={{
+            display: 'inline-block',
+            whiteSpace: 'nowrap',
+            willChange: isMarquee ? 'transform' : 'auto',
+            animation: isMarquee ? 'marqueeBadge 4.5s ease-in-out infinite alternate' : 'none',
+            ['--marquee-offset' as any]: `${marqueeOffset}px`
+          }}
+        >
+          {content}
+        </span>
       </span>
     </span>
   );
+}
+
+export function MarqueeBadge(props: BadgeProps) {
+  return <Badge {...props} />;
 }

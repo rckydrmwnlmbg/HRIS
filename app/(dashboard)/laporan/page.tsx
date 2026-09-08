@@ -5,6 +5,7 @@ import { t } from '@/lib/i18n';
 import { EmptyState } from '@/components/ui/EmptyState';
 import type { Department, Seksi, Jabatan } from '@/types';
 import { FileText, Download, BarChart3, Filter, Loader2, Calendar as CalendarIcon } from 'lucide-react';
+import { MarqueeBadge } from '@/components/ui/Badge';
 import styles from './laporan.module.css';
 
 type Tab = 'absensi' | 'ot' | 'cuti' | 'skorsing';
@@ -363,10 +364,18 @@ export default function LaporanPage() {
                             <td style={{ fontSize: '12px', whiteSpace: 'nowrap' }}>{r.BAGIAN || '-'}</td>
                             <td style={{ textAlign: 'center', fontFamily: 'monospace' }}>{r.MASUK || '-'}</td>
                             <td style={{ textAlign: 'center', fontFamily: 'monospace' }}>{r.PULANG || '-'}</td>
-                            <td style={{ textAlign: 'center' }}>
-                              <span className={`badge badge-${(r.STATUS_HARI || '').toLowerCase().includes('kerja') ? 'hadir' : (r.STATUS_HARI || '').toLowerCase().includes('libur') ? 'netral' : 'alpha'}`}>
+                            <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                              <MarqueeBadge
+                                variant={
+                                  (r.STATUS_HARI || '').toLowerCase().includes('kerja') ? 'hadir'
+                                  : (r.STATUS_HARI || '').toLowerCase().includes('libur') ? 'gray'
+                                  : 'alpha'
+                                }
+                                width={85}
+                                height={23}
+                              >
                                 {r.STATUS_HARI || '-'}
-                              </span>
+                              </MarqueeBadge>
                             </td>
                             <td style={{ fontSize: '12px' }}>{r.ALASAN || '-'}</td>
                             <td style={{ textAlign: 'center', fontWeight: 600 }}>{r.BASIC}</td>
@@ -435,7 +444,11 @@ export default function LaporanPage() {
                             <td style={{ fontSize: '12px' }}>{r.DEP_DESC || '-'}</td>
                             <td style={{ fontSize: '12px' }}>{r.SEC_DESC || '-'}</td>
                             <td style={{ fontSize: '12px' }}>{r.TEAM || r.JOB_DESC || '-'}</td>
-                            <td><span className="badge badge-cuti">{r.type}</span></td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              <MarqueeBadge variant="cuti" width={120} height={23}>
+                                {r.type}
+                              </MarqueeBadge>
+                            </td>
                             <td>{new Date(r.startDate).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US')}</td>
                             <td>{new Date(r.endDate).toLocaleDateString(lang === 'id' ? 'id-ID' : 'en-US')}</td>
                             <td>{r.days} {lang === 'id' ? 'Hari' : 'Days'}</td>

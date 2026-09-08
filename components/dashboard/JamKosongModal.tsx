@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Download, AlertTriangle, Calendar, Loader2, Search, Clock } from 'lucide-react';
+import { MarqueeBadge } from '@/components/ui/Badge';
 import type { JamKosongRecord } from '@/types';
 
 interface JamKosongModalProps {
@@ -286,23 +287,23 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(16px)', backgroundColor: 'var(--table-header-bg)' }}>
                 <tr>
-                  <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Tanggal' : 'Date'}</th>
+                  <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>{lang === 'id' ? 'Tanggal' : 'Date'}</th>
                   <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Informasi Karyawan' : 'Employee'}</th>
                   <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Unit Kerja & Tim' : 'Section & Team'}</th>
-                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Waktu Masuk' : 'Clock In'}</th>
-                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Waktu Pulang' : 'Clock Out'}</th>
-                  <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Status Presensi' : 'Attendance Status'}</th>
+                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em', minWidth: 110, width: 110, whiteSpace: 'nowrap' }}>{lang === 'id' ? 'Waktu Masuk' : 'Clock In'}</th>
+                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em', minWidth: 110, width: 110, whiteSpace: 'nowrap' }}>{lang === 'id' ? 'Waktu Pulang' : 'Clock Out'}</th>
+                  <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em', minWidth: 185, width: 185, whiteSpace: 'nowrap' }}>{lang === 'id' ? 'Status Presensi' : 'Attendance Status'}</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredData.map((k, i) => (
                   <tr key={`${k.EMP_CD}-${k.DATE_TRANS}`} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'var(--bg-secondary)' : 'var(--bg-subtle)' }}>
-                    <td style={{ padding: '10px 16px', fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)' }}>
+                    <td style={{ padding: '10px 16px', fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
                       {k.DATE_TRANS?.split('-').reverse().join('-')}
                     </td>
                     <td style={{ padding: '10px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(2, 132, 199, 0.15)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 750, fontSize: 11 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(2, 132, 199, 0.15)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 750, fontSize: 11, flexShrink: 0 }}>
                           {k.EMP_NM.charAt(0)}
                         </div>
                         <div>
@@ -315,43 +316,46 @@ export default function JamKosongModal({ isOpen, onClose, data, lang }: JamKoson
                       <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 11.5 }}>{k.BAGIAN || '-'}</div>
                       <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{k.TEAM || '-'}</div>
                     </td>
-                    <td style={{ padding: '10px 12px', fontSize: 11.5 }}>
+                    <td style={{ padding: '10px 12px', fontSize: 11.5, whiteSpace: 'nowrap' }}>
                       {k.WORK_IN ? (
                         <span style={{ color: 'var(--text-primary)', fontWeight: 650 }}>{k.WORK_IN}</span>
                       ) : (
-                        <span style={{ color: '#b91c1c', fontWeight: 650, background: '#fee2e2', border: '1px solid #fca5a5', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px' }}>
+                        <MarqueeBadge
+                          variant="danger"
+                          width={96}
+                          height={23}
+                        >
                           {lang === 'id' ? 'Belum Tercatat' : 'Missing'}
-                        </span>
+                        </MarqueeBadge>
                       )}
                     </td>
-                    <td style={{ padding: '10px 12px', fontSize: 11.5 }}>
+                    <td style={{ padding: '10px 12px', fontSize: 11.5, whiteSpace: 'nowrap' }}>
                       {k.WORK_OUT ? (
                         <span style={{ color: 'var(--text-primary)', fontWeight: 650 }}>{k.WORK_OUT}</span>
                       ) : (
-                        <span style={{ color: '#b91c1c', fontWeight: 650, background: '#fee2e2', border: '1px solid #fca5a5', padding: '2px 8px', borderRadius: '6px', fontSize: '10.5px' }}>
+                        <MarqueeBadge
+                          variant="danger"
+                          width={96}
+                          height={23}
+                        >
                           {lang === 'id' ? 'Belum Tercatat' : 'Missing'}
-                        </span>
+                        </MarqueeBadge>
                       )}
                     </td>
-                    <td style={{ padding: '10px 16px' }}>
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: '6px', fontSize: 11, fontWeight: 600,
-                        background: k.keterangan_kosong.startsWith('Alasan') || k.keterangan_kosong.includes('(') ? '#eff6ff'
-                          : k.keterangan_kosong === 'Lupa Tap Masuk' ? '#fef9c3'
-                          : k.keterangan_kosong === 'Lupa Tap Pulang' ? '#ffedd5'
-                          : '#fee2e2',
-                        color: k.keterangan_kosong.startsWith('Alasan') || k.keterangan_kosong.includes('(') ? '#1d4ed8'
-                          : k.keterangan_kosong === 'Lupa Tap Masuk' ? '#854d0e'
-                          : k.keterangan_kosong === 'Lupa Tap Pulang' ? '#9a3412'
-                          : '#991b1b',
-                        border: k.keterangan_kosong.startsWith('Alasan') || k.keterangan_kosong.includes('(') ? '1px solid #bfdbfe'
-                          : k.keterangan_kosong === 'Lupa Tap Masuk' ? '1px solid #fde047'
-                          : k.keterangan_kosong === 'Lupa Tap Pulang' ? '1px solid #fdba74'
-                          : '1px solid #fca5a5',
-                      }}>
-                        <AlertTriangle size={11} />
+                    <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>
+                      <MarqueeBadge
+                        variant={
+                          k.keterangan_kosong.startsWith('Alasan') || k.keterangan_kosong.includes('(') ? 'info'
+                            : k.keterangan_kosong === 'Lupa Tap Masuk' ? 'warning'
+                            : k.keterangan_kosong === 'Lupa Tap Pulang' ? 'orange'
+                            : 'danger'
+                        }
+                        icon={<AlertTriangle size={11} />}
+                        width={180}
+                        height={24}
+                      >
                         {k.keterangan_kosong}
-                      </span>
+                      </MarqueeBadge>
                     </td>
                   </tr>
                 ))}

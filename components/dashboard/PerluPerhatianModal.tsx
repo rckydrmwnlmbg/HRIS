@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import * as XLSX from 'xlsx';
 import { X, Download, AlertCircle, AlertTriangle, Calendar, Loader2, Search, Clock, Zap } from 'lucide-react';
+import { MarqueeBadge } from '@/components/ui/Badge';
 import type { PerluPerhatianRecord } from '@/types';
 
 interface PerluPerhatianModalProps {
@@ -277,11 +278,11 @@ export default function PerluPerhatianModal({ isOpen, onClose, initialData = [],
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 12 }}>
               <thead style={{ position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(16px)', backgroundColor: 'var(--table-header-bg)' }}>
                 <tr>
-                  <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Informasi Karyawan' : 'Employee'}</th>
-                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Unit Kerja & Tim' : 'Section & Team'}</th>
-                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Waktu Masuk & Pulang' : 'Clock In / Out'}</th>
-                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Durasi Kerja' : 'Work Hours'}</th>
-                  <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em' }}>{lang === 'id' ? 'Catatan Penyesuaian' : 'Adjustment Details'}</th>
+                  <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>{lang === 'id' ? 'Informasi Karyawan' : 'Employee'}</th>
+                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em', whiteSpace: 'nowrap' }}>{lang === 'id' ? 'Unit Kerja & Tim' : 'Section & Team'}</th>
+                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em', minWidth: 125, width: 125, whiteSpace: 'nowrap' }}>{lang === 'id' ? 'Waktu Masuk & Pulang' : 'Clock In / Out'}</th>
+                  <th style={{ padding: '10px 12px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em', minWidth: 90, width: 90, whiteSpace: 'nowrap' }}>{lang === 'id' ? 'Durasi Kerja' : 'Work Hours'}</th>
+                  <th style={{ padding: '10px 16px', color: 'var(--text-secondary)', fontWeight: 700, borderBottom: '2px solid var(--border)', fontSize: 11, letterSpacing: '0.02em', minWidth: 175, width: 175, whiteSpace: 'nowrap' }}>{lang === 'id' ? 'Catatan Penyesuaian' : 'Adjustment Details'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -289,20 +290,20 @@ export default function PerluPerhatianModal({ isOpen, onClose, initialData = [],
                   <tr key={k.EMP_CD} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'var(--bg-secondary)' : 'var(--bg-subtle)' }}>
                     <td style={{ padding: '10px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(2, 132, 199, 0.15)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 750, fontSize: 11 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'rgba(2, 132, 199, 0.15)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 750, fontSize: 11, flexShrink: 0 }}>
                           {k.EMP_NM.charAt(0)}
                         </div>
                         <div>
-                          <div style={{ fontWeight: 650, color: 'var(--text-primary)', fontSize: 12 }}>{k.EMP_NM}</div>
+                          <div style={{ fontWeight: 650, color: 'var(--text-primary)', fontSize: 12, whiteSpace: 'nowrap' }}>{k.EMP_NM}</div>
                           <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 500 }}>{k.EMP_CD}</div>
                         </div>
                       </div>
                     </td>
                     <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 11.5 }}>{k.BAGIAN || '-'}</div>
-                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{k.TEAM || '-'}</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 11.5, whiteSpace: 'nowrap' }}>{k.BAGIAN || '-'}</div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{k.TEAM || '-'}</div>
                     </td>
-                    <td style={{ padding: '10px 12px', fontSize: 11.5 }}>
+                    <td style={{ padding: '10px 12px', fontSize: 11.5, whiteSpace: 'nowrap' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         <span style={{ color: k.jenis_anomali === 'TERLAMBAT' ? '#dc2626' : 'var(--text-primary)', fontWeight: k.jenis_anomali === 'TERLAMBAT' ? 700 : 550 }}>
                           {lang === 'id' ? 'Masuk' : 'In'}: {k.WORK_IN || '-'}
@@ -314,26 +315,28 @@ export default function PerluPerhatianModal({ isOpen, onClose, initialData = [],
                         </span>
                       </div>
                     </td>
-                    <td style={{ padding: '10px 12px' }}>
-                      <span style={{
-                        display: 'inline-block', padding: '3px 8px', borderRadius: '6px', fontSize: 11, fontWeight: 650,
-                        background: k.jam_kerja < 7.0 ? '#fee2e2' : 'var(--bg-subtle)',
-                        color: k.jam_kerja < 7.0 ? '#dc2626' : 'var(--text-primary)',
-                        border: k.jam_kerja < 7.0 ? '1px solid #fca5a5' : '1px solid var(--border)'
-                      }}>
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap' }}>
+                      <MarqueeBadge
+                        variant={k.jam_kerja < 7.0 ? 'danger' : 'gray'}
+                        width={78}
+                        height={23}
+                      >
                         {k.jam_kerja} {lang === 'id' ? 'Jam' : 'Hrs'}
-                      </span>
+                      </MarqueeBadge>
                     </td>
-                    <td style={{ padding: '10px 16px' }}>
-                      <div style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: '6px', fontSize: 11, fontWeight: 600,
-                        background: k.jenis_anomali === 'PULANG_CEPAT' ? '#fef9c3' : (k.jenis_anomali === 'TERLAMBAT' ? '#fee2e2' : '#f5f3ff'),
-                        color: k.jenis_anomali === 'PULANG_CEPAT' ? '#854d0e' : (k.jenis_anomali === 'TERLAMBAT' ? '#991b1b' : '#5b21b6'),
-                        border: k.jenis_anomali === 'PULANG_CEPAT' ? '1px solid #fde047' : (k.jenis_anomali === 'TERLAMBAT' ? '1px solid #fca5a5' : '1px solid #ddd6fe')
-                      }}>
-                        <AlertTriangle size={11} />
+                    <td style={{ padding: '10px 16px', whiteSpace: 'nowrap' }}>
+                      <MarqueeBadge
+                        variant={
+                          k.jenis_anomali === 'PULANG_CEPAT' ? 'warning'
+                            : k.jenis_anomali === 'TERLAMBAT' ? 'danger'
+                            : 'purple'
+                        }
+                        icon={<AlertTriangle size={11} />}
+                        width={170}
+                        height={24}
+                      >
                         {k.keterangan}
-                      </div>
+                      </MarqueeBadge>
                     </td>
                   </tr>
                 ))}
