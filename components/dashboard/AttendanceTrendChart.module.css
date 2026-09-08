@@ -1,27 +1,29 @@
 .trendCard {
-  padding: 16px 20px;
+  padding: 18px 22px;
   display: flex;
   flex-direction: column;
   height: 100%;
+  position: relative;
+  overflow: hidden;
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
 }
 
 .titleArea {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 
 .title {
-  font-size: 13.5px;
+  font-size: 14px;
   font-weight: 750;
   letter-spacing: -0.015em;
   color: var(--text-primary);
@@ -46,10 +48,10 @@
 .rangeBtn {
   background: transparent;
   border: none;
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 3px;
+  padding: 4px 10px;
+  border-radius: 4px;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -68,11 +70,11 @@
 .exportBtn {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
-  padding: 4px 9px;
+  padding: 4px 10px;
   font-size: 11px;
   font-weight: 600;
   color: var(--text-primary);
@@ -86,83 +88,207 @@
   transform: translateY(-1px);
 }
 
-/* Series Filter Toggles */
-.legendFilterRow {
+/* Stage Metrics Grid (area-charts-2 style) */
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.metricCard {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+
+.metricCardActive:hover {
+  border-color: var(--glass-border-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.09);
+}
+
+.metricCardInactive {
+  opacity: 0.42;
+  filter: grayscale(0.5);
+  background: transparent;
+  border-style: dashed;
+}
+
+.metricCardInactive:hover {
+  opacity: 0.7;
+}
+
+.metricBar {
+  width: 3.5px;
+  height: 38px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.metricCardActive:hover .metricBar {
+  transform: scaleY(1.08);
+}
+
+.metricContent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.metricLabelRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
-  font-size: 11px;
-  flex-wrap: wrap;
   gap: 6px;
 }
 
-.filterChips {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.filterChip {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: transparent;
-  cursor: pointer;
-  font-size: 10.5px;
-  font-weight: 550;
-  color: var(--text-secondary);
-  transition: all 0.15s ease;
-  user-select: none;
-}
-
-.filterChipActive {
-  border-color: var(--glass-border-hover);
-  background: var(--glass-bg);
-  color: var(--text-primary);
+.metricLabel {
+  font-size: 11.5px;
   font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.filterChipInactive {
-  opacity: 0.35;
-  text-decoration: line-through;
+.inactiveTag {
+  font-size: 9px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-weight: 500;
+  line-height: 1.2;
 }
 
-.statBadge {
-  font-size: 10.5px;
+.metricValueRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.metricValue {
+  font-size: 1.35rem;
+  font-weight: 750;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.trendPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1.5px 6px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.trendGood {
+  color: #10B981;
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.trendBad {
+  color: #EF4444;
+  background: rgba(239, 68, 68, 0.12);
+}
+
+.trendWarning {
+  color: #F59E0B;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.trendNeutral {
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+}
+
+/* Helper note */
+.helperRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -6px;
+  margin-bottom: 6px;
+}
+
+.helperText {
+  font-size: 10px;
   color: var(--text-muted);
 }
 
-/* Custom Tooltip */
+/* Chart Container */
+.chartWrapper {
+  flex: 1;
+  min-height: 250px;
+  width: 100%;
+  position: relative;
+}
+
+/* Custom Tooltip matching area-charts-2 */
 .tooltipCard {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
-  padding: 10px 14px;
+  padding: 11px 14px;
   font-size: 11.5px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(24px) saturate(180%);
   -webkit-backdrop-filter: blur(24px) saturate(180%);
-  min-width: 140px;
+  min-width: 175px;
 }
 
 .tooltipTitle {
-  font-weight: 750;
+  font-size: 11.5px;
+  font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 6px;
+  margin-bottom: 7px;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 4px;
+  padding-bottom: 5px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .tooltipRow {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 3px;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+.tooltipIndicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.tooltipTotalRow {
+  border-top: 1px dashed var(--border);
+  margin-top: 6px;
+  padding-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
 }
 
 /* Export Modal Form */
@@ -193,6 +319,13 @@
   box-shadow: 0 2px 6px var(--accent-glow);
 }
 
+@media (max-width: 900px) {
+  .metricsGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+}
+
 @media (max-width: 640px) {
   .trendCard {
     padding: 12px 14px;
@@ -211,19 +344,27 @@
     gap: 6px;
   }
 
-  .legendFilterRow {
-    flex-direction: column;
-    align-items: flex-start;
+  .metricsGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .metricCard {
+    padding: 8px 10px;
     gap: 8px;
   }
 
-  .filterChips {
-    flex-wrap: wrap;
-    gap: 4px;
+  .metricBar {
+    height: 32px;
+    width: 3px;
   }
 
-  .filterChip {
-    padding: 2.5px 6px;
-    font-size: 10px;
+  .metricValue {
+    font-size: 1.15rem;
+  }
+
+  .chartWrapper {
+    min-height: 210px;
   }
 }

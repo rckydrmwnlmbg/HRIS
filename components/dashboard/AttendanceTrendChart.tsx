@@ -12,9 +12,9 @@ import {
 } from 'recharts';
 import { 
   TrendingUp, 
+  TrendingDown, 
   Download, 
   Calendar, 
-  Check, 
   FileSpreadsheet
 } from 'lucide-react';
 import { useApp } from '@/lib/context';
@@ -47,7 +47,7 @@ export default function AttendanceTrendChart() {
   const [loading, setLoading] = useState<boolean>(true);
   const [timeRange, setTimeRange] = useState<'30d' | '3m' | '6m'>('6m');
 
-  // Series visibility toggles (Clickable legend)
+  // Series visibility toggles (Clickable cards)
   const [showAlpha, setShowAlpha] = useState<boolean>(true);
   const [showIzin, setShowIzin] = useState<boolean>(true);
   const [showSakit, setShowSakit] = useState<boolean>(true);
@@ -89,6 +89,36 @@ export default function AttendanceTrendChart() {
     fetchTrend(timeRange);
   }, [timeRange]);
 
+  // Compute Stage Metrics (Totals & Trend Percentage)
+  const stats = useMemo(() => {
+    const compute = (key: 'alpha' | 'izin' | 'sakit' | 'cuti') => {
+      if (!trendData || trendData.length === 0) {
+        return { total: 0, change: 0 };
+      }
+      const total = trendData.reduce((acc, curr) => acc + (Number(curr[key]) || 0), 0);
+      if (trendData.length < 2) {
+        return { total, change: 0 };
+      }
+      const mid = Math.floor(trendData.length / 2);
+      const firstHalf = trendData.slice(0, mid).reduce((sum, d) => sum + (Number(d[key]) || 0), 0);
+      const secondHalf = trendData.slice(mid).reduce((sum, d) => sum + (Number(d[key]) || 0), 0);
+      let change = 0;
+      if (firstHalf > 0) {
+        change = Math.round(((secondHalf - firstHalf) / firstHalf) * 100);
+      } else if (secondHalf > 0) {
+        change = 100;
+      }
+      return { total, change };
+    };
+
+    return {
+      alpha: compute('alpha'),
+      izin: compute('izin'),
+      sakit: compute('sakit'),
+      cuti: compute('cuti'),
+    };
+  }, [trendData]);
+
   // Execute Excel Export Download
   const handleDownloadExcel = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -127,27 +157,98 @@ export default function AttendanceTrendChart() {
     }
   };
 
-  // Custom Glassmorphic Tooltip
+  const isDark = settings.darkMode;
+
+  const colors = useMemo(() => {
+    if (isDark) {
+      return {
+        alpha: { stroke: '#FB7185', top: '#F43F5E', topOpacity: 0.38, midOpacity: 0.12, fill: 'url(#gradientAlpha)' },
+        izin: { stroke: '#38BDF8', top: '#0EA5E9', topOpacity: 0.35, midOpacity: 0.10, fill: 'url(#gradientIzin)' },
+        sakit: { stroke: '#FBBF24', top: '#F59E0B', topOpacity: 0.35, midOpacity: 0.10, fill: 'url(#gradientSakit)' },
+        cuti: { stroke: '#A78BFA', top: '#8B5CF6', topOpacity: 0.35, midOpacity: 0.10, fill: 'url(#gradientCuti)' },
+      };
+    }
+    // Rich Silky Light Mode Palette
+    return {
+      alpha: { stroke: '#E11D48', top: '#FB7185', topOpacity: 0.28, midOpacity: 0.08, fill: 'url(#gradientAlpha)' },
+      izin: { stroke: '#0284C7', top: '#38BDF8', topOpacity: 0.25, midOpacity: 0.07, fill: 'url(#gradientIzin)' },
+      sakit: { stroke: '#D97706', top: '#FBBF24', topOpacity: 0.25, midOpacity: 0.07, fill: 'url(#gradientSakit)' },
+      cuti: { stroke: '#7C3AED', top: '#A78BFA', topOpacity: 0.25, midOpacity: 0.07, fill: 'url(#gradientCuti)' },
+    };
+  }, [isDark]);
+
+  // Stage Metrics Definition (area-charts-2 style)
+  const stageMetrics = [
+    {
+      key: 'alpha',
+      label: 'Alpha',
+      color: colors.alpha.stroke,
+      active: showAlpha,
+      onToggle: () => setShowAlpha(!showAlpha),
+      total: stats.alpha.total,
+      change: stats.alpha.change,
+      trendClass: stats.alpha.change > 0 ? styles.trendBad : stats.alpha.change < 0 ? styles.trendGood : styles.trendNeutral,
+    },
+    {
+      key: 'izin',
+      label: 'Izin',
+      color: colors.izin.stroke,
+      active: showIzin,
+      onToggle: () => setShowIzin(!showIzin),
+      total: stats.izin.total,
+      change: stats.izin.change,
+      trendClass: stats.izin.change > 0 ? styles.trendWarning : stats.izin.change < 0 ? styles.trendGood : styles.trendNeutral,
+    },
+    {
+      key: 'sakit',
+      label: 'Sakit',
+      color: colors.sakit.stroke,
+      active: showSakit,
+      onToggle: () => setShowSakit(!showSakit),
+      total: stats.sakit.total,
+      change: stats.sakit.change,
+      trendClass: stats.sakit.change > 0 ? styles.trendBad : stats.sakit.change < 0 ? styles.trendGood : styles.trendNeutral,
+    },
+    {
+      key: 'cuti',
+      label: 'Cuti',
+      color: colors.cuti.stroke,
+      active: showCuti,
+      onToggle: () => setShowCuti(!showCuti),
+      total: stats.cuti.total,
+      change: stats.cuti.change,
+      trendClass: stats.cuti.change > 0 ? styles.trendGood : stats.cuti.change < 0 ? styles.trendNeutral : styles.trendNeutral,
+    },
+  ];
+
+  // Custom Glassmorphic Tooltip (area-charts-2 style)
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const total = payload.reduce((sum: number, entry: any) => sum + (Number(entry.value) || 0), 0);
-      const sortedPayload = [...payload].sort((a: any, b: any) => (Number(b.value) || 0) - (Number(a.value) || 0));
+      // Filter out pattern areas which have transparent stroke
+      const validEntries = payload.filter((p: any) => p.stroke !== 'transparent');
+      const total = validEntries.reduce((sum: number, entry: any) => sum + (Number(entry.value) || 0), 0);
+      const sortedEntries = [...validEntries].sort((a: any, b: any) => (Number(b.value) || 0) - (Number(a.value) || 0));
+
       return (
         <div className={styles.tooltipCard}>
           <div className={styles.tooltipTitle}>
-            📅 {label}
+            <span>📅</span>
+            <span>{label}</span>
           </div>
-          {sortedPayload.map((entry: any, index: number) => (
+          {sortedEntries.map((entry: any, index: number) => (
             <div key={`item-${index}`} className={styles.tooltipRow}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: entry.color }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div 
+                  className={styles.tooltipIndicator} 
+                  style={{ backgroundColor: entry.stroke || entry.color }} 
+                />
                 <span style={{ color: 'var(--text-secondary)' }}>{entry.name}:</span>
               </div>
               <strong style={{ color: 'var(--text-primary)' }}>{entry.value} org</strong>
             </div>
           ))}
-          <div style={{ borderTop: '1px dashed var(--border)', marginTop: '4px', paddingTop: '4px', display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-            <span>Total Absen:</span>
+          <div className={styles.tooltipTotalRow}>
+            <span style={{ color: 'var(--text-secondary)' }}>Total Absen:</span>
             <span style={{ color: 'var(--accent)' }}>{total} org</span>
           </div>
         </div>
@@ -155,26 +256,6 @@ export default function AttendanceTrendChart() {
     }
     return null;
   };
-
-  const isDark = settings.darkMode;
-
-  const colors = useMemo(() => {
-    if (isDark) {
-      return {
-        alpha: { stroke: '#FB7185', top: '#F43F5E', topOpacity: 0.35, midOpacity: 0.12, fill: 'url(#gradientAlpha)' },
-        izin: { stroke: '#38BDF8', top: '#0EA5E9', topOpacity: 0.32, midOpacity: 0.10, fill: 'url(#gradientIzin)' },
-        sakit: { stroke: '#FBBF24', top: '#F59E0B', topOpacity: 0.32, midOpacity: 0.10, fill: 'url(#gradientSakit)' },
-        cuti: { stroke: '#A78BFA', top: '#8B5CF6', topOpacity: 0.32, midOpacity: 0.10, fill: 'url(#gradientCuti)' },
-      };
-    }
-    // Silky Smooth Light Mode Palette
-    return {
-      alpha: { stroke: '#E11D48', top: '#FB7185', topOpacity: 0.22, midOpacity: 0.06, fill: 'url(#gradientAlpha)' },
-      izin: { stroke: '#0284C7', top: '#38BDF8', topOpacity: 0.20, midOpacity: 0.05, fill: 'url(#gradientIzin)' },
-      sakit: { stroke: '#D97706', top: '#FBBF24', topOpacity: 0.20, midOpacity: 0.05, fill: 'url(#gradientSakit)' },
-      cuti: { stroke: '#7C3AED', top: '#A78BFA', topOpacity: 0.20, midOpacity: 0.05, fill: 'url(#gradientCuti)' },
-    };
-  }, [isDark]);
 
   return (
     <div className={`glass-card stagger-2 ${styles.trendCard}`}>
@@ -235,56 +316,59 @@ export default function AttendanceTrendChart() {
         </div>
       </div>
 
-      {/* Series Filter Row (Interactive Click-to-Toggle) */}
-      <div className={styles.legendFilterRow}>
-        <div className={styles.filterChips}>
-          <button
-            className={`${styles.filterChip} ${showAlpha ? styles.filterChipActive : styles.filterChipInactive}`}
-            onClick={() => setShowAlpha(!showAlpha)}
-            title="Klik untuk sembunyikan/tampilkan Alpha"
+      {/* Stage Metrics Grid (area-charts-2 KPI Blocks) */}
+      <div className={styles.metricsGrid}>
+        {stageMetrics.map((stage) => (
+          <div
+            key={stage.key}
+            className={`${styles.metricCard} ${stage.active ? styles.metricCardActive : styles.metricCardInactive}`}
+            onClick={stage.onToggle}
+            role="button"
+            tabIndex={0}
+            title={lang === 'id' 
+              ? `Klik untuk ${stage.active ? 'menyembunyikan' : 'menampilkan'} ${stage.label}`
+              : `Click to ${stage.active ? 'hide' : 'show'} ${stage.label}`}
           >
-            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: colors.alpha.stroke }} />
-            <span>Alpha</span>
-          </button>
+            <div 
+              className={styles.metricBar} 
+              style={{ backgroundColor: stage.color }} 
+            />
+            <div className={styles.metricContent}>
+              <div className={styles.metricLabelRow}>
+                <span className={styles.metricLabel}>{stage.label}</span>
+                {!stage.active && (
+                  <span className={styles.inactiveTag}>
+                    {lang === 'id' ? 'Nonaktif' : 'Hidden'}
+                  </span>
+                )}
+              </div>
+              <div className={styles.metricValueRow}>
+                <span className={styles.metricValue}>
+                  {loading ? '...' : stage.total.toLocaleString('id-ID')}
+                </span>
+                {!loading && (
+                  <span className={`${styles.trendPill} ${stage.trendClass}`}>
+                    {stage.change >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                    <span>{stage.change >= 0 ? `+${stage.change}%` : `${stage.change}%`}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
 
-          <button
-            className={`${styles.filterChip} ${showIzin ? styles.filterChipActive : styles.filterChipInactive}`}
-            onClick={() => setShowIzin(!showIzin)}
-            title="Klik untuk sembunyikan/tampilkan Izin"
-          >
-            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: colors.izin.stroke }} />
-            <span>Izin</span>
-          </button>
-
-          <button
-            className={`${styles.filterChip} ${showSakit ? styles.filterChipActive : styles.filterChipInactive}`}
-            onClick={() => setShowSakit(!showSakit)}
-            title="Klik untuk sembunyikan/tampilkan Sakit"
-          >
-            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: colors.sakit.stroke }} />
-            <span>Sakit</span>
-          </button>
-
-          <button
-            className={`${styles.filterChip} ${showCuti ? styles.filterChipActive : styles.filterChipInactive}`}
-            onClick={() => setShowCuti(!showCuti)}
-            title="Klik untuk sembunyikan/tampilkan Cuti"
-          >
-            <div style={{ width: '7px', height: '7px', borderRadius: '50%', background: colors.cuti.stroke }} />
-            <span>Cuti</span>
-          </button>
-        </div>
-
-        <span className={styles.statBadge}>
-          *Klik kategori untuk memfilter grafik
+      <div className={styles.helperRow}>
+        <span className={styles.helperText}>
+          {lang === 'id' ? '*Klik kartu kategori untuk menyaring grafik' : '*Click metric card to toggle series'}
         </span>
       </div>
 
       {/* Area Chart Container */}
-      <div style={{ flex: 1, minHeight: 220, marginTop: 4 }}>
+      <div className={styles.chartWrapper}>
         {loading ? (
-          <div style={{ height: '100%', minHeight: '215px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <Skeleton width="100%" height="100%" style={{ borderRadius: 'var(--radius-md)', minHeight: '215px' }} />
+          <div style={{ height: '100%', minHeight: '230px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <Skeleton width="100%" height="100%" style={{ borderRadius: 'var(--radius-md)', minHeight: '230px' }} />
           </div>
         ) : trendData.length === 0 ? (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', width: '100%', color: 'var(--text-secondary)', fontSize: '12px' }}>
@@ -292,35 +376,66 @@ export default function AttendanceTrendChart() {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={trendData} margin={{ top: 8, right: 8, left: -24, bottom: 0 }}>
+            <AreaChart data={trendData} margin={{ top: 12, right: 8, left: -22, bottom: 2 }}>
               <defs>
+                {/* Modern Abstract Geometric Background Pattern (area-charts-2) */}
+                <pattern id="modernPattern" x="0" y="0" width="32" height="32" patternUnits="userSpaceOnUse">
+                  <path
+                    d="M0,16 L32,16 M16,0 L16,32"
+                    stroke="var(--text-muted)"
+                    strokeWidth="0.5"
+                    strokeOpacity={isDark ? 0.08 : 0.05}
+                  />
+                  <path
+                    d="M0,0 L32,32 M0,32 L32,0"
+                    stroke="var(--text-muted)"
+                    strokeWidth="0.3"
+                    strokeOpacity={isDark ? 0.06 : 0.03}
+                  />
+                  <circle cx="8" cy="8" r="1.5" fill="var(--text-muted)" fillOpacity={isDark ? 0.08 : 0.05} />
+                  <circle cx="24" cy="24" r="1.5" fill="var(--text-muted)" fillOpacity={isDark ? 0.08 : 0.05} />
+                  <rect x="12" y="4" width="8" height="2" rx="1" fill="var(--text-muted)" fillOpacity={isDark ? 0.07 : 0.04} />
+                  <rect x="4" y="26" width="8" height="2" rx="1" fill="var(--text-muted)" fillOpacity={isDark ? 0.07 : 0.04} />
+                  <rect x="20" y="12" width="2" height="8" rx="1" fill="var(--text-muted)" fillOpacity={isDark ? 0.07 : 0.04} />
+                  <circle cx="6" cy="20" r="0.5" fill="var(--text-muted)" fillOpacity={isDark ? 0.12 : 0.08} />
+                  <circle cx="26" cy="10" r="0.5" fill="var(--text-muted)" fillOpacity={isDark ? 0.12 : 0.08} />
+                  <circle cx="14" cy="28" r="0.5" fill="var(--text-muted)" fillOpacity={isDark ? 0.12 : 0.08} />
+                </pattern>
+
                 <linearGradient id="gradientAlpha" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={colors.alpha.top} stopOpacity={colors.alpha.topOpacity} />
-                  <stop offset="60%" stopColor={colors.alpha.top} stopOpacity={colors.alpha.midOpacity} />
+                  <stop offset="55%" stopColor={colors.alpha.top} stopOpacity={colors.alpha.midOpacity} />
                   <stop offset="100%" stopColor={colors.alpha.top} stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="gradientIzin" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={colors.izin.top} stopOpacity={colors.izin.topOpacity} />
-                  <stop offset="60%" stopColor={colors.izin.top} stopOpacity={colors.izin.midOpacity} />
+                  <stop offset="55%" stopColor={colors.izin.top} stopOpacity={colors.izin.midOpacity} />
                   <stop offset="100%" stopColor={colors.izin.top} stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="gradientSakit" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={colors.sakit.top} stopOpacity={colors.sakit.topOpacity} />
-                  <stop offset="60%" stopColor={colors.sakit.top} stopOpacity={colors.sakit.midOpacity} />
+                  <stop offset="55%" stopColor={colors.sakit.top} stopOpacity={colors.sakit.midOpacity} />
                   <stop offset="100%" stopColor={colors.sakit.top} stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="gradientCuti" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={colors.cuti.top} stopOpacity={colors.cuti.topOpacity} />
-                  <stop offset="60%" stopColor={colors.cuti.top} stopOpacity={colors.cuti.midOpacity} />
+                  <stop offset="55%" stopColor={colors.cuti.top} stopOpacity={colors.cuti.midOpacity} />
                   <stop offset="100%" stopColor={colors.cuti.top} stopOpacity={0.0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid vertical={false} stroke="var(--border)" strokeDasharray="3 3" opacity={isDark ? 0.35 : 0.25} />
+
+              <CartesianGrid 
+                vertical={false} 
+                stroke="var(--border)" 
+                strokeDasharray="3 3" 
+                opacity={isDark ? 0.35 : 0.25} 
+              />
               <XAxis 
                 dataKey="name" 
                 axisLine={false} 
                 tickLine={false} 
                 tick={{ fontSize: 10.5, fill: 'var(--text-muted)' }} 
+                tickMargin={6}
               />
               <YAxis 
                 axisLine={false} 
@@ -328,18 +443,82 @@ export default function AttendanceTrendChart() {
                 tick={{ fontSize: 10.5, fill: 'var(--text-muted)' }} 
                 allowDecimals={false} 
               />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip 
+                cursor={{
+                  strokeDasharray: '4 4',
+                  stroke: isDark ? 'rgba(255, 255, 255, 0.25)' : 'rgba(0, 0, 0, 0.25)',
+                  strokeWidth: 1.2,
+                }}
+                content={<CustomTooltip />} 
+              />
 
-              {/* Garis Mandiri: Masing-masing garis dimulai dari 0 sesuai angka riil */}
+              {/* Background Pattern Areas (Underlay pattern fill) */}
+              {showCuti && (
+                <Area 
+                  type="monotone" 
+                  dataKey="cuti" 
+                  fill="url(#modernPattern)" 
+                  fillOpacity={1} 
+                  stroke="transparent" 
+                  dot={false} 
+                  activeDot={false} 
+                  isAnimationActive={false} 
+                />
+              )}
+              {showAlpha && (
+                <Area 
+                  type="monotone" 
+                  dataKey="alpha" 
+                  fill="url(#modernPattern)" 
+                  fillOpacity={1} 
+                  stroke="transparent" 
+                  dot={false} 
+                  activeDot={false} 
+                  isAnimationActive={false} 
+                />
+              )}
+              {showSakit && (
+                <Area 
+                  type="monotone" 
+                  dataKey="sakit" 
+                  fill="url(#modernPattern)" 
+                  fillOpacity={1} 
+                  stroke="transparent" 
+                  dot={false} 
+                  activeDot={false} 
+                  isAnimationActive={false} 
+                />
+              )}
+              {showIzin && (
+                <Area 
+                  type="monotone" 
+                  dataKey="izin" 
+                  fill="url(#modernPattern)" 
+                  fillOpacity={1} 
+                  stroke="transparent" 
+                  dot={false} 
+                  activeDot={false} 
+                  isAnimationActive={false} 
+                />
+              )}
+
+              {/* Colored Gradient Areas with Active Glow Dots */}
               {showCuti && (
                 <Area 
                   type="monotone" 
                   dataKey="cuti" 
                   stroke={colors.cuti.stroke} 
                   strokeWidth={2}
-                  fillOpacity={0.25}
+                  fillOpacity={0.35}
                   fill={colors.cuti.fill} 
                   name="Cuti" 
+                  dot={false}
+                  activeDot={{
+                    r: 4.5,
+                    fill: colors.cuti.stroke,
+                    stroke: '#fff',
+                    strokeWidth: 1.5,
+                  }}
                 />
               )}
               {showAlpha && (
@@ -348,9 +527,16 @@ export default function AttendanceTrendChart() {
                   dataKey="alpha" 
                   stroke={colors.alpha.stroke} 
                   strokeWidth={2}
-                  fillOpacity={0.25}
+                  fillOpacity={0.35}
                   fill={colors.alpha.fill} 
                   name="Alpha" 
+                  dot={false}
+                  activeDot={{
+                    r: 4.5,
+                    fill: colors.alpha.stroke,
+                    stroke: '#fff',
+                    strokeWidth: 1.5,
+                  }}
                 />
               )}
               {showSakit && (
@@ -359,9 +545,16 @@ export default function AttendanceTrendChart() {
                   dataKey="sakit" 
                   stroke={colors.sakit.stroke} 
                   strokeWidth={2}
-                  fillOpacity={0.25}
+                  fillOpacity={0.35}
                   fill={colors.sakit.fill} 
                   name="Sakit" 
+                  dot={false}
+                  activeDot={{
+                    r: 4.5,
+                    fill: colors.sakit.stroke,
+                    stroke: '#fff',
+                    strokeWidth: 1.5,
+                  }}
                 />
               )}
               {showIzin && (
@@ -370,9 +563,16 @@ export default function AttendanceTrendChart() {
                   dataKey="izin" 
                   stroke={colors.izin.stroke} 
                   strokeWidth={2}
-                  fillOpacity={0.25}
+                  fillOpacity={0.35}
                   fill={colors.izin.fill} 
                   name="Izin" 
+                  dot={false}
+                  activeDot={{
+                    r: 4.5,
+                    fill: colors.izin.stroke,
+                    stroke: '#fff',
+                    strokeWidth: 1.5,
+                  }}
                 />
               )}
             </AreaChart>
