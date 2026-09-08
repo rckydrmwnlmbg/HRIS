@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Outfit, Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import { AppProvider } from '@/lib/context';
 import NextTopLoader from 'nextjs-toploader';
+import BeamsBackground from '@/components/ui/BeamsBackground';
 import './globals.css';
 
 const outfit = Outfit({
@@ -38,7 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="id" className={`${outfit.variable} ${plusJakartaSans.variable} ${jetbrainsMono.variable}`}>
       <body className={outfit.className}>
-        <div className="bg-canvas-fixed" aria-hidden="true" />
+        <BeamsBackground />
         <AppProvider>
           <NextTopLoader color="#0ea5e9" showSpinner={false} height={2.5} />
           {children}

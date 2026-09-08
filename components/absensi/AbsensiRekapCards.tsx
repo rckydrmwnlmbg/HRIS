@@ -68,35 +68,31 @@ export function AbsensiRekapCards({
                   overflow: 'hidden'
                 }}
                 onClick={() => setSelectedStatus(code)}
-                onMouseOver={e => {
-                  e.currentTarget.style.borderColor = info.color;
-                  e.currentTarget.style.boxShadow = `0 14px 36px -8px rgba(0,0,0,0.6), 0 0 24px ${info.color}33`;
-                }}
-                onMouseOut={e => {
-                  e.currentTarget.style.borderColor = 'var(--glass-border)';
-                  e.currentTarget.style.boxShadow = 'var(--glass-shadow)';
-                }}
                 title={lang === 'id' ? `Klik untuk rincian ${info.label_id}` : `Click to view ${info.label_en} details`}
               >
                 <div
                   style={{
-                    position: 'absolute',
-                    top: '-15px',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: '60px',
-                    height: '60px',
-                    borderRadius: '50%',
-                    background: info.color,
-                    opacity: 0.12,
-                    filter: 'blur(16px)',
-                    pointerEvents: 'none'
+                    fontFamily: 'var(--font-display)',
+                    fontSize: '1.85rem',
+                    fontWeight: 800,
+                    color: 'var(--text-secondary, #475569)',
+                    letterSpacing: '-0.03em',
+                    lineHeight: 1.15,
+                    textShadow: 'none',
+                    filter: 'none'
                   }}
-                />
-                <div style={{ fontSize: '1.85rem', fontWeight: 800, color: info.color, letterSpacing: '-0.03em', lineHeight: 1.15 }}>
+                >
                   {count}
                 </div>
-                <div style={{ fontSize: '12px', fontWeight: 650, color: 'var(--text-secondary)', marginTop: '6px' }}>
+                <div
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--text-muted, #64748b)',
+                    marginTop: '6px',
+                    letterSpacing: '0.01em'
+                  }}
+                >
                   {lang === 'id' ? info.label_id : info.label_en}
                 </div>
               </div>

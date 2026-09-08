@@ -87,7 +87,46 @@ export async function GET(request: Request) {
     const tahun = searchParams.get('tahun') || new Date().getFullYear();
     const emp = searchParams.get('emp');
 
-    let queryStr = `
+    // 1. Ambil data pengajuan resmi langsung dari tblCUTI (Master Data Cuti)
+    let cutiMasterQuery = `
+      SELECT 
+        RTRIM(c.EMP_CD) AS EMP_CD,
+        RTRIM(e.EMP_NM) AS EMP_NM,
+        CONVERT(varchar(10), c.AWAL_CUTI, 120) AS startDate,
+        CONVERT(varchar(10), c.AKHIR_CUTI, 120) AS endDate,
+        ISNULL(c.LM_CUTI, DATEDIFF(day, c.AWAL_CUTI, c.AKHIR_CUTI) + 1) AS days,
+        'KERJA' AS typeCode,
+        RTRIM(c.REASON) AS reasonCode,
+        RTRIM(mr.REASON_DESC) AS reasonDesc,
+        RTRIM(mr.REASON_GROUP) AS reasonGroup,
+        ISNULL(RTRIM(mr.REASON_DESC), RTRIM(c.REASON)) AS type,
+        ISNULL(NULLIF(RTRIM(c.REMARK), ''), RTRIM(mr.REASON_DESC)) AS reason,
+        RTRIM(e.SEC_CD) AS SEC_CD,
+        RTRIM(s.SEC_DESC) AS SEC_DESC,
+        RTRIM(e.DEP_CD) AS DEP_CD,
+        RTRIM(d.DEP_DESC) AS DEP_DESC,
+        RTRIM(e.JOB_CD) AS JOB_CD,
+        RTRIM(j.JOB_DESC) AS JOB_DESC,
+        ${TEAM_NAME_CASE} AS TEAM
+      FROM tblCUTI c
+      LEFT JOIN EMP_TABLE e ON RTRIM(c.EMP_CD) = RTRIM(e.EMP_CD)
+      LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+      LEFT JOIN MS_DEP d ON RTRIM(e.DEP_CD) = RTRIM(d.DEP_CD)
+      LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+      LEFT JOIN Ms_Reason mr ON RTRIM(c.REASON) = RTRIM(mr.REASON_CODE)
+      WHERE (c.AWAL_CUTI >= '${tahun}-01-01' OR c.AKHIR_CUTI >= '${tahun}-01-01')
+        AND c.AWAL_CUTI <= '${tahun}-12-31'
+    `;
+
+    if (emp) {
+      cutiMasterQuery += ` AND RTRIM(c.EMP_CD) = '${emp.trim().replace(/'/g, "''")}'`;
+    }
+    cutiMasterQuery += ` ORDER BY c.AWAL_CUTI DESC`;
+
+    const masterCutiList = await query<any>(cutiMasterQuery);
+
+    // 2. Ambil data cuti/izin/sakit dari TR_ABSEN yang belum/tidak tercatat di tblCUTI
+    let absenQuery = `
       SELECT 
         RTRIM(a.EMP_CD) AS EMP_CD,
         RTRIM(e.EMP_NM) AS EMP_NM,
@@ -110,51 +149,50 @@ export async function GET(request: Request) {
       LEFT JOIN MS_JOBS j ON e.JOB_CD = j.JOB_CD
       LEFT JOIN Ms_Reason mr ON RTRIM(a.REASON) = RTRIM(mr.REASON_CODE)
       WHERE 
-        -- Deteksi cuti/izin/sakit LEWAT REASON, bukan STATUS_HARI.
-        -- Baris cuti sekarang ber-STATUS_HARI='KERJA' (pola asli INUS), jadi filter lama
-        -- yang mencari STATUS_HARI IN ('C','H','CUTI','S','I') tidak akan menemukan apa pun.
-        -- Nilai 'CUTI' tetap disertakan supaya 4 baris lama buatan web versi sebelumnya
-        -- masih tampil di riwayat sampai dibersihkan.
         (RTRIM(mr.REASON_GROUP) IN ('C', 'H', 'S', 'I')
          OR RTRIM(a.STATUS_HARI) IN ('C', 'H', 'CUTI', 'S', 'I')
          OR RTRIM(a.STATUS_HARI) LIKE 'CUTI%')
     `;
 
     if (emp) {
-      queryStr += ` AND RTRIM(a.EMP_CD) = '${emp.trim().replace(/'/g, "''")}'`;
+      absenQuery += ` AND RTRIM(a.EMP_CD) = '${emp.trim().replace(/'/g, "''")}'`;
     }
 
-    queryStr += ` AND a.DATE_TRANS >= '${tahun}-01-01' AND a.DATE_TRANS <= '${tahun}-12-31'`;
-    queryStr += ` AND a.WORK_IN IS NULL AND a.WORK_OUT IS NULL`;
-    queryStr += ` ORDER BY a.EMP_CD, a.DATE_TRANS ASC`;
+    absenQuery += ` AND a.DATE_TRANS >= '${tahun}-01-01' AND a.DATE_TRANS <= '${tahun}-12-31'`;
+    absenQuery += ` AND a.WORK_IN IS NULL AND a.WORK_OUT IS NULL`;
+    absenQuery += ` ORDER BY a.EMP_CD, a.DATE_TRANS ASC`;
 
-    const result = await query<any>(queryStr);
+    const absenResult = await query<any>(absenQuery);
 
-    // Filter out weekend rows before grouping — cuti days only count working days
-    const filteredResult = result.filter((r: any) => {
+    // Filter baris TR_ABSEN yang tanggalnya sudah tercakup di dalam master tblCUTI
+    const standaloneAbsen = absenResult.filter((r: any) => {
       const d = new Date(r.dateStr + 'T00:00:00');
       const dow = d.getDay();
-      return dow !== 0 && dow !== 6;
+      if (dow === 0 || dow === 6) return false;
+      const alreadyCovered = masterCutiList.some((m: any) => 
+        m.EMP_CD === r.EMP_CD && r.dateStr >= m.startDate && r.dateStr <= m.endDate
+      );
+      return !alreadyCovered;
     });
 
-    // Grouping contiguous dates for each employee
-    const groupedRecords: any[] = [];
+    // Kelompokkan baris TR_ABSEN mandiri yang contiguous (hanya jika tanggalnya benar-benar berurutan)
+    const groupedStandalone: any[] = [];
     let currentGroup: any = null;
 
-    for (const row of filteredResult) {
+    for (const row of standaloneAbsen) {
       if (!currentGroup) {
         currentGroup = {
           EMP_CD: row.EMP_CD,
           EMP_NM: row.EMP_NM,
           startDate: row.dateStr,
           endDate: row.dateStr,
+          days: 1,
           typeCode: row.typeCode,
           reasonCode: row.reasonCode,
           reasonDesc: row.reasonDesc,
           reasonGroup: row.reasonGroup,
           type: row.reasonDesc ? row.reasonDesc : (row.typeCode || 'Unknown'),
           reason: row.reasonDesc ? `${row.reasonDesc} (${row.reasonCode || '-'})` : (row.reasonCode || '-'),
-          days: 1,
           SEC_CD: row.SEC_CD,
           SEC_DESC: row.SEC_DESC,
           DEP_CD: row.DEP_CD,
@@ -163,53 +201,34 @@ export async function GET(request: Request) {
           JOB_DESC: row.JOB_DESC
         };
       } else {
-        const prevDate = new Date(currentGroup.endDate);
-        const currDate = new Date(row.dateStr);
-        const diffTime = Math.abs(currDate.getTime() - prevDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        const prevDow = prevDate.getDay();
-        
-        // Cek apakah jeda antara prevDate dan currDate murni hanya akhir pekan (Sabtu/Minggu)
+        const prevDate = new Date(currentGroup.endDate + 'T00:00:00');
+        const currDate = new Date(row.dateStr + 'T00:00:00');
+        const diffDays = Math.round((currDate.getTime() - prevDate.getTime()) / (1000 * 60 * 60 * 24));
+
         let isAdjacent = false;
         if (diffDays === 1) {
           isAdjacent = true;
-        } else if (diffDays <= 3) {
-          // Jika selisih 2 atau 3 hari, pastikan tidak ada hari kerja (Senin-Jumat) di antaranya
-          let temp = new Date(prevDate);
-          temp.setDate(temp.getDate() + 1);
-          let hasWorkdayInBetween = false;
-          while (temp < currDate) {
-            const dow = temp.getDay();
-            if (dow !== 0 && dow !== 6) { // Jika ada hari selain Sabtu/Minggu
-              hasWorkdayInBetween = true;
-              break;
-            }
-            temp.setDate(temp.getDate() + 1);
-          }
-          if (!hasWorkdayInBetween) {
-            isAdjacent = true;
-          }
+        } else if (diffDays === 3 && prevDate.getDay() === 5 && currDate.getDay() === 1) {
+          isAdjacent = true;
         }
 
-        if (row.EMP_CD === currentGroup.EMP_CD && row.typeCode === currentGroup.typeCode && row.reasonCode === currentGroup.reasonCode && isAdjacent) {
-          // contiguous day (atau terpisah murni karena akhir pekan)
+        if (row.EMP_CD === currentGroup.EMP_CD && row.reasonCode === currentGroup.reasonCode && isAdjacent) {
           currentGroup.endDate = row.dateStr;
           currentGroup.days += 1;
         } else {
-          // push and start new group
-          groupedRecords.push(currentGroup);
+          groupedStandalone.push(currentGroup);
           currentGroup = {
             EMP_CD: row.EMP_CD,
             EMP_NM: row.EMP_NM,
             startDate: row.dateStr,
             endDate: row.dateStr,
+            days: 1,
             typeCode: row.typeCode,
             reasonCode: row.reasonCode,
             reasonDesc: row.reasonDesc,
             reasonGroup: row.reasonGroup,
             type: row.reasonDesc ? row.reasonDesc : (row.typeCode || 'Unknown'),
             reason: row.reasonDesc ? `${row.reasonDesc} (${row.reasonCode || '-'})` : (row.reasonCode || '-'),
-            days: 1,
             SEC_CD: row.SEC_CD,
             SEC_DESC: row.SEC_DESC,
             DEP_CD: row.DEP_CD,
@@ -221,13 +240,13 @@ export async function GET(request: Request) {
       }
     }
     if (currentGroup) {
-      groupedRecords.push(currentGroup);
+      groupedStandalone.push(currentGroup);
     }
 
-    // Sort the final result by startDate DESC
-    groupedRecords.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+    const allRecords = [...masterCutiList, ...groupedStandalone];
+    allRecords.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
 
-    const records = groupedRecords.map((r: any, index: number) => ({
+    const records = allRecords.map((r: any, index: number) => ({
       ...r,
       id: index + 1,
       status: 'approved'
@@ -286,18 +305,35 @@ export async function POST(request: Request) {
     // Jika karyawan sudah memiliki cuti yang rentangnya beririsan dengan input baru, form ditolak.
     // Ini krusial untuk mencegah Error PK (Primary Key) di INUS.
     const overlapCheck = await query<any>(
-      `SELECT TOP 1 CONVERT(varchar(10), AWAL_CUTI, 120) AS AWAL_CUTI, CONVERT(varchar(10), AKHIR_CUTI, 120) AS AKHIR_CUTI
-       FROM tblCUTI 
-       WHERE RTRIM(EMP_CD) = '${empCd.replace(/'/g, "''")}'
-         AND AWAL_CUTI <= '${endDate}' 
-         AND AKHIR_CUTI >= '${startDate}'`
+      `SELECT TOP 1 
+         CONVERT(varchar(10), c.AWAL_CUTI, 120) AS AWAL_CUTI, 
+         CONVERT(varchar(10), c.AKHIR_CUTI, 120) AS AKHIR_CUTI,
+         (SELECT COUNT(1) FROM tbldetcuti d 
+          WHERE RTRIM(d.EMP_CD) = RTRIM(c.EMP_CD) 
+            AND d.TGL_CUTI >= c.AWAL_CUTI AND d.TGL_CUTI <= c.AKHIR_CUTI) AS detCount
+       FROM tblCUTI c
+       WHERE RTRIM(c.EMP_CD) = '${empCd.replace(/'/g, "''")}'
+         AND c.AWAL_CUTI <= '${endDate}' 
+         AND c.AKHIR_CUTI >= '${startDate}'`
     );
 
     if (overlapCheck && overlapCheck.length > 0) {
-      return NextResponse.json(
-        { error: `Karyawan ini sudah memiliki cuti pada rentang tersebut (${overlapCheck[0].AWAL_CUTI} s.d ${overlapCheck[0].AKHIR_CUTI}). Silakan HAPUS data lama terlebih dahulu jika ini adalah koreksi.` },
-        { status: 400 }
-      );
+      const existing = overlapCheck[0];
+      // Jika baris di tblCUTI ini adalah baris yatim/ghost (tidak ada baris detail di tbldetcuti karena gagal terhapus sebelumnya),
+      // otomatis bersihkan baris lama tersebut agar pengajuan baru tidak terblokir.
+      if (Number(existing.detCount || 0) === 0) {
+        await query(`
+          DELETE FROM tblCUTI 
+          WHERE RTRIM(EMP_CD) = '${empCd.replace(/'/g, "''")}'
+            AND AWAL_CUTI <= '${endDate}' 
+            AND AKHIR_CUTI >= '${startDate}'
+        `);
+      } else {
+        return NextResponse.json(
+          { error: `Karyawan ini sudah memiliki cuti pada rentang tersebut (${existing.AWAL_CUTI} s.d ${existing.AKHIR_CUTI}). Silakan HAPUS data lama terlebih dahulu jika ini adalah koreksi.` },
+          { status: 400 }
+        );
+      }
     }
 
     const workingDays = dates.filter(d => [0, 6].includes(new Date(d + 'T00:00:00').getDay()) === false).length || dates.length;
@@ -429,51 +465,24 @@ export async function DELETE(request: Request) {
     }
 
     await withTransaction(async (tx) => {
-      // ── LANGKAH 0: Cari entry tblCUTI induk ──
-      // GET mengelompokkan tanggal berurutan dan MENGECUALIKAN weekend. Akibatnya
-      // satu entry tblCUTI (misal 14-18 Agustus, Senin-Jumat) bisa dipecah menjadi
-      // 2+ grup di UI kalau ada hari libur/weekend di tengah.
-      //
-      // Frontend mengirim start/end DARI GRUP, bukan dari tblCUTI. Exact match
-      // (AWAL_CUTI=@awal AND AKHIR_CUTI=@akhir) akan GAGAL kalau sub-range tidak
-      // cocok dengan range asli.
-      //
-      // Solusi: cari entry tblCUTI yang MENCAKUP rentang yang dikirim frontend,
-      // lalu gunakan range ASLI dari tblCUTI untuk semua operasi pembersihan.
-      const parentRows = await tx<{ AWAL_CUTI: string; AKHIR_CUTI: string }>(
-        `SELECT TOP 1
-            CONVERT(varchar(10), AWAL_CUTI, 120) AS AWAL_CUTI,
-            CONVERT(varchar(10), AKHIR_CUTI, 120) AS AKHIR_CUTI
-          FROM tblCUTI
-          WHERE RTRIM(EMP_CD) = @empCd
-            AND AWAL_CUTI <= @awal
-            AND AKHIR_CUTI >= @akhir`,
-        { empCd, awal: startDate, akhir: endDate }
-      );
-
-      // Gunakan range asli tblCUTI kalau ditemukan, fallback ke param frontend
-      const actualStart = parentRows?.[0]?.AWAL_CUTI || startDate;
-      const actualEnd = parentRows?.[0]?.AKHIR_CUTI || endDate;
-
-      // 1. tblCUTI — hapus entry induk dengan range aslinya
+      // 1. tblCUTI — hapus semua entri cuti yang beririsan atau cocok dengan rentang yang dihapus
       await tx(
         `DELETE FROM tblCUTI
-          WHERE RTRIM(EMP_CD) = @empCd AND AWAL_CUTI = @awal AND AKHIR_CUTI = @akhir`,
-        { empCd, awal: actualStart, akhir: actualEnd }
+          WHERE RTRIM(EMP_CD) = @empCd
+            AND AWAL_CUTI <= @akhir
+            AND AKHIR_CUTI >= @awal`,
+        { empCd, awal: startDate, akhir: endDate }
       );
 
       // 2. tbldetcuti — wajib, kalau tidak cuti akan muncul kembali saat sinkronisasi INUS.
       await tx(
         `DELETE FROM tbldetcuti
-          WHERE RTRIM(EMP_CD) = @empCd AND TGL_CUTI >= @awal AND TGL_CUTI <= @akhir`,
-        { empCd, awal: actualStart, akhir: actualEnd }
+          WHERE RTRIM(EMP_CD) = @empCd
+            AND TGL_CUTI >= @awal AND TGL_CUTI <= @akhir`,
+        { empCd, awal: startDate, akhir: endDate }
       );
 
       // 3. Bersihkan REASON di TR_ABSEN.
-      //    STATUS_HARI TIDAK diubah: nilainya sudah 'KERJA' (atau 'LIBUR' kalau INUS yang
-      //    menandainya) dan keduanya benar. Versi lama menulis 'O' -- nilai yang tidak
-      //    dikenal INUS, hanya muncul 2x di seluruh data.
-      //
       //    Guard WORK_IN/WORK_OUT IS NULL dipertahankan: kalau ternyata ada jam fingerprint,
       //    berarti karyawan benar-benar masuk kerja dan barisnya jangan disentuh.
       await tx(
@@ -482,7 +491,7 @@ export async function DELETE(request: Request) {
           WHERE RTRIM(EMP_CD) = @empCd
             AND DATE_TRANS >= @awal AND DATE_TRANS <= @akhir
             AND WORK_IN IS NULL AND WORK_OUT IS NULL`,
-        { empCd, awal: actualStart, akhir: actualEnd }
+        { empCd, awal: startDate, akhir: endDate }
       );
     });
 

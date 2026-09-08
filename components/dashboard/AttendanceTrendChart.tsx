@@ -15,8 +15,7 @@ import {
   Download, 
   Calendar, 
   Check, 
-  FileSpreadsheet, 
-  Layers
+  FileSpreadsheet
 } from 'lucide-react';
 import { useApp } from '@/lib/context';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -132,12 +131,13 @@ export default function AttendanceTrendChart() {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       const total = payload.reduce((sum: number, entry: any) => sum + (Number(entry.value) || 0), 0);
+      const sortedPayload = [...payload].sort((a: any, b: any) => (Number(b.value) || 0) - (Number(a.value) || 0));
       return (
         <div className={styles.tooltipCard}>
           <div className={styles.tooltipTitle}>
             📅 {label}
           </div>
-          {payload.map((entry: any, index: number) => (
+          {sortedPayload.map((entry: any, index: number) => (
             <div key={`item-${index}`} className={styles.tooltipRow}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: entry.color }} />
@@ -205,18 +205,21 @@ export default function AttendanceTrendChart() {
           {/* Range Selector */}
           <div className={styles.rangePills}>
             <button
+              type="button"
               className={`${styles.rangeBtn} ${timeRange === '30d' ? styles.rangeBtnActive : ''}`}
               onClick={() => setTimeRange('30d')}
             >
               30 Hari
             </button>
             <button
+              type="button"
               className={`${styles.rangeBtn} ${timeRange === '3m' ? styles.rangeBtnActive : ''}`}
               onClick={() => setTimeRange('3m')}
             >
               3 Bulan
             </button>
             <button
+              type="button"
               className={`${styles.rangeBtn} ${timeRange === '6m' ? styles.rangeBtnActive : ''}`}
               onClick={() => setTimeRange('6m')}
             >
@@ -327,38 +330,14 @@ export default function AttendanceTrendChart() {
               />
               <Tooltip content={<CustomTooltip />} />
 
-              {showIzin && (
-                <Area 
-                  type="monotone" 
-                  dataKey="izin" 
-                  stackId="1"
-                  stroke={colors.izin.stroke} 
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill={colors.izin.fill} 
-                  name="Izin" 
-                />
-              )}
-              {showSakit && (
-                <Area 
-                  type="monotone" 
-                  dataKey="sakit" 
-                  stackId="1"
-                  stroke={colors.sakit.stroke} 
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill={colors.sakit.fill} 
-                  name="Sakit" 
-                />
-              )}
+              {/* Garis Mandiri: Masing-masing garis dimulai dari 0 sesuai angka riil */}
               {showCuti && (
                 <Area 
                   type="monotone" 
                   dataKey="cuti" 
-                  stackId="1"
                   stroke={colors.cuti.stroke} 
                   strokeWidth={2}
-                  fillOpacity={1}
+                  fillOpacity={0.25}
                   fill={colors.cuti.fill} 
                   name="Cuti" 
                 />
@@ -367,12 +346,33 @@ export default function AttendanceTrendChart() {
                 <Area 
                   type="monotone" 
                   dataKey="alpha" 
-                  stackId="1"
                   stroke={colors.alpha.stroke} 
                   strokeWidth={2}
-                  fillOpacity={1}
+                  fillOpacity={0.25}
                   fill={colors.alpha.fill} 
                   name="Alpha" 
+                />
+              )}
+              {showSakit && (
+                <Area 
+                  type="monotone" 
+                  dataKey="sakit" 
+                  stroke={colors.sakit.stroke} 
+                  strokeWidth={2}
+                  fillOpacity={0.25}
+                  fill={colors.sakit.fill} 
+                  name="Sakit" 
+                />
+              )}
+              {showIzin && (
+                <Area 
+                  type="monotone" 
+                  dataKey="izin" 
+                  stroke={colors.izin.stroke} 
+                  strokeWidth={2}
+                  fillOpacity={0.25}
+                  fill={colors.izin.fill} 
+                  name="Izin" 
                 />
               )}
             </AreaChart>

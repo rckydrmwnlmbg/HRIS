@@ -157,6 +157,13 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
     return `${d}-${m}-${y}`;
   };
 
+  const holidayResult = await pool.request().query(`
+    SELECT CONVERT(varchar(10), TANGGAL, 120) AS tanggal
+    FROM MS_LIBUR_KERJA WITH (NOLOCK)
+    WHERE TANGGAL >= '${startStr}' AND TANGGAL <= '${endStr}'
+  `);
+  const holidayDates = new Set((holidayResult.recordset || []).map((h: any) => h.tanggal));
+
   const otDataResult = await pool.request().query(`
     SELECT 
       RTRIM(e.EMP_CD) AS EMP_CD,
@@ -216,30 +223,44 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
     }
     const emp = empMap.get(row.EMP_CD);
     if (row.dateStr) {
-      const status = row.STATUS_HARI;
+      // Normalisasi STATUS_HARI hanya bernilai 'KERJA' atau 'LIBUR' (standar INUS)
+      const rawStatus = (row.STATUS_HARI || '').trim().toUpperCase();
+      const status = (rawStatus === 'LIBUR' || rawStatus === 'OFF' || rawStatus === 'L' || rawStatus === 'H') ? 'LIBUR' : 'KERJA';
       const rg = row.REASON_GROUP;
       
-      const dObj = new Date(row.dateStr + 'T00:00:00');
-      const dayOfWeek = dObj.getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      const isHoliday = status === 'LIBUR' || status === 'OFF' || status === 'H';
-      const security = isSecurityJob(row.JOB_DESC, row.SEC_DESC);
-      const isSecurityWeekend = security && isWeekend;
-      const isHolidayCalculation = isHoliday && !isSecurityWeekend;
+      const security = isSecurityJob(row.JOB_DESC, row.SEC_DESC, row.SHIFT);
+      const securityShift = security ? (detectSecurityShift(row.WORK_IN, row.WORK_OUT) || getSecurityShiftByCode(row.SHIFT)) : null;
 
-      let isKerjaNormal = !isHolidayCalculation && (status === 'KERJA' || status === 'O' || rg === 'O');
-      let isCuti = !isSecurityWeekend && (status === 'CUTI' || status === 'C' || status === 'H' || status === 'HAID' || rg === 'C' || rg === 'H');
+      // Deteksi Hari Libur:
+      // 1. Jika status explicitly 'LIBUR': Seluruh karyawan (termasuk Security) dihitung lembur hari libur.
+      // 2. Jika hari libur resmi nasional (MS_LIBUR_KERJA): Seluruh karyawan dihitung lembur hari libur kecuali status diubah manual ke 'KERJA'.
+      // 3. Jika hari Minggu (Sunday):
+      //    - Untuk Security: BUKAN hari libur otomatis (Sabtu & Minggu adalah hari kerja shift normal).
+      //    - Untuk Non-Security: Hari Minggu adalah hari libur (jam kerja 0, seluruhnya lembur OT).
+      const dObj = new Date(row.dateStr + 'T00:00:00');
+      const dayOfWeek = dObj.getDay(); // 0 = Sunday
+      const isSunday = dayOfWeek === 0;
+      const isRegisteredHoliday = holidayDates.has(row.dateStr);
+      const isStatusLibur = status === 'LIBUR';
+
+      let isHoliday = false;
+      if (isStatusLibur) {
+        isHoliday = true;
+      } else if (isRegisteredHoliday) {
+        isHoliday = status !== 'KERJA';
+      } else if (isSunday) {
+        isHoliday = !security && status !== 'KERJA';
+      }
 
       let kerjaHours = 0;
       let otHours = 0;
 
-      let computedOt: number | null = null;
       const outDate = row.WORK_OUT ? new Date(row.WORK_OUT) : null;
       const inDate = row.WORK_IN ? new Date(row.WORK_IN) : null;
-      const securityShift = security ? (detectSecurityShift(row.WORK_IN, row.WORK_OUT) || getSecurityShiftByCode(row.SHIFT)) : null;
       const attendanceValid = isValidAttendancePair(row.dateStr, inDate, outDate, securityShift);
       const hasPair = Boolean(inDate && outDate);
 
+      let computedOt: number | null = null;
       if (inDate && outDate) {
         const otRes = calculateAttendanceAndOt(
           row.dateStr,
@@ -247,23 +268,42 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
           outDate,
           row.JOB_DESC || '',
           row.SEC_DESC || '',
-          status || '',
-          row.SHIFT || null
+          status,
+          row.SHIFT || null,
+          isHoliday
         );
         computedOt = otRes.T_OT;
       }
 
-      const hasDbDailyOt = row.dailyOt !== null && row.dailyOt !== undefined && !isNaN(Number(row.dailyOt));
-      const effectiveOt = hasDbDailyOt ? Number(row.dailyOt) : (computedOt ?? 0);
-
-      if (isHolidayCalculation) {
+      if (isHoliday) {
+        // HARI LIBUR: Jam kerja normal = 0, seluruh durasi jam hadir dialihkan ke OT (Lembur)
+        // Berlaku untuk SEMUA KARYAWAN termasuk Security
         kerjaHours = 0;
-        otHours = (hasPair || attendanceValid) ? effectiveOt : 0;
+        if (hasPair || (attendanceValid && inDate && outDate)) {
+          if (inDate && outDate) {
+            const workedMin = getDurationMinutes(inDate, outDate);
+            const netMin = workedMin >= 300 ? workedMin - 60 : workedMin; // Potong 1 jam istirahat jika >= 5 jam (300 menit)
+            const holidayOtCalc = Math.max(0, Math.floor((netMin / 60) * 2) / 2);
+            otHours = (computedOt !== null && computedOt > 0) ? computedOt : holidayOtCalc;
+            if (row.dailyOt !== null && row.dailyOt !== undefined && !isNaN(Number(row.dailyOt)) && Number(row.dailyOt) > 0) {
+              otHours = Math.max(otHours, Number(row.dailyOt));
+            }
+          } else {
+            otHours = Number(row.dailyOt || 0);
+          }
+        } else {
+          otHours = 0;
+        }
       } else {
+        // HARI KERJA BIASA:
+        const isCuti = rawStatus === 'CUTI' || rawStatus === 'C' || rg === 'C' || rg === 'H';
+        const hasDbDailyOt = row.dailyOt !== null && row.dailyOt !== undefined && !isNaN(Number(row.dailyOt));
+        const effectiveOt = hasDbDailyOt ? Number(row.dailyOt) : (computedOt ?? 0);
+
         if (isCuti) {
           kerjaHours = 8;
           otHours = 0;
-        } else if (hasPair || (isKerjaNormal && attendanceValid)) {
+        } else if (hasPair || (attendanceValid && inDate && outDate)) {
           if (row.JAM_KERJA !== null && row.JAM_KERJA !== undefined && !isNaN(Number(row.JAM_KERJA)) && Number(row.JAM_KERJA) > 0) {
             kerjaHours = Math.min(8, Number(row.JAM_KERJA));
           } else if (inDate && outDate) {
@@ -274,6 +314,9 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
             kerjaHours = 8;
           }
           otHours = effectiveOt;
+        } else if (row.REASON === '21') {
+          kerjaHours = 8;
+          otHours = 0;
         } else {
           kerjaHours = 0;
           otHours = 0;
@@ -284,10 +327,10 @@ async function handleAnalysisOTExport(pool: any, startStr: string, endStr: strin
       emp.totalKerja += kerjaHours;
       emp.totalOt = Number((emp.totalOt + otHours).toFixed(2));
 
-      if (status === 'ALPHA' || status === 'A') emp.A++;
-      else if (status === 'IJIN' || status === 'I' || rg === 'I') emp.I++;
-      else if (status === 'SAKIT' || status === 'S' || rg === 'S') emp.S++;
-      else if (isCuti) emp.C++;
+      if (rawStatus === 'ALPHA' || rawStatus === 'A') emp.A++;
+      else if (rawStatus === 'IJIN' || rawStatus === 'I' || rg === 'I') emp.I++;
+      else if (rawStatus === 'SAKIT' || rawStatus === 'S' || rg === 'S') emp.S++;
+      else if (rawStatus === 'CUTI' || rawStatus === 'C' || rg === 'C') emp.C++;
     }
   });
 

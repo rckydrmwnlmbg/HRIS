@@ -79,86 +79,94 @@ export function calculateAttendanceAndOt(
   empJobDesc: string,
   empSecDesc: string,
   inputStatusHari: string,
-  inputShift: string | null
+  inputShift: string | null,
+  isHolidayOverride?: boolean
 ): OtCalculationResult {
 
   const isSecurity = isSecurityJob(empJobDesc, empSecDesc, inputShift);
   const transactionDate = new Date(`${dateTrans}T00:00:00`);
   const dayOfWeek = transactionDate.getDay();
-  const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
 
-  let finalStatusHari = (inputStatusHari || '').trim().toUpperCase();
-  let JAM_KERJA: number | null = null;
-  let totalOtHours = 0;
+  // STATUS_HARI hanya bernilai 'KERJA' dan 'LIBUR' (standar INUS)
+  let rawStatus = (inputStatusHari || '').trim().toUpperCase();
+  let finalStatusHari: 'KERJA' | 'LIBUR' = (rawStatus === 'LIBUR' || rawStatus === 'OFF' || rawStatus === 'L' || rawStatus === 'H' || rawStatus === 'O') ? 'LIBUR' : 'KERJA';
 
-  // 1. Bug Weekend Security: HANYA otomatis jika status kosong/belum ditentukan (jangan timpa pilihan manual user)
-  if (isSecurity && isWeekend && (!inputStatusHari || inputStatusHari === '')) {
+  // Penentuan isHoliday:
+  // 1. Jika isHolidayOverride ditentukan, gunakan nilai tersebut (true/false) secara eksplisit.
+  // 2. Jika tidak ditentukan:
+  //    - Jika status eksplisit 'LIBUR', maka isHoliday = true.
+  //    - Jika status eksplisit 'KERJA', maka isHoliday = false (menghormati shift normal Security / kerja normal).
+  //    - Jika status kosong: untuk non-security Minggu adalah libur, untuk security Minggu adalah kerja.
+  let isHoliday: boolean;
+  if (isHolidayOverride !== undefined) {
+    isHoliday = isHolidayOverride;
+  } else if (rawStatus.length > 0) {
+    isHoliday = finalStatusHari === 'LIBUR';
+  } else {
+    isHoliday = isSecurity ? false : (dayOfWeek === 0);
+  }
+
+  if (isHoliday) {
+    finalStatusHari = 'LIBUR';
+  } else {
     finalStatusHari = 'KERJA';
   }
 
-  const isHoliday = finalStatusHari === 'LIBUR' || finalStatusHari === 'OFF' || finalStatusHari === 'L' || finalStatusHari === 'H';
-  const isSecurityHoliday = isSecurity && isHoliday; // Berlaku jika libur/cuti
+  let JAM_KERJA: number | null = null;
+  let totalOtHours = 0;
 
   // 2. Jika Fingerprint Kosong (TIDAK ADA DATA)
   if (!workIn || !workOut) {
     return {
-      JAM_KERJA: isHoliday ? 0 : 0,
+      JAM_KERJA: 0,
       OT_1: 0, OT_2: 0, OT_3: 0, OT_4: 0, T_OT: 0,
-      STATUS_HARI: finalStatusHari || (isHoliday ? 'LIBUR' : 'KERJA')
+      STATUS_HARI: finalStatusHari
     };
   }
 
   // 3. Kalkulasi Durasi
   const workedMinutes = getDurationMinutes(workIn, workOut);
 
-  // 4. Kalkulasi Jam Kerja & Lembur berdasarkan Tipe Karyawan
-  // Jika dia Security atau memiliki shift security (2S, 3S, 4S), hitung berdasarkan jadwal shift security
-  if (isSecurity && inputShift !== '1') {
-    // --- SECURITY ---
+  // 4. Kalkulasi Jam Kerja & Lembur berdasarkan Tipe Hari & Tipe Karyawan
+  // JIKA HARI LIBUR: Jam kerja normal = 0, seluruh durasi kerja masuk ke OT (Berlaku untuk SEMUA KARYAWAN termasuk Security)
+  if (isHoliday) {
+    JAM_KERJA = 0;
+    // Jika lembur hari libur >= 5 jam (300 menit), kurangi 60 menit (1 jam) untuk istirahat makan siang
+    const netMinutes = workedMinutes >= 300 ? workedMinutes - 60 : workedMinutes;
+    totalOtHours = Math.max(0, Math.floor((netMinutes / 60) * 2) / 2);
+  } else if (isSecurity) {
+    // --- SECURITY HARI BIASA ---
     const secShift = inputShift ? getSecurityShiftByCode(inputShift) : detectSecurityShift(workIn, workOut);
+    JAM_KERJA = secShift ? secShift.standardHours : 8.0;
     
-    if (isSecurityHoliday) {
-      JAM_KERJA = 0;
-      totalOtHours = Math.max(0, Math.floor(((workedMinutes - 60) / 60) * 2) / 2); // Pengurangan 1 jam istirahat
+    // Hitung Lembur (OT) secara ketat berdasarkan jam selesai shift
+    if (secShift) {
+      totalOtHours = calculateSecurityOtHours(workIn, workOut, secShift);
     } else {
-      JAM_KERJA = secShift ? secShift.standardHours : 8.0;
-      
-      // Hitung Lembur (OT) secara ketat berdasarkan jam selesai shift
-      if (secShift) {
-        totalOtHours = calculateSecurityOtHours(workIn, workOut, secShift);
-      } else {
-        totalOtHours = Math.max(0, Math.floor(((workedMinutes - 60) / 60) * 2) / 2 - 8.0);
-      }
+      totalOtHours = Math.max(0, Math.floor(((workedMinutes - 60) / 60) * 2) / 2 - 8.0);
     }
   } else {
-    // --- KARYAWAN UMUM (HARIAN & ALL-IN) ---
-    if (isHoliday) {
-      JAM_KERJA = 0;
-      // Jika lembur hari libur >= 5 jam (300 menit), kurangi 60 menit (1 jam) untuk istirahat makan siang
-      const netMinutes = workedMinutes >= 300 ? workedMinutes - 60 : workedMinutes;
-      totalOtHours = Math.max(0, Math.floor((netMinutes / 60) * 2) / 2);
-    } else {
-      JAM_KERJA = 8; // Default jam kerja kantoran
-      
-      // Normalize workOut for overnight (outDate < inDate means next day)
-      let effectiveOut = workOut;
-      if (workOut.getTime() < workIn.getTime()) {
-        effectiveOut = new Date(workOut.getTime() + 24 * 60 * 60 * 1000);
-      }
+    // --- KARYAWAN UMUM (HARIAN & ALL-IN) HARI BIASA ---
+    JAM_KERJA = 8; // Default jam kerja kantoran
+    
+    // Normalize workOut for overnight (outDate < inDate means next day)
+    let effectiveOut = workOut;
+    if (workOut.getTime() < workIn.getTime()) {
+      effectiveOut = new Date(workOut.getTime() + 24 * 60 * 60 * 1000);
+    }
 
-      // Jadwal pulang standar jam 16:00 WIB di hari yang sama dengan jam masuk
-      const scheduleOut = new Date(
-        workIn.getFullYear(),
-        workIn.getMonth(),
-        workIn.getDate(),
-        16, 0, 0
-      );
-      
-      if (effectiveOut.getTime() > scheduleOut.getTime()) {
-        const diffMinutes = (effectiveOut.getTime() - scheduleOut.getTime()) / 60000;
-        const breakMinutes = diffMinutes >= 210 ? 30 : 0; // Break 30 menit jika lembur > 3.5 jam
-        totalOtHours = Math.max(0, Math.floor(((diffMinutes - breakMinutes) / 60) * 2) / 2);
-      }
+    // Jadwal pulang standar jam 16:00 WIB di hari yang sama dengan jam masuk
+    const scheduleOut = new Date(
+      workIn.getFullYear(),
+      workIn.getMonth(),
+      workIn.getDate(),
+      16, 0, 0
+    );
+    
+    if (effectiveOut.getTime() > scheduleOut.getTime()) {
+      const diffMinutes = (effectiveOut.getTime() - scheduleOut.getTime()) / 60000;
+      const breakMinutes = diffMinutes >= 210 ? 30 : 0; // Break 30 menit jika lembur > 3.5 jam
+      totalOtHours = Math.max(0, Math.floor(((diffMinutes - breakMinutes) / 60) * 2) / 2);
     }
   }
 

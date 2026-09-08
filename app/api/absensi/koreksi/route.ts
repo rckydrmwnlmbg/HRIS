@@ -120,9 +120,49 @@ export async function POST(request: Request) {
       const detectedShift = security ? detectSecurityShift(cleanWorkIn, cleanWorkOut) : null;
       const shift = correctedShift || detectedShift?.code || null;
 
-      let finalStatusHariInput = (statusHari || '').trim().toUpperCase();
-      if (!finalStatusHariInput) {
-        finalStatusHariInput = holidaySet.has(dateTrans) ? 'LIBUR' : 'KERJA';
+      const dTransObj = new Date(dateTrans + 'T00:00:00');
+      const isSunday = dTransObj.getDay() === 0;
+      const isNationalHoliday = holidaySet.has(dateTrans);
+      const isHolidayDate = isNationalHoliday || isSunday;
+
+      let rawStatusInput = (statusHari || '').trim().toUpperCase();
+      let explicitChoice = rawStatusInput.length > 0;
+      let finalStatusHariInput: 'KERJA' | 'LIBUR';
+      let effectiveIsHoliday: boolean;
+
+      if (explicitChoice) {
+        // HR secara sadar memilih status di form koreksi web
+        if (rawStatusInput === 'LIBUR' || rawStatusInput === 'OFF' || rawStatusInput === 'L' || rawStatusInput === 'H' || rawStatusInput === 'O') {
+          finalStatusHariInput = 'LIBUR';
+          effectiveIsHoliday = true;
+        } else {
+          // HR memilih 'KERJA' atau 'K' -> Menjadikan hari tersebut hari kerja normal!
+          // Berlaku untuk Security pada hari Sabtu/Minggu, maupun karyawan normal dengan jadwal shift kerja
+          finalStatusHariInput = 'KERJA';
+          effectiveIsHoliday = false;
+        }
+      } else {
+        // HR tidak mengubah status secara manual -> Sistem menentukan secara otomatis:
+        if (security) {
+          // Untuk Security, Sabtu & Minggu adalah hari kerja shift normal (KERJA)
+          // Hanya menjadi libur jika tanggal tersebut terdaftar di MS_LIBUR_KERJA
+          if (isNationalHoliday) {
+            finalStatusHariInput = 'LIBUR';
+            effectiveIsHoliday = true;
+          } else {
+            finalStatusHariInput = 'KERJA';
+            effectiveIsHoliday = false;
+          }
+        } else {
+          // Untuk non-security, Minggu dan hari libur resmi adalah LIBUR
+          if (isHolidayDate) {
+            finalStatusHariInput = 'LIBUR';
+            effectiveIsHoliday = true;
+          } else {
+            finalStatusHariInput = 'KERJA';
+            effectiveIsHoliday = false;
+          }
+        }
       }
 
       // Hitung Ulang JAM_KERJA, OT, dan status hari
@@ -133,14 +173,17 @@ export async function POST(request: Request) {
         employee.JOB_DESC,
         employee.SEC_DESC,
         finalStatusHariInput,
-        shift
+        shift,
+        effectiveIsHoliday
       );
 
-      // Tentukan Jam Kerja Final (Cuti/Dinas = 8 jam, Hadir = hitung durasi, Libur/Kosong = 0 jam)
+      // Tentukan Jam Kerja Final (Libur = 0 jam & seluruhnya OT, Cuti/Dinas = 8 jam, Hadir biasa = 8 jam, Kosong = 0 jam)
       const isCuti = reason && ['08', '09', '10', '11', '12', '13', '14', '17', '18'].includes(reason);
       const isDinas = reason === '21';
       let finalJamKerja: number = 0.0;
-      if (isCuti || isDinas) {
+      if (effectiveIsHoliday) {
+        finalJamKerja = 0.0;
+      } else if (isCuti || isDinas) {
         finalJamKerja = 8.0;
       } else if (cleanWorkIn && cleanWorkOut) {
         finalJamKerja = calcResult.JAM_KERJA ?? 8.0;
@@ -154,7 +197,7 @@ export async function POST(request: Request) {
         cleanWorkIn,
         cleanWorkOut,
         finalJamKerja,
-        statusHari: statusHari || calcResult.STATUS_HARI,
+        statusHari: finalStatusHariInput,
         reason,
         shift,
         ot1: calcResult.OT_1,

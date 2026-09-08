@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { query, withTransaction } from '@/lib/db';
 import { dsQuery } from '@/lib/db-datasolution';
 import { calculateAttendanceAndOt } from '@/lib/otCalculator';
+import { isSecurityJob } from '@/lib/securitySchedule';
 import fs from 'fs';
 import path from 'path';
 
@@ -173,21 +174,20 @@ export async function POST(request: Request) {
               END;
               TRUNCATE TABLE TMP_HRIS_SYNC;
 
-              IF OBJECT_ID('TMP_HRIS_OT', 'U') IS NULL
-              BEGIN
-                CREATE TABLE TMP_HRIS_OT (
-                  EMP_CD VARCHAR(20) NOT NULL,
-                  DATE_TRANS VARCHAR(10) NOT NULL,
-                  OT_1 DECIMAL(5,2) DEFAULT 0,
-                  OT_2 DECIMAL(5,2) DEFAULT 0,
-                  OT_3 DECIMAL(5,2) DEFAULT 0,
-                  OT_4 DECIMAL(5,2) DEFAULT 0,
-                  T_OT DECIMAL(5,2) DEFAULT 0,
-                  JAM_KERJA DECIMAL(5,2) DEFAULT 0
-                );
-                CREATE CLUSTERED INDEX IX_TMP_HRIS_OT_ED ON TMP_HRIS_OT (EMP_CD, DATE_TRANS);
-              END;
-              TRUNCATE TABLE TMP_HRIS_OT;
+              IF OBJECT_ID('TMP_HRIS_OT', 'U') IS NOT NULL
+                DROP TABLE TMP_HRIS_OT;
+              CREATE TABLE TMP_HRIS_OT (
+                EMP_CD VARCHAR(20) NOT NULL,
+                DATE_TRANS VARCHAR(10) NOT NULL,
+                OT_1 DECIMAL(5,2) DEFAULT 0,
+                OT_2 DECIMAL(5,2) DEFAULT 0,
+                OT_3 DECIMAL(5,2) DEFAULT 0,
+                OT_4 DECIMAL(5,2) DEFAULT 0,
+                T_OT DECIMAL(5,2) DEFAULT 0,
+                JAM_KERJA DECIMAL(5,2) DEFAULT 0,
+                STATUS_HARI VARCHAR(10) DEFAULT 'KERJA'
+              );
+              CREATE CLUSTERED INDEX IX_TMP_HRIS_OT_ED ON TMP_HRIS_OT (EMP_CD, DATE_TRANS);
             `);
 
             // 2. Batch Bulk Insert ke TMP_HRIS_SYNC (MENGGUNAKAN LOCAL TIME TANPA PERGESERAN UTC)
@@ -222,9 +222,17 @@ export async function POST(request: Request) {
                 a.WORK_OUT1 = t.WorkOut,
                 a.DATE_IN = CONVERT(date, t.WorkIn),
                 a.DATE_OUT = CONVERT(date, t.WorkOut),
-                a.JAM_KERJA = t.CalcJamKerja,
+                a.JAM_KERJA = CASE
+                                WHEN DATEPART(dw, a.DATE_TRANS) = 1 THEN 0
+                                WHEN EXISTS (
+                                  SELECT 1 FROM MS_LIBUR_KERJA l 
+                                  WHERE CONVERT(varchar(10), l.TANGGAL, 120) = CONVERT(varchar(10), a.DATE_TRANS, 120)
+                                ) THEN 0
+                                ELSE t.CalcJamKerja
+                              END,
                 a.HADIR = 1,
                 a.STATUS_HARI = CASE
+                                  WHEN DATEPART(dw, a.DATE_TRANS) = 1 THEN 'LIBUR'
                                   WHEN EXISTS (
                                     SELECT 1 FROM MS_LIBUR_KERJA l 
                                     WHERE CONVERT(varchar(10), l.TANGGAL, 120) = CONVERT(varchar(10), a.DATE_TRANS, 120)
@@ -287,8 +295,16 @@ export async function POST(request: Request) {
                 CONVERT(date, t.WorkOut),
                 CAST(t.Tanggal + ' ' + @defInStr AS DATETIME),
                 CAST(t.Tanggal + ' ' + @defOutStr AS DATETIME),
-                t.CalcJamKerja,
                 CASE
+                  WHEN DATEPART(dw, CONVERT(date, t.Tanggal)) = 1 THEN 0
+                  WHEN EXISTS (
+                    SELECT 1 FROM MS_LIBUR_KERJA l 
+                    WHERE CONVERT(varchar(10), l.TANGGAL, 120) = t.Tanggal
+                  ) THEN 0
+                  ELSE t.CalcJamKerja
+                END,
+                CASE
+                  WHEN DATEPART(dw, CONVERT(date, t.Tanggal)) = 1 THEN 'LIBUR'
                   WHEN EXISTS (
                     SELECT 1 FROM MS_LIBUR_KERJA l 
                     WHERE CONVERT(varchar(10), l.TANGGAL, 120) = t.Tanggal
@@ -332,7 +348,8 @@ export async function POST(request: Request) {
               UPDATE a
               SET 
                 a.STATUS_HARI = CASE
-                                  WHEN a.STATUS_HARI IS NOT NULL AND RTRIM(a.STATUS_HARI) <> '' THEN a.STATUS_HARI
+                                  WHEN a.STATUS_HARI IS NOT NULL AND RTRIM(a.STATUS_HARI) IN ('KERJA', 'LIBUR') THEN a.STATUS_HARI
+                                  WHEN DATEPART(dw, a.DATE_TRANS) = 1 THEN 'LIBUR'
                                   WHEN EXISTS (
                                     SELECT 1 FROM MS_LIBUR_KERJA l 
                                     WHERE CONVERT(varchar(10), l.TANGGAL, 120) = CONVERT(varchar(10), a.DATE_TRANS, 120)
@@ -359,6 +376,14 @@ export async function POST(request: Request) {
             // ── FASE 2: Hitung ulang lembur dengan otCalculator (Super Cepat & Akurat) ──
             sendEvent('progress', { message: 'Mengambil data presensi untuk kalkulasi lembur...', progress: 55 });
             
+            // Ambil data hari libur resmi dari MS_LIBUR_KERJA
+            const holidayRows = await tx<any>(`
+              SELECT CONVERT(varchar(10), TANGGAL, 120) AS tanggal
+              FROM MS_LIBUR_KERJA WITH (NOLOCK)
+              WHERE TANGGAL >= @startDate AND TANGGAL <= @endDate
+            `, { startDate, endDate });
+            const holidayDates = new Set((holidayRows || []).map((h: any) => h.tanggal));
+
             const syncedAbsen = await tx<any>(`
               SELECT a.EMP_CD, CONVERT(varchar(10), a.DATE_TRANS, 120) AS DATE_TRANS, 
                      a.WORK_IN, a.WORK_OUT, a.STATUS_HARI, a.SHIFT,
@@ -373,14 +398,30 @@ export async function POST(request: Request) {
 
             if (syncedAbsen && syncedAbsen.length > 0) {
               const otResults = syncedAbsen.map((row: any) => {
+                const security = isSecurityJob(row.JOB_DESC, row.SEC_DESC, row.SHIFT);
+                const dObj = new Date(row.DATE_TRANS + 'T00:00:00');
+                const isSunday = dObj.getDay() === 0;
+                const isRegisteredHoliday = holidayDates.has(row.DATE_TRANS);
+                const isStatusLibur = row.STATUS_HARI === 'LIBUR';
+
+                let isHoliday = false;
+                if (isStatusLibur) {
+                  isHoliday = true;
+                } else if (isRegisteredHoliday) {
+                  isHoliday = row.STATUS_HARI !== 'KERJA';
+                } else if (isSunday) {
+                  isHoliday = !security && row.STATUS_HARI !== 'KERJA';
+                }
+
                 const ot = calculateAttendanceAndOt(
                   row.DATE_TRANS,
                   new Date(row.WORK_IN),
                   new Date(row.WORK_OUT),
                   row.JOB_DESC || '',
                   row.SEC_DESC || '',
-                  row.STATUS_HARI || '',
-                  row.SHIFT || ''
+                  isHoliday ? 'LIBUR' : 'KERJA',
+                  row.SHIFT || '',
+                  isHoliday
                 );
                 return {
                   EMP_CD: String(row.EMP_CD).trim(),
@@ -390,7 +431,8 @@ export async function POST(request: Request) {
                   OT_3: ot.OT_3 || 0,
                   OT_4: ot.OT_4 || 0,
                   T_OT: ot.T_OT || 0,
-                  JAM_KERJA: ot.JAM_KERJA || 0,
+                  JAM_KERJA: ot.JAM_KERJA !== null && ot.JAM_KERJA !== undefined ? ot.JAM_KERJA : (isHoliday ? 0 : 8),
+                  STATUS_HARI: isHoliday ? 'LIBUR' : 'KERJA'
                 };
               });
 
@@ -400,10 +442,11 @@ export async function POST(request: Request) {
                 const valuesSql = chunk.map(r => {
                   const pNik = `'${r.EMP_CD.replace(/'/g, "''")}'`;
                   const pTgl = `'${r.DATE_TRANS}'`;
-                  return `(${pNik}, ${pTgl}, ${r.OT_1}, ${r.OT_2}, ${r.OT_3}, ${r.OT_4}, ${r.T_OT}, ${r.JAM_KERJA})`;
+                  const pStatus = `'${r.STATUS_HARI}'`;
+                  return `(${pNik}, ${pTgl}, ${r.OT_1}, ${r.OT_2}, ${r.OT_3}, ${r.OT_4}, ${r.T_OT}, ${r.JAM_KERJA}, ${pStatus})`;
                 }).join(',\n');
 
-                await tx(`INSERT INTO TMP_HRIS_OT (EMP_CD, DATE_TRANS, OT_1, OT_2, OT_3, OT_4, T_OT, JAM_KERJA) VALUES\n${valuesSql};`);
+                await tx(`INSERT INTO TMP_HRIS_OT (EMP_CD, DATE_TRANS, OT_1, OT_2, OT_3, OT_4, T_OT, JAM_KERJA, STATUS_HARI) VALUES\n${valuesSql};`);
 
                 const currentOt = Math.min(i + OT_BATCH, otResults.length);
                 const pct = 55 + Math.floor((currentOt / otResults.length) * 35);
@@ -419,7 +462,8 @@ export async function POST(request: Request) {
                   a.OT_3 = o.OT_3,
                   a.OT_4 = o.OT_4,
                   a.T_OT = o.T_OT,
-                  a.JAM_KERJA = o.JAM_KERJA
+                  a.JAM_KERJA = o.JAM_KERJA,
+                  a.STATUS_HARI = o.STATUS_HARI
                 FROM TR_ABSEN a
                 JOIN TMP_HRIS_OT o ON RTRIM(a.EMP_CD) = RTRIM(o.EMP_CD) AND CONVERT(varchar(10), a.DATE_TRANS, 120) = o.DATE_TRANS;
               `);
