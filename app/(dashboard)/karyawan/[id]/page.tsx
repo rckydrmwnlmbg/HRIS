@@ -107,6 +107,14 @@ export default function KaryawanDetailPage({ params }: { params: Promise<{ id: s
     </div>
   );
 
+  const isKaryawanAktif = Boolean(
+    karyawan.Act_NonAct && (
+      !karyawan.DT_RSG ||
+      new Date(karyawan.DT_RSG).getFullYear() <= 1900 ||
+      new Date(karyawan.DT_RSG).getTime() >= new Date().setHours(0, 0, 0, 0)
+    )
+  );
+
   return (
     <div className="animate-fadeIn">
       {/* Header */}
@@ -140,8 +148,8 @@ export default function KaryawanDetailPage({ params }: { params: Promise<{ id: s
           <h2 className={styles.heroName}>{karyawan.EMP_NM}</h2>
           <div className={styles.heroMeta}>
             <span className="badge badge-info" style={{ fontSize: '12px' }}>{karyawan.EMP_CD}</span>
-            <span className={`badge ${karyawan.Act_NonAct ? 'badge-success' : 'badge-danger'}`}>
-              {karyawan.Act_NonAct ? t(lang, 'aktif') : t(lang, 'tidakAktif')}
+            <span className={`badge ${isKaryawanAktif ? 'badge-success' : 'badge-danger'}`}>
+              {isKaryawanAktif ? t(lang, 'aktif') : t(lang, 'tidakAktif')}
             </span>
             {karyawan.JNS_DESC && <span className="badge badge-purple">{karyawan.JNS_DESC}</span>}
             <span className="badge badge-gray">{karyawan.SX === 'L' ? (lang === 'id' ? '♂ Laki-laki' : '♂ Male') : (lang === 'id' ? '♀ Perempuan' : '♀ Female')}</span>

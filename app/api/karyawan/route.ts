@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getCache, setCache } from '@/lib/cache';
 
-import { TEAM_NAME_CASE, getActiveEmployeeFilter } from '@/lib/queries';
+import { TEAM_NAME_CASE, getActiveEmployeeFilter, getInactiveEmployeeFilter } from '@/lib/queries';
 
 // GET /api/karyawan — Fetch employee list with joined master data
 export async function GET(request: Request) {
@@ -23,11 +23,19 @@ export async function GET(request: Request) {
       return NextResponse.json(cachedData);
     }
 
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, '0');
+    const d = String(today.getDate()).padStart(2, '0');
+    const todayStr = `${y}-${m}-${d}`;
+
     let whereClause = 'WHERE 1=1';
     if (status === 'aktif') {
-      whereClause += ` AND ${getActiveEmployeeFilter()}`;
+      whereClause += ` AND ${getActiveEmployeeFilter({ date: todayStr })}`;
     }
-    else if (status === 'tidak') whereClause += ' AND e.Act_NonAct = 0';
+    else if (status === 'tidak') {
+      whereClause += ` AND ${getInactiveEmployeeFilter({ date: todayStr })}`;
+    }
     if (sec) whereClause += ` AND e.SEC_CD = '${sec.replace(/'/g, "''")}'`;
     if (job) {
       whereClause += ` AND (${TEAM_NAME_CASE}) = '${job.replace(/'/g, "''")}'`;
@@ -59,10 +67,15 @@ export async function GET(request: Request) {
           RTRIM(e.JOB_CD) AS JOB_CD,
           RTRIM(e.JNS_KRY) AS JNS_KRY,
           e.DT_ENTRY,
+          e.DT_RSG,
           RTRIM(e.SX) AS SX,
           RTRIM(e.agama) AS agama,
           RTRIM(e.ALL_IN) AS ALL_IN,
           e.Act_NonAct,
+          CASE 
+            WHEN e.Act_NonAct = 1 AND (e.DT_RSG IS NULL OR YEAR(e.DT_RSG) <= 1900 OR CONVERT(varchar(10), e.DT_RSG, 120) >= '${todayStr}')
+            THEN 1 ELSE 0 
+          END AS IS_ACTIVE,
           RTRIM(d.DEP_DESC) AS DEP_DESC,
           RTRIM(s.SEC_DESC) AS SEC_DESC,
           RTRIM(j.JOB_DESC) AS JOB_DESC,

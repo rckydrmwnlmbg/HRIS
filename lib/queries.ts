@@ -48,8 +48,11 @@ export function getActiveEmployeeFilter(options?: {
   alias?: string;
 }): string {
   const a = options?.alias || 'e';
-  const start = options?.startDate || options?.date;
-  const end = options?.endDate || options?.date;
+  const defaultDate = (!options?.startDate && !options?.endDate && !options?.date)
+    ? new Date().toISOString().split('T')[0]
+    : undefined;
+  const start = options?.startDate || options?.date || defaultDate;
+  const end = options?.endDate || options?.date || defaultDate;
 
   let clause = `${a}.Act_NonAct = 1`;
 
@@ -62,4 +65,23 @@ export function getActiveEmployeeFilter(options?: {
   }
 
   return clause;
+}
+
+/**
+ * Menghasilkan klausa SQL WHERE untuk memfilter karyawan tidak aktif pada suatu periode/tanggal
+ * Merupakan negasi logis dari getActiveEmployeeFilter.
+ */
+export function getInactiveEmployeeFilter(options?: {
+  startDate?: string;
+  endDate?: string;
+  date?: string;
+  alias?: string;
+}): string {
+  const a = options?.alias || 'e';
+  const targetDate = options?.date || options?.startDate || new Date().toISOString().split('T')[0];
+
+  return `(
+    ${a}.Act_NonAct = 0 
+    OR (${a}.DT_RSG IS NOT NULL AND YEAR(${a}.DT_RSG) > 1900 AND CONVERT(varchar(10), ${a}.DT_RSG, 120) < '${targetDate}')
+  )`;
 }

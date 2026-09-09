@@ -38,6 +38,7 @@ export interface Karyawan {
   JNS_DESC?: string;
   TEAM?: string;
   BS_SLR?: number;
+  IS_ACTIVE?: number | boolean;
 }
 
 export interface Department {

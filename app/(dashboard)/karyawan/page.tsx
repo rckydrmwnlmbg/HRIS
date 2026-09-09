@@ -97,9 +97,13 @@ export default function KaryawanPage() {
   const seksiForDep = masterSec;
 
   const getStatusBadge = (k: Karyawan) => {
+    const isActive = k.IS_ACTIVE !== undefined
+      ? Boolean(k.IS_ACTIVE)
+      : Boolean(k.Act_NonAct && (!k.DT_RSG || new Date(k.DT_RSG).getFullYear() <= 1900 || new Date(k.DT_RSG).getTime() >= new Date().setHours(0, 0, 0, 0)));
+
     return (
-      <MarqueeBadge variant={k.Act_NonAct ? 'success' : 'danger'} width={80} height={23}>
-        {k.Act_NonAct ? t(lang, 'aktif') : t(lang, 'tidakAktif')}
+      <MarqueeBadge variant={isActive ? 'success' : 'danger'} width={80} height={23}>
+        {isActive ? t(lang, 'aktif') : t(lang, 'tidakAktif')}
       </MarqueeBadge>
     );
   };
