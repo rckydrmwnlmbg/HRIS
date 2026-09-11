@@ -3,6 +3,7 @@ import React from 'react';
 import type { AbsensiRecord, Reason, Shift, Language } from '@/types';
 import { DataTable } from '@/components/ui/DataTable';
 import { CheckSquare, X, Loader2 } from 'lucide-react';
+import { calculateAttendanceAndOt } from '@/lib/otCalculator';
 
 interface AbsensiMonthlyTableProps {
   records: AbsensiRecord[];
@@ -413,6 +414,41 @@ export function AbsensiMonthlyTable({
 
                 delete (updated as any).WORK_IN_STR;
                 delete (updated as any).WORK_OUT_STR;
+
+                // ⚡ LIVE OT PREVIEW: Hitung lembur langsung di browser saat pengetikan / koreksi
+                const wInDate = updated.WORK_IN ? new Date(updated.WORK_IN) : null;
+                const wOutDate = updated.WORK_OUT ? new Date(updated.WORK_OUT) : null;
+                if (wInDate && wOutDate && !isNaN(wInDate.getTime()) && !isNaN(wOutDate.getTime())) {
+                  const calc = calculateAttendanceAndOt(
+                    r.DATE_TRANS,
+                    wInDate,
+                    wOutDate,
+                    (user as any)?.JOB_DESC || '',
+                    (user as any)?.SEC_DESC || '',
+                    currentStatus || 'KERJA',
+                    currentShift || '1'
+                  );
+                  (updated as any).OT_1 = calc.OT_1;
+                  (updated as any).OT_2 = calc.OT_2;
+                  (updated as any).OT_3 = calc.OT_3;
+                  (updated as any).OT_4 = calc.OT_4;
+                  (updated as any).OT1 = calc.OT_1;
+                  (updated as any).OT2 = calc.OT_2;
+                  (updated as any).OT3 = calc.OT_3;
+                  (updated as any).OT4 = calc.OT_4;
+                  (updated as any).T_OT = calc.T_OT;
+                  updated.JAM_KERJA = calc.JAM_KERJA ?? 8;
+                } else {
+                  (updated as any).OT_1 = 0;
+                  (updated as any).OT_2 = 0;
+                  (updated as any).OT_3 = 0;
+                  (updated as any).OT_4 = 0;
+                  (updated as any).OT1 = 0;
+                  (updated as any).OT2 = 0;
+                  (updated as any).OT3 = 0;
+                  (updated as any).OT4 = 0;
+                  (updated as any).T_OT = 0;
+                }
 
                 setCorrections(prev => new Map(prev).set(r.DATE_TRANS, updated as AbsensiRecord));
               };

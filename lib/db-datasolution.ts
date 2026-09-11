@@ -96,16 +96,43 @@ export async function getDsDbConnection() {
   return dsPoolPromise;
 }
 
-export async function dsQuery<T>(queryString: string, params?: Record<string, any>): Promise<T[]> {
-  const pool = await getDsDbConnection();
-  const request = pool.request();
+export async function dsQuery<T>(queryString: string, params?: Record<string, any>, isRetry = false): Promise<T[]> {
+  try {
+    const pool = await getDsDbConnection();
+    const request = pool.request();
 
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      request.input(key, value);
-    });
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        request.input(key, value);
+      });
+    }
+
+    const result = await request.query(queryString);
+    return result.recordset as T[];
+  } catch (err: any) {
+    const isConnErr = 
+      err.code === 'ECONNRESET' || 
+      err.code === 'ESOCKET' || 
+      err.code === 'ETIMEDOUT' || 
+      String(err.message || '').includes('closed') || 
+      String(err.message || '').includes('ECONNRESET');
+
+    if (isConnErr) {
+      console.warn('Resetting broken DataSolution connection pool due to:', err.message || err.code);
+      try {
+        if (dsPoolPromise) {
+          const p = await dsPoolPromise;
+          await p.close();
+        }
+      } catch (_) {}
+      dsPoolPromise = null;
+
+      if (!isRetry) {
+        console.log('Mencoba menyambung kembali (auto-retry) ke DataSolution SQL Server...');
+        return dsQuery<T>(queryString, params, true);
+      }
+    }
+    throw err;
   }
-
-  const result = await request.query(queryString);
-  return result.recordset as T[];
 }
+
