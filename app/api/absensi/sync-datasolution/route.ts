@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query, withTransaction } from '@/lib/db';
+import { query } from '@/lib/db';
 import { dsQuery } from '@/lib/db-datasolution';
 import { calculateAttendanceAndOt } from '@/lib/otCalculator';
 import { isSecurityJob } from '@/lib/securitySchedule';
@@ -59,9 +59,9 @@ export async function POST(request: Request) {
               RTRIM(u.Badgenumber) AS NIK,
               c.CHECKTIME,
               RTRIM(ISNULL(c.CHECKTYPE, '')) AS CHECKTYPE
-            FROM CHECKINOUT c
-            JOIN USERINFO u ON c.USERID = u.USERID
-            WHERE c.CHECKTIME >= @startDate AND c.CHECKTIME < DATEADD(hour, 27, CAST(@endDate AS DATETIME))
+            FROM CHECKINOUT c WITH (NOLOCK)
+            JOIN USERINFO u WITH (NOLOCK) ON c.USERID = u.USERID
+            WHERE c.CHECKTIME >= CAST(@startDate AS DATETIME) AND c.CHECKTIME < DATEADD(hour, 27, CAST(@endDate AS DATETIME))
               AND u.Badgenumber IS NOT NULL AND RTRIM(u.Badgenumber) <> ''
             ORDER BY u.Badgenumber, c.CHECKTIME ASC
           `, { startDate, endDate });
@@ -157,157 +157,118 @@ export async function POST(request: Request) {
             });
           });
 
-          // ── EKSEKUSI TRANSAKSI DATABASE (STAGING TABLE TMP_HRIS_SYNC & TMP_HRIS_OT) ──
-          await withTransaction(async (tx) => {
-            // 1. Setup Staging Tables (Auto-create jika belum ada, lalu truncate)
-            await tx(`
-              IF OBJECT_ID('TMP_HRIS_SYNC', 'U') IS NULL
-              BEGIN
-                CREATE TABLE TMP_HRIS_SYNC (
-                  NIK VARCHAR(20) NOT NULL,
-                  Tanggal VARCHAR(10) NOT NULL,
-                  WorkIn DATETIME NULL,
-                  WorkOut DATETIME NULL,
-                  CalcJamKerja DECIMAL(5,2) DEFAULT 0
-                );
-                CREATE CLUSTERED INDEX IX_TMP_HRIS_SYNC_NT ON TMP_HRIS_SYNC (NIK, Tanggal);
-              END;
-              TRUNCATE TABLE TMP_HRIS_SYNC;
+          // ── TAHAP 1: INTEGRASI PRESENSI LANGSUNG KE TR_ABSEN (DIRECT VALUES BATCHING - ZERO STAGING TABLE) ──
+          sendEvent('progress', { message: 'Menjalankan integrasi data presensi...', progress: 15 });
 
-              IF OBJECT_ID('TMP_HRIS_OT', 'U') IS NOT NULL
-                DROP TABLE TMP_HRIS_OT;
-              CREATE TABLE TMP_HRIS_OT (
-                EMP_CD VARCHAR(20) NOT NULL,
-                DATE_TRANS VARCHAR(10) NOT NULL,
-                OT_1 DECIMAL(5,2) DEFAULT 0,
-                OT_2 DECIMAL(5,2) DEFAULT 0,
-                OT_3 DECIMAL(5,2) DEFAULT 0,
-                OT_4 DECIMAL(5,2) DEFAULT 0,
-                T_OT DECIMAL(5,2) DEFAULT 0,
-                JAM_KERJA DECIMAL(5,2) DEFAULT 0,
-                STATUS_HARI VARCHAR(10) DEFAULT 'KERJA'
-              );
-              CREATE CLUSTERED INDEX IX_TMP_HRIS_OT_ED ON TMP_HRIS_OT (EMP_CD, DATE_TRANS);
-            `);
+          const BATCH_SIZE = 800;
+          for (let i = 0; i < dsData.length; i += BATCH_SIZE) {
+            const chunk = dsData.slice(i, i + BATCH_SIZE);
+            const valuesSql = chunk.map(r => {
+              const pNik = `'${String(r.NIK).trim().replace(/'/g, "''")}'`;
+              const pTgl = `'${r.Tanggal}'`;
+              const pIn = formatLocalSqlDatetime(r.finalWorkIn);
+              const pOut = formatLocalSqlDatetime(r.finalWorkOut);
+              const pJam = r.calcJamKerja || 0;
+              return `(${pNik}, ${pTgl}, CAST(${pIn} AS DATETIME), CAST(${pOut} AS DATETIME), CAST(${pJam} AS DECIMAL(5,2)))`;
+            }).join(',\n');
 
-            // 2. Batch Bulk Insert ke TMP_HRIS_SYNC (MENGGUNAKAN LOCAL TIME TANPA PERGESERAN UTC)
-            const STAGING_BATCH = 400;
-            for (let i = 0; i < dsData.length; i += STAGING_BATCH) {
-              const chunk = dsData.slice(i, i + STAGING_BATCH);
-              const valuesSql = chunk.map(r => {
-                const pNik = `'${String(r.NIK).trim().replace(/'/g, "''")}'`;
-                const pTgl = `'${r.Tanggal}'`;
-                const pIn = formatLocalSqlDatetime(r.finalWorkIn);
-                const pOut = formatLocalSqlDatetime(r.finalWorkOut);
-                const pJam = r.calcJamKerja || 0;
-                return `(${pNik}, ${pTgl}, ${pIn}, ${pOut}, ${pJam})`;
-              }).join(',\n');
+            await query(`
+              DECLARE @defInStr VARCHAR(8) = (SELECT TOP 1 CONVERT(varchar(8), WORK_IN, 108) FROM msSHIFT WITH (NOLOCK) WHERE RTRIM(shift_CODE) = '1');
+              DECLARE @defOutStr VARCHAR(8) = (SELECT TOP 1 CONVERT(varchar(8), WORK_OUT, 108) FROM msSHIFT WITH (NOLOCK) WHERE RTRIM(shift_CODE) = '1');
+              SET @defInStr = ISNULL(@defInStr, '07:00:00');
+              SET @defOutStr = ISNULL(@defOutStr, '16:00:00');
 
-              await tx(`INSERT INTO TMP_HRIS_SYNC (NIK, Tanggal, WorkIn, WorkOut, CalcJamKerja) VALUES\n${valuesSql};`);
-              
-              const currentLoaded = Math.min(i + STAGING_BATCH, dsData.length);
-              const pct = 10 + Math.floor((currentLoaded / dsData.length) * 35);
-              sendEvent('progress', { message: `Menyinkronkan data presensi (${currentLoaded}/${dsData.length})...`, progress: pct });
-            }
-
-            sendEvent('progress', { message: 'Menjalankan integrasi data presensi...', progress: 48 });
-
-            // 3. Set-Based UPDATE on TR_ABSEN (Non-Security, dengan Proteksi Mutlak Koreksi Manual HR)
-            await tx(`
+              -- 1. Lean UPDATE: hanya ubah baris yang jam masuk/pulang memang berubah
               UPDATE a
               SET 
-                a.WORK_IN = t.WorkIn,
-                a.WORK_OUT = t.WorkOut,
-                a.WORK_IN1 = t.WorkIn,
-                a.WORK_OUT1 = t.WorkOut,
-                a.DATE_IN = CONVERT(date, t.WorkIn),
-                a.DATE_OUT = CONVERT(date, t.WorkOut),
+                a.WORK_IN = v.WorkIn,
+                a.WORK_OUT = v.WorkOut,
+                a.WORK_IN1 = v.WorkIn,
+                a.WORK_OUT1 = v.WorkOut,
+                a.DATE_IN = CONVERT(date, v.WorkIn),
+                a.DATE_OUT = CONVERT(date, v.WorkOut),
                 a.JAM_KERJA = CASE
                                 WHEN DATEPART(dw, a.DATE_TRANS) = 1 THEN 0
                                 WHEN EXISTS (
-                                  SELECT 1 FROM MS_LIBUR_KERJA l 
-                                  WHERE CONVERT(varchar(10), l.TANGGAL, 120) = CONVERT(varchar(10), a.DATE_TRANS, 120)
+                                  SELECT 1 FROM MS_LIBUR_KERJA l WITH (NOLOCK)
+                                  WHERE l.TANGGAL = a.DATE_TRANS
                                 ) THEN 0
-                                ELSE t.CalcJamKerja
+                                ELSE v.CalcJamKerja
                               END,
                 a.HADIR = 1,
                 a.STATUS_HARI = CASE
                                   WHEN DATEPART(dw, a.DATE_TRANS) = 1 THEN 'LIBUR'
                                   WHEN EXISTS (
-                                    SELECT 1 FROM MS_LIBUR_KERJA l 
-                                    WHERE CONVERT(varchar(10), l.TANGGAL, 120) = CONVERT(varchar(10), a.DATE_TRANS, 120)
+                                    SELECT 1 FROM MS_LIBUR_KERJA l WITH (NOLOCK)
+                                    WHERE l.TANGGAL = a.DATE_TRANS
                                   ) THEN 'LIBUR'
                                   ELSE 'KERJA'
                                 END,
                 a.SHIFT = ISNULL(a.SHIFT, '1'),
                 a.FLAG_ABSEN = ISNULL(a.FLAG_ABSEN, 'M'),
                 a.Time_Late = CASE 
-                                WHEN t.WorkIn IS NOT NULL AND a.JAM_MASUK IS NOT NULL AND t.WorkIn > a.JAM_MASUK
+                                WHEN v.WorkIn IS NOT NULL AND a.JAM_MASUK IS NOT NULL AND v.WorkIn > a.JAM_MASUK
                                 THEN 
                                   CASE 
-                                    WHEN DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) <= 120
-                                    THEN CEILING(CAST(DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) AS FLOAT) / 30.0) * 0.5
-                                    ELSE CAST(DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) AS FLOAT)
+                                    WHEN DATEDIFF(MINUTE, a.JAM_MASUK, v.WorkIn) <= 120
+                                    THEN CEILING(CAST(DATEDIFF(MINUTE, a.JAM_MASUK, v.WorkIn) AS FLOAT) / 30.0) * 0.5
+                                    ELSE CAST(DATEDIFF(MINUTE, a.JAM_MASUK, v.WorkIn) AS FLOAT)
                                   END
                                 ELSE 0.0 
                               END,
                 a.POT_JAM = CASE 
-                              WHEN t.WorkIn IS NOT NULL AND a.JAM_MASUK IS NOT NULL AND t.WorkIn > a.JAM_MASUK
+                              WHEN v.WorkIn IS NOT NULL AND a.JAM_MASUK IS NOT NULL AND v.WorkIn > a.JAM_MASUK
                               THEN 
                                 CASE 
-                                  WHEN DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) <= 120
-                                  THEN CEILING(CAST(DATEDIFF(MINUTE, a.JAM_MASUK, t.WorkIn) AS FLOAT) / 30.0) * 0.5
+                                  WHEN DATEDIFF(MINUTE, a.JAM_MASUK, v.WorkIn) <= 120
+                                  THEN CEILING(CAST(DATEDIFF(MINUTE, a.JAM_MASUK, v.WorkIn) AS FLOAT) / 30.0) * 0.5
                                   ELSE 0.0
                                 END
                               ELSE 0.0 
                             END
               FROM TR_ABSEN a
-              JOIN TMP_HRIS_SYNC t ON RTRIM(a.EMP_CD) = RTRIM(t.NIK) AND CONVERT(varchar(10), a.DATE_TRANS, 120) = t.Tanggal
-              WHERE (a.SEC_CD IS NULL OR RTRIM(a.SEC_CD) <> 'SEC')
+              JOIN (VALUES 
+${valuesSql}
+              ) AS v(NIK, Tanggal, WorkIn, WorkOut, CalcJamKerja)
+                ON RTRIM(a.EMP_CD) = RTRIM(v.NIK) AND a.DATE_TRANS = CAST(v.Tanggal AS DATETIME)
+              WHERE a.DATE_TRANS >= CAST(@startDate AS DATETIME) AND a.DATE_TRANS < DATEADD(day, 1, CAST(@endDate AS DATETIME))
+                AND (a.SEC_CD IS NULL OR RTRIM(a.SEC_CD) <> 'SEC')
                 -- 🛡️ PROTEKSI MUTLAK: LEWATI SEMUA BARIS KOREKSI MANUAL HR (JAMEDIT/USERNAME) & ALASAN/CUTI/IZIN
                 AND a.JAMEDIT IS NULL
                 AND (a.USERNAME IS NULL OR RTRIM(a.USERNAME) = '')
                 AND (a.REASON IS NULL OR RTRIM(a.REASON) = '' OR RTRIM(a.REASON) = '-')
-                AND ISNULL(CONVERT(varchar(19), a.WORK_IN, 120), '') = ISNULL(CONVERT(varchar(19), a.WORK_IN1, 120), '')
-                AND ISNULL(CONVERT(varchar(19), a.WORK_OUT, 120), '') = ISNULL(CONVERT(varchar(19), a.WORK_OUT1, 120), '');
-            `);
+                AND (ISNULL(a.WORK_IN, '') <> ISNULL(v.WorkIn, '') OR ISNULL(a.WORK_OUT, '') <> ISNULL(v.WorkOut, ''));
 
-            // 4. Set-Based INSERT for Rows not yet in TR_ABSEN
-            await tx(`
-              DECLARE @defInStr VARCHAR(8) = (SELECT TOP 1 CONVERT(varchar(8), WORK_IN, 108) FROM msSHIFT WHERE RTRIM(shift_CODE) = '1');
-              DECLARE @defOutStr VARCHAR(8) = (SELECT TOP 1 CONVERT(varchar(8), WORK_OUT, 108) FROM msSHIFT WHERE RTRIM(shift_CODE) = '1');
-              SET @defInStr = ISNULL(@defInStr, '07:00:00');
-              SET @defOutStr = ISNULL(@defOutStr, '16:00:00');
-
+              -- 2. INSERT baris baru untuk karyawan yang belum ada di TR_ABSEN pada tanggal tersebut
               INSERT INTO TR_ABSEN (
                 EMP_CD, DATE_TRANS, WORK_IN, WORK_OUT, WORK_IN1, WORK_OUT1, 
                 DATE_IN, DATE_OUT, JAM_MASUK, JAM_PULANG, JAM_KERJA, 
                 STATUS_HARI, SHIFT, HADIR, FLAG_ABSEN, Time_Late, POT_JAM
               )
               SELECT 
-                t.NIK, 
-                CONVERT(date, t.Tanggal), 
-                t.WorkIn, 
-                t.WorkOut, 
-                t.WorkIn, 
-                t.WorkOut, 
-                CONVERT(date, t.WorkIn), 
-                CONVERT(date, t.WorkOut),
-                CAST(t.Tanggal + ' ' + @defInStr AS DATETIME),
-                CAST(t.Tanggal + ' ' + @defOutStr AS DATETIME),
+                v.NIK, 
+                CAST(v.Tanggal AS DATETIME), 
+                v.WorkIn, 
+                v.WorkOut, 
+                v.WorkIn, 
+                v.WorkOut, 
+                CONVERT(date, v.WorkIn), 
+                CONVERT(date, v.WorkOut),
+                CAST(v.Tanggal + ' ' + @defInStr AS DATETIME),
+                CAST(v.Tanggal + ' ' + @defOutStr AS DATETIME),
                 CASE
-                  WHEN DATEPART(dw, CONVERT(date, t.Tanggal)) = 1 THEN 0
+                  WHEN DATEPART(dw, CAST(v.Tanggal AS DATETIME)) = 1 THEN 0
                   WHEN EXISTS (
-                    SELECT 1 FROM MS_LIBUR_KERJA l 
-                    WHERE CONVERT(varchar(10), l.TANGGAL, 120) = t.Tanggal
+                    SELECT 1 FROM MS_LIBUR_KERJA l WITH (NOLOCK)
+                    WHERE CONVERT(date, l.TANGGAL) = CAST(v.Tanggal AS DATE)
                   ) THEN 0
-                  ELSE t.CalcJamKerja
+                  ELSE v.CalcJamKerja
                 END,
                 CASE
-                  WHEN DATEPART(dw, CONVERT(date, t.Tanggal)) = 1 THEN 'LIBUR'
+                  WHEN DATEPART(dw, CAST(v.Tanggal AS DATETIME)) = 1 THEN 'LIBUR'
                   WHEN EXISTS (
-                    SELECT 1 FROM MS_LIBUR_KERJA l 
-                    WHERE CONVERT(varchar(10), l.TANGGAL, 120) = t.Tanggal
+                    SELECT 1 FROM MS_LIBUR_KERJA l WITH (NOLOCK)
+                    WHERE CONVERT(date, l.TANGGAL) = CAST(v.Tanggal AS DATE)
                   ) THEN 'LIBUR'
                   ELSE 'KERJA'
                 END,
@@ -315,170 +276,169 @@ export async function POST(request: Request) {
                 1,
                 'M',
                 CASE 
-                  WHEN t.WorkIn IS NOT NULL AND t.WorkIn > CAST(t.Tanggal + ' ' + @defInStr AS DATETIME)
+                  WHEN v.WorkIn IS NOT NULL AND v.WorkIn > CAST(v.Tanggal + ' ' + @defInStr AS DATETIME)
                   THEN 
                     CASE 
-                      WHEN DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) <= 120
-                      THEN CEILING(CAST(DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) AS FLOAT) / 30.0) * 0.5
-                      ELSE CAST(DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) AS FLOAT)
+                      WHEN DATEDIFF(MINUTE, CAST(v.Tanggal + ' ' + @defInStr AS DATETIME), v.WorkIn) <= 120
+                      THEN CEILING(CAST(DATEDIFF(MINUTE, CAST(v.Tanggal + ' ' + @defInStr AS DATETIME), v.WorkIn) AS FLOAT) / 30.0) * 0.5
+                      ELSE CAST(DATEDIFF(MINUTE, CAST(v.Tanggal + ' ' + @defInStr AS DATETIME), v.WorkIn) AS FLOAT)
                     END
                   ELSE 0.0 
                 END,
                 CASE 
-                  WHEN t.WorkIn IS NOT NULL AND t.WorkIn > CAST(t.Tanggal + ' ' + @defInStr AS DATETIME)
+                  WHEN v.WorkIn IS NOT NULL AND v.WorkIn > CAST(v.Tanggal + ' ' + @defInStr AS DATETIME)
                   THEN 
                     CASE 
-                      WHEN DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) <= 120
-                      THEN CEILING(CAST(DATEDIFF(MINUTE, CAST(t.Tanggal + ' ' + @defInStr AS DATETIME), t.WorkIn) AS FLOAT) / 30.0) * 0.5
+                      WHEN DATEDIFF(MINUTE, CAST(v.Tanggal + ' ' + @defInStr AS DATETIME), v.WorkIn) <= 120
+                      THEN CEILING(CAST(DATEDIFF(MINUTE, CAST(v.Tanggal + ' ' + @defInStr AS DATETIME), v.WorkIn) AS FLOAT) / 30.0) * 0.5
                       ELSE 0.0
                     END
                   ELSE 0.0 
                 END
-              FROM TMP_HRIS_SYNC t
+              FROM (VALUES 
+${valuesSql}
+              ) AS v(NIK, Tanggal, WorkIn, WorkOut, CalcJamKerja)
               WHERE NOT EXISTS (
-                SELECT 1 FROM TR_ABSEN a 
-                WHERE RTRIM(a.EMP_CD) = RTRIM(t.NIK) 
-                  AND CONVERT(varchar(10), a.DATE_TRANS, 120) = t.Tanggal
+                SELECT 1 FROM TR_ABSEN a WITH (NOLOCK)
+                WHERE a.DATE_TRANS >= CAST(@startDate AS DATETIME) 
+                  AND a.DATE_TRANS < DATEADD(day, 1, CAST(@endDate AS DATETIME))
+                  AND RTRIM(a.EMP_CD) = RTRIM(v.NIK) 
+                  AND a.DATE_TRANS = CAST(v.Tanggal AS DATETIME)
               );
-            `);
-
-            // 4b. JAMINAN MUTLAK: Pastikan STATUS_HARI, SHIFT, dan FLAG_ABSEN TIDAK BOLEH NULL/KOSONG
-            // Hanya mengisi kolom yang masih kosong, TANPA menyentuh jam masuk/pulang hasil koreksi HR!
-            await tx(`
-              UPDATE a
-              SET 
-                a.STATUS_HARI = CASE
-                                  WHEN a.STATUS_HARI IS NOT NULL AND RTRIM(a.STATUS_HARI) IN ('KERJA', 'LIBUR') THEN a.STATUS_HARI
-                                  WHEN DATEPART(dw, a.DATE_TRANS) = 1 THEN 'LIBUR'
-                                  WHEN EXISTS (
-                                    SELECT 1 FROM MS_LIBUR_KERJA l 
-                                    WHERE CONVERT(varchar(10), l.TANGGAL, 120) = CONVERT(varchar(10), a.DATE_TRANS, 120)
-                                  ) THEN 'LIBUR'
-                                  ELSE 'KERJA'
-                                END,
-                a.SHIFT = CASE
-                            WHEN a.SHIFT IS NOT NULL AND RTRIM(a.SHIFT) <> '' THEN a.SHIFT
-                            ELSE '1'
-                          END,
-                a.FLAG_ABSEN = CASE
-                                 WHEN a.FLAG_ABSEN IS NOT NULL AND RTRIM(a.FLAG_ABSEN) <> '' THEN a.FLAG_ABSEN
-                                 ELSE 'M'
-                               END
-              FROM TR_ABSEN a
-              WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS < DATEADD(day, 1, @endDate)
-                AND (
-                  a.STATUS_HARI IS NULL OR RTRIM(a.STATUS_HARI) = ''
-                  OR a.SHIFT IS NULL OR RTRIM(a.SHIFT) = ''
-                  OR a.FLAG_ABSEN IS NULL OR RTRIM(a.FLAG_ABSEN) = ''
-                );
             `, { startDate, endDate });
 
-            // ── FASE 2: Hitung ulang lembur dengan otCalculator (Super Cepat & Akurat) ──
-            sendEvent('progress', { message: 'Mengambil data presensi untuk kalkulasi lembur...', progress: 55 });
-            
-            // Ambil data hari libur resmi dari MS_LIBUR_KERJA
-            const holidayRows = await tx<any>(`
-              SELECT CONVERT(varchar(10), TANGGAL, 120) AS tanggal
-              FROM MS_LIBUR_KERJA WITH (NOLOCK)
-              WHERE TANGGAL >= @startDate AND TANGGAL <= @endDate
-            `, { startDate, endDate });
-            const holidayDates = new Set((holidayRows || []).map((h: any) => h.tanggal));
+            const currentLoaded = Math.min(i + BATCH_SIZE, dsData.length);
+            const pct = 15 + Math.floor((currentLoaded / dsData.length) * 35);
+            sendEvent('progress', { message: `Menyinkronkan data presensi (${currentLoaded}/${dsData.length})...`, progress: pct });
+          }
 
-            const syncedAbsen = await tx<any>(`
-              SELECT a.EMP_CD, CONVERT(varchar(10), a.DATE_TRANS, 120) AS DATE_TRANS, 
-                     a.WORK_IN, a.WORK_OUT, a.STATUS_HARI, a.SHIFT,
-                     e.JOB_CD, j.JOB_DESC, e.SEC_CD, s.SEC_DESC
-              FROM TR_ABSEN a
-              JOIN EMP_TABLE e ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
-              LEFT JOIN MS_JOBS j ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
-              LEFT JOIN MS_SEC s ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
-              WHERE a.DATE_TRANS >= @startDate AND a.DATE_TRANS < DATEADD(day, 1, @endDate)
-                AND a.WORK_IN IS NOT NULL AND a.WORK_OUT IS NOT NULL;
-            `, { startDate, endDate });
+          // ── TAHAP 2: KALKULASI LEMBUR DI MEMORY (DILAKUKAN DI LUAR TRANSAKSI AGAR DATABASE TIDAK TERKUNCI) ──
+          sendEvent('progress', { message: 'Mengambil data presensi untuk kalkulasi lembur...', progress: 52 });
+          
+          const holidayRows = await query<any>(`
+            SELECT CONVERT(varchar(10), TANGGAL, 120) AS tanggal
+            FROM MS_LIBUR_KERJA WITH (NOLOCK)
+            WHERE TANGGAL >= @startDate AND TANGGAL <= @endDate
+          `, { startDate, endDate });
+          const holidayDates = new Set((holidayRows || []).map((h: any) => h.tanggal));
 
-            if (syncedAbsen && syncedAbsen.length > 0) {
-              const otResults = syncedAbsen.map((row: any) => {
-                const security = isSecurityJob(row.JOB_DESC, row.SEC_DESC, row.SHIFT);
-                const dObj = new Date(row.DATE_TRANS + 'T00:00:00');
-                const isSunday = dObj.getDay() === 0;
-                const isRegisteredHoliday = holidayDates.has(row.DATE_TRANS);
-                const isStatusLibur = row.STATUS_HARI === 'LIBUR';
+          const syncedAbsen = await query<any>(`
+            SELECT a.EMP_CD, CONVERT(varchar(10), a.DATE_TRANS, 120) AS DATE_TRANS, 
+                   a.WORK_IN, a.WORK_OUT, a.STATUS_HARI, a.SHIFT,
+                   e.JOB_CD, j.JOB_DESC, e.SEC_CD, s.SEC_DESC
+            FROM TR_ABSEN a WITH (NOLOCK)
+            JOIN EMP_TABLE e WITH (NOLOCK) ON RTRIM(a.EMP_CD) = RTRIM(e.EMP_CD)
+            LEFT JOIN MS_JOBS j WITH (NOLOCK) ON RTRIM(e.JOB_CD) = RTRIM(j.JOB_CD)
+            LEFT JOIN MS_SEC s WITH (NOLOCK) ON RTRIM(e.SEC_CD) = RTRIM(s.SEC_CD)
+            WHERE a.DATE_TRANS >= CAST(@startDate AS DATETIME) AND a.DATE_TRANS < DATEADD(day, 1, CAST(@endDate AS DATETIME))
+              AND a.WORK_IN IS NOT NULL AND a.WORK_OUT IS NOT NULL;
+          `, { startDate, endDate });
 
-                let isHoliday = false;
-                if (isStatusLibur) {
-                  isHoliday = true;
-                } else if (isRegisteredHoliday) {
-                  isHoliday = row.STATUS_HARI !== 'KERJA';
-                } else if (isSunday) {
-                  isHoliday = !security && row.STATUS_HARI !== 'KERJA';
-                }
+          if (syncedAbsen && syncedAbsen.length > 0) {
+            const otResults = syncedAbsen.map((row: any) => {
+              const security = isSecurityJob(row.JOB_DESC, row.SEC_DESC, row.SHIFT);
+              const dObj = new Date(row.DATE_TRANS + 'T00:00:00');
+              const isSunday = dObj.getDay() === 0;
+              const isRegisteredHoliday = holidayDates.has(row.DATE_TRANS);
+              const isStatusLibur = row.STATUS_HARI === 'LIBUR';
 
-                const ot = calculateAttendanceAndOt(
-                  row.DATE_TRANS,
-                  new Date(row.WORK_IN),
-                  new Date(row.WORK_OUT),
-                  row.JOB_DESC || '',
-                  row.SEC_DESC || '',
-                  isHoliday ? 'LIBUR' : 'KERJA',
-                  row.SHIFT || '',
-                  isHoliday
-                );
-                return {
-                  EMP_CD: String(row.EMP_CD).trim(),
-                  DATE_TRANS: row.DATE_TRANS,
-                  OT_1: ot.OT_1 || 0,
-                  OT_2: ot.OT_2 || 0,
-                  OT_3: ot.OT_3 || 0,
-                  OT_4: ot.OT_4 || 0,
-                  T_OT: ot.T_OT || 0,
-                  JAM_KERJA: ot.JAM_KERJA !== null && ot.JAM_KERJA !== undefined ? ot.JAM_KERJA : (isHoliday ? 0 : 8),
-                  STATUS_HARI: isHoliday ? 'LIBUR' : 'KERJA'
-                };
-              });
-
-              const OT_BATCH = 400;
-              for (let i = 0; i < otResults.length; i += OT_BATCH) {
-                const chunk = otResults.slice(i, i + OT_BATCH);
-                const valuesSql = chunk.map(r => {
-                  const pNik = `'${r.EMP_CD.replace(/'/g, "''")}'`;
-                  const pTgl = `'${r.DATE_TRANS}'`;
-                  const pStatus = `'${r.STATUS_HARI}'`;
-                  return `(${pNik}, ${pTgl}, ${r.OT_1}, ${r.OT_2}, ${r.OT_3}, ${r.OT_4}, ${r.T_OT}, ${r.JAM_KERJA}, ${pStatus})`;
-                }).join(',\n');
-
-                await tx(`INSERT INTO TMP_HRIS_OT (EMP_CD, DATE_TRANS, OT_1, OT_2, OT_3, OT_4, T_OT, JAM_KERJA, STATUS_HARI) VALUES\n${valuesSql};`);
-
-                const currentOt = Math.min(i + OT_BATCH, otResults.length);
-                const pct = 55 + Math.floor((currentOt / otResults.length) * 35);
-                sendEvent('progress', { message: `Menghitung ulang jam lembur (${currentOt}/${otResults.length})...`, progress: pct });
+              let isHoliday = false;
+              if (isStatusLibur) {
+                isHoliday = true;
+              } else if (isRegisteredHoliday) {
+                isHoliday = row.STATUS_HARI !== 'KERJA';
+              } else if (isSunday) {
+                isHoliday = !security && row.STATUS_HARI !== 'KERJA';
               }
 
-              // Set-Based UPDATE Overtime langsung ke TR_ABSEN
-              await tx(`
+              const ot = calculateAttendanceAndOt(
+                row.DATE_TRANS,
+                new Date(row.WORK_IN),
+                new Date(row.WORK_OUT),
+                row.JOB_DESC || '',
+                row.SEC_DESC || '',
+                isHoliday ? 'LIBUR' : 'KERJA',
+                row.SHIFT || '',
+                isHoliday
+              );
+              return {
+                EMP_CD: String(row.EMP_CD).trim(),
+                DATE_TRANS: row.DATE_TRANS,
+                OT_1: ot.OT_1 || 0,
+                OT_2: ot.OT_2 || 0,
+                OT_3: ot.OT_3 || 0,
+                OT_4: ot.OT_4 || 0,
+                T_OT: ot.T_OT || 0,
+                JAM_KERJA: ot.JAM_KERJA !== null && ot.JAM_KERJA !== undefined ? ot.JAM_KERJA : (isHoliday ? 0 : 8),
+                STATUS_HARI: isHoliday ? 'LIBUR' : 'KERJA'
+              };
+            });
+
+            // ── TAHAP 3: INTEGRASI LEMBUR KE TR_ABSEN (DIRECT SET-BASED UPDATE TANPA STAGING TABLE) ──
+            const OT_BATCH = 800;
+            for (let i = 0; i < otResults.length; i += OT_BATCH) {
+              const chunk = otResults.slice(i, i + OT_BATCH);
+              const valuesSql = chunk.map(r => {
+                const pNik = `'${r.EMP_CD.replace(/'/g, "''")}'`;
+                const pTgl = `'${r.DATE_TRANS}'`;
+                const pStatus = `'${r.STATUS_HARI}'`;
+                return `(${pNik}, ${pTgl}, ${r.OT_1}, ${r.OT_2}, ${r.OT_3}, ${r.OT_4}, ${r.T_OT}, ${r.JAM_KERJA}, ${pStatus})`;
+              }).join(',\n');
+
+              await query(`
                 UPDATE a
                 SET 
-                  a.OT_1 = o.OT_1,
-                  a.OT_2 = o.OT_2,
-                  a.OT_3 = o.OT_3,
-                  a.OT_4 = o.OT_4,
-                  a.T_OT = o.T_OT,
-                  a.JAM_KERJA = o.JAM_KERJA,
-                  a.STATUS_HARI = o.STATUS_HARI
+                  a.OT_1 = v.OT_1,
+                  a.OT_2 = v.OT_2,
+                  a.OT_3 = v.OT_3,
+                  a.OT_4 = v.OT_4,
+                  a.T_OT = v.T_OT,
+                  a.JAM_KERJA = v.JAM_KERJA,
+                  a.STATUS_HARI = v.STATUS_HARI
                 FROM TR_ABSEN a
-                JOIN TMP_HRIS_OT o ON RTRIM(a.EMP_CD) = RTRIM(o.EMP_CD) AND CONVERT(varchar(10), a.DATE_TRANS, 120) = o.DATE_TRANS;
-              `);
+                JOIN (VALUES 
+${valuesSql}
+                ) AS v(EMP_CD, DATE_TRANS, OT_1, OT_2, OT_3, OT_4, T_OT, JAM_KERJA, STATUS_HARI)
+                  ON RTRIM(a.EMP_CD) = RTRIM(v.EMP_CD) AND a.DATE_TRANS = CAST(v.DATE_TRANS AS DATETIME)
+                WHERE a.DATE_TRANS >= CAST(@startDate AS DATETIME) AND a.DATE_TRANS < DATEADD(day, 1, CAST(@endDate AS DATETIME))
+                  AND (
+                    ISNULL(a.OT_1, 0) <> v.OT_1 
+                    OR ISNULL(a.OT_2, 0) <> v.OT_2 
+                    OR ISNULL(a.OT_3, 0) <> v.OT_3 
+                    OR ISNULL(a.OT_4, 0) <> v.OT_4 
+                    OR ISNULL(a.T_OT, 0) <> v.T_OT 
+                    OR ISNULL(a.JAM_KERJA, 0) <> v.JAM_KERJA 
+                    OR ISNULL(a.STATUS_HARI, '') <> v.STATUS_HARI
+                  );
+              `, { startDate, endDate });
+
+              const currentOt = Math.min(i + OT_BATCH, otResults.length);
+              const pct = 55 + Math.floor((currentOt / otResults.length) * 40);
+              sendEvent('progress', { message: `Menyimpan data lembur (${currentOt}/${otResults.length})...`, progress: pct });
             }
 
-            // 5. Bersihkan data lembur anomali di hari tanpa tap (Safety Cleanup untuk seluruh tanggal rentang)
-            await tx(`
+            // Bersihkan data lembur anomali di hari tanpa tap (Safety Cleanup)
+            await query(`
               UPDATE TR_ABSEN
               SET OT_1 = 0, OT_2 = 0, OT_3 = 0, OT_4 = 0, T_OT = 0, JAM_KERJA = 0
-              WHERE DATE_TRANS >= @startDate AND DATE_TRANS < DATEADD(day, 1, @endDate)
-                AND (WORK_IN IS NULL OR RTRIM(CONVERT(varchar(19), WORK_IN, 120)) = '') 
-                AND (WORK_OUT IS NULL OR RTRIM(CONVERT(varchar(19), WORK_OUT, 120)) = '')
-                AND (REASON IS NULL OR RTRIM(REASON) = '');
+              WHERE DATE_TRANS >= CAST(@startDate AS DATETIME) AND DATE_TRANS < DATEADD(day, 1, CAST(@endDate AS DATETIME))
+                AND WORK_IN IS NULL
+                AND WORK_OUT IS NULL
+                AND (REASON IS NULL OR RTRIM(REASON) = '')
+                AND (ISNULL(OT_1, 0) <> 0 OR ISNULL(OT_2, 0) <> 0 OR ISNULL(OT_3, 0) <> 0 OR ISNULL(OT_4, 0) <> 0 OR ISNULL(T_OT, 0) <> 0);
             `, { startDate, endDate });
-          });
+          } else {
+            // Jika tidak ada data tap sama sekali, tetap jalankan safety cleanup
+            await query(`
+              UPDATE TR_ABSEN
+              SET OT_1 = 0, OT_2 = 0, OT_3 = 0, OT_4 = 0, T_OT = 0, JAM_KERJA = 0
+              WHERE DATE_TRANS >= CAST(@startDate AS DATETIME) AND DATE_TRANS < DATEADD(day, 1, CAST(@endDate AS DATETIME))
+                AND WORK_IN IS NULL
+                AND WORK_OUT IS NULL
+                AND (REASON IS NULL OR RTRIM(REASON) = '')
+                AND (ISNULL(OT_1, 0) <> 0 OR ISNULL(OT_2, 0) <> 0 OR ISNULL(OT_3, 0) <> 0 OR ISNULL(OT_4, 0) <> 0 OR ISNULL(T_OT, 0) <> 0);
+            `, { startDate, endDate });
+          }
 
           if (fallbackLogs.length > 0) {
             logSyncFallback(`Sync range ${startDate} to ${endDate}: ${fallbackLogs.length} fallbacks triggered.`);
@@ -504,6 +464,7 @@ export async function POST(request: Request) {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no',
       },
     });
   } catch (error: any) {

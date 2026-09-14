@@ -30,19 +30,22 @@ const workstationId = (process.env.DB_WORKSTATION_ID || 'TMNB-D101-NILA').replac
 
 const sqlConfig: any = {
   server: serverHost,
+  port: parseInt(process.env.DB_PORT || '1433', 10),
   database: process.env.DB_NAME,
   pool: {
     max: 10,
     min: 0,
     idleTimeoutMillis: 30000
   },
+  connectionTimeout: 30000,
   requestTimeout: 120000,
   options: {
     useUTC: false,
     encrypt: false,
     trustServerCertificate: true,
     appName: appName,
-    workstationId: workstationId
+    workstationId: workstationId,
+    connectTimeout: 30000
   }
 };
 
@@ -102,11 +105,17 @@ export async function getDbConnection() {
 
   if (!poolPromise) {
     console.log('Connecting to SQL Server at', sqlConfig.server, '(Fresh Pool Init)');
-    poolPromise = new sql.ConnectionPool(sqlConfig)
+    const pool = new sql.ConnectionPool(sqlConfig);
+    pool.on('error', (err: any) => {
+      console.error('SQL Server pool error:', err?.message || err);
+      poolPromise = null;
+    });
+
+    poolPromise = pool
       .connect()
-      .then((pool: any) => {
+      .then((p: any) => {
         console.log('Connected to SQL Server successfully');
-        return pool;
+        return p;
       })
       .catch((err: any) => {
         console.error('Database Connection Failed! Bad Config: ', err);
@@ -118,17 +127,24 @@ export async function getDbConnection() {
 }
 
 export async function query<T>(queryString: string, params?: Record<string, any>): Promise<T[]> {
-  const pool = await getDbConnection();
-  const request = pool.request();
+  try {
+    const pool = await getDbConnection();
+    const request = pool.request();
 
-  if (params) {
-    Object.entries(params).forEach(([key, value]) => {
-      request.input(key, value);
-    });
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        request.input(key, value);
+      });
+    }
+
+    const result = await request.query(queryString);
+    return result.recordset as T[];
+  } catch (err: any) {
+    if (err?.code === 'ECONNRESET' || err?.code === 'EPIPE' || err?.code === 'ETIMEDOUT' || err?.code === 'EINVALIDSTATE' || err?.name === 'ConnectionError') {
+      poolPromise = null;
+    }
+    throw err;
   }
-
-  const result = await request.query(queryString);
-  return result.recordset as T[];
 }
 
 /**
@@ -178,7 +194,10 @@ export async function withTransaction<T>(
     await transaction.commit();
     committed = true;
     return output;
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.code === 'ECONNRESET' || err?.code === 'EPIPE' || err?.code === 'ETIMEDOUT') {
+      poolPromise = null;
+    }
     if (!committed) {
       try {
         await transaction.rollback();

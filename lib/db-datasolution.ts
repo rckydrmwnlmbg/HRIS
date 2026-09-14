@@ -28,19 +28,22 @@ const dsWorkstationId = (process.env.DS_DB_WORKSTATION_ID || process.env.DB_WORK
 
 const sqlConfig: any = {
   server: serverHost,
+  port: parseInt(process.env.DS_DB_PORT || '1433', 10),
   database: process.env.DS_DB_NAME || 'DataSolution',
   pool: {
     max: 10,
     min: 0,
     idleTimeoutMillis: 30000
   },
+  connectionTimeout: 30000,
   requestTimeout: 120000,
   options: {
     useUTC: false,
     encrypt: false,
     trustServerCertificate: true,
     appName: dsAppName,
-    workstationId: dsWorkstationId
+    workstationId: dsWorkstationId,
+    connectTimeout: 30000
   }
 };
 
@@ -81,11 +84,17 @@ export async function getDsDbConnection() {
 
   if (!dsPoolPromise) {
     console.log('Connecting to DataSolution SQL Server at', sqlConfig.server);
-    dsPoolPromise = new sql.ConnectionPool(sqlConfig)
+    const pool = new sql.ConnectionPool(sqlConfig);
+    pool.on('error', (err: any) => {
+      console.error('DataSolution SQL Server pool error:', err?.message || err);
+      dsPoolPromise = null;
+    });
+
+    dsPoolPromise = pool
       .connect()
-      .then((pool: any) => {
+      .then((p: any) => {
         console.log('Connected to DataSolution SQL Server successfully');
-        return pool;
+        return p;
       })
       .catch((err: any) => {
         console.error('DataSolution Database Connection Failed! Bad Config: ', err);

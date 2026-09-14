@@ -320,7 +320,8 @@ function AbsensiContent() {
                   if (selectedEmp) loadAbsensi(selectedEmp.EMP_CD, bulan, tahun);
                 }, 1500);
               } else if (data.type === 'error') {
-                showToast(data.message || 'Gagal sinkronisasi', 'warning');
+                showToast(data.error || data.message || 'Gagal sinkronisasi', 'warning');
+                setSyncModalOpen(false);
               }
             } catch (e) {}
           }
