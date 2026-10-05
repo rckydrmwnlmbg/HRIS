@@ -29,16 +29,11 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [trend, setTrend] = useState<TrendAbsensi[]>([]);
   const [jamKosong, setJamKosong] = useState<JamKosongRecord[]>([]);
   const [perluPerhatian, setPerluPerhatian] = useState<PerluPerhatianRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [showJamKosongModal, setShowJamKosongModal] = useState(false);
   const [showPerluPerhatianModal, setShowPerluPerhatianModal] = useState(false);
-
-  const [trendLoading, setTrendLoading] = useState(true);
-
-
 
   const loadDashboard = async () => {
     try {
@@ -75,24 +70,8 @@ export default function DashboardPage() {
     }
   };
 
-  const loadTrend = async () => {
-    try {
-      const res = await fetch('/api/dashboard/trend');
-      if (res.ok) {
-        const data = await res.json();
-        setTrend(data || []);
-      }
-    } catch (err) {
-      console.error('Failed to load dashboard trend', err);
-      setTrend([]);
-    } finally {
-      setTrendLoading(false);
-    }
-  };
-
   useEffect(() => {
     loadDashboard();
-    loadTrend();
   }, []);
 
   const now = new Date();

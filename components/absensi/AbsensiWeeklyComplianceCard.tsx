@@ -55,15 +55,22 @@ function MarqueeBadge({
   const [marqueeOffset, setMarqueeOffset] = React.useState<number>(0);
 
   React.useEffect(() => {
-    if (containerRef.current && textRef.current) {
-      const containerW = containerRef.current.clientWidth - 16; // minus padding 8px * 2
-      const textW = textRef.current.scrollWidth;
-      if (textW > containerW) {
-        setMarqueeOffset(containerW - textW);
-      } else {
-        setMarqueeOffset(0);
-      }
+    if (typeof text === 'string' && text.length <= 10) {
+      if (marqueeOffset !== 0) setMarqueeOffset(0);
+      return;
     }
+    const rafId = requestAnimationFrame(() => {
+      if (containerRef.current && textRef.current) {
+        const containerW = containerRef.current.clientWidth - 16; // minus padding 8px * 2
+        const textW = textRef.current.scrollWidth;
+        if (textW > containerW) {
+          setMarqueeOffset(containerW - textW);
+        } else if (marqueeOffset !== 0) {
+          setMarqueeOffset(0);
+        }
+      }
+    });
+    return () => cancelAnimationFrame(rafId);
   }, [text]);
 
   const isMarquee = marqueeOffset < 0;

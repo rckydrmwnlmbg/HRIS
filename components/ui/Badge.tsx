@@ -1,5 +1,5 @@
 'use client';
-import React, { ReactNode, useRef, useState, useEffect } from 'react';
+import React, { ReactNode, useRef, useState, useEffect, memo } from 'react';
 
 export type BadgeVariant =
   | 'hadir'
@@ -35,7 +35,7 @@ export interface BadgeProps {
   height?: number | string;
 }
 
-export function Badge({
+export const Badge = memo(function Badge({
   variant = 'gray',
   size = 'md',
   children,
@@ -57,29 +57,36 @@ export function Badge({
   const [marqueeOffset, setMarqueeOffset] = useState<number>(0);
 
   const textContent = typeof content === 'string' ? content : undefined;
+  const isShortText = typeof content === 'string' && content.length <= 14;
 
   useEffect(() => {
+    // Skip expensive forced layout calculation for short strings that never overflow
+    if (isShortText) {
+      if (marqueeOffset !== 0) setMarqueeOffset(0);
+      return;
+    }
+
+    let rafId: number;
     const measure = () => {
       if (textContainerRef.current && textRef.current) {
         const availableW = textContainerRef.current.clientWidth;
         const textW = textRef.current.scrollWidth;
         if (textW > availableW && availableW > 0) {
-          setMarqueeOffset(availableW - textW - 2);
-        } else {
+          const diff = availableW - textW - 2;
+          setMarqueeOffset(prev => (prev !== diff ? diff : prev));
+        } else if (marqueeOffset !== 0) {
           setMarqueeOffset(0);
         }
       }
     };
 
-    measure();
-    const raf = requestAnimationFrame(measure);
-    const timer = setTimeout(measure, 150);
+    // Single requestAnimationFrame avoids blocking synchronous render pipeline
+    rafId = requestAnimationFrame(measure);
 
     return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(timer);
+      if (rafId) cancelAnimationFrame(rafId);
     };
-  }, [content, maxWidth, minWidth, width]);
+  }, [content, maxWidth, minWidth, width, isShortText]);
 
   const isMarquee = marqueeOffset < 0;
 
@@ -127,6 +134,7 @@ export function Badge({
         style={{
           display: 'inline-block',
           overflow: 'hidden',
+          textOverflow: isMarquee ? 'clip' : 'ellipsis',
           flex: 1,
           minWidth: 0,
           textAlign: isMarquee ? 'left' : 'center',
@@ -148,8 +156,8 @@ export function Badge({
       </span>
     </span>
   );
-}
+});
 
-export function MarqueeBadge(props: BadgeProps) {
+export const MarqueeBadge = memo(function MarqueeBadge(props: BadgeProps) {
   return <Badge {...props} />;
-}
+});
