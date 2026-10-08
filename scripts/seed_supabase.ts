@@ -281,6 +281,20 @@ export async function generateAllData() {
     const city = randomChoice(CITIES);
     const bsSlr = isAllIn ? randomInt(7500000, 15000000) : randomInt(5000000, 6500000);
 
+    // Tanggal selesai probation (3 bulan setelah tanggal masuk)
+    const entryDateObj = new Date(dtEntry + 'T00:00:00');
+    entryDateObj.setMonth(entryDateObj.getMonth() + 3);
+    const dtProb = formatDate(entryDateObj);
+
+    // Nomor rekening bank (BCA / Mandiri / BNI)
+    const bankPrefix = randomChoice(['5390', '1370', '0812', '7120']);
+    const accNo = `${bankPrefix}${randomInt(100000, 999999)}`;
+
+    // Nomor registrasi dan SPSI
+    const noReg = `REG-2026-${String(empCd).slice(-4)}`;
+    const spsiNo = isAllIn ? '-' : `SPSI-TP-${randomInt(1000, 9999)}`;
+    const statusPekerjaan = isAllIn ? 'Karyawan Tetap (Manajerial)' : (empCd.endsWith('1') ? 'Karyawan Tetap' : 'Karyawan Kontrak PKWT');
+
     employees.push({
       EMP_CD: empCd,
       EMP_NM: name,
@@ -292,6 +306,7 @@ export async function generateAllData() {
       Act_NonAct: actNonAct,
       DT_ENTRY: dtEntry,
       DT_RSG: dtRsg,
+      DT_PROB: dtProb,
       DT_BRT: dtBrt,
       PLC_BRT: city,
       ADRR: `Jl. Raya ${city} No. ${randomInt(10, 150)} RT ${randomInt(1, 9)}/RW ${randomInt(1, 5)}`,
@@ -302,6 +317,10 @@ export async function generateAllData() {
       noktp: `317${randomInt(1000000000000, 9999999999999)}`,
       NPWP: `0${randomInt(10, 99)}.${randomInt(100, 999)}.${randomInt(100, 999)}.${randomInt(1, 9)}-${randomInt(100, 999)}.000`,
       PTKP_ST: isFemale ? 'TK/0' : (i % 2 === 0 ? 'K/1' : 'TK/0'),
+      ACC_NO: accNo,
+      SPSI_NO: spsiNo,
+      No_Reg: noReg,
+      Status_Pekerjaan: statusPekerjaan,
       ALL_IN: isAllIn ? '1' : '0',
       FLAG_OT: isAllIn ? '0' : '1',
       BS_SLR: bsSlr,
@@ -654,14 +673,17 @@ async function runDirectSeed(dbUrl: string) {
       await client.query(
         `INSERT INTO EMP_TABLE (
           EMP_CD, EMP_NM, DEP_CD, SEC_CD, JOB_CD, DIV_CD, JNS_KRY, Act_NonAct,
-          DT_ENTRY, DT_RSG, DT_BRT, PLC_BRT, ADRR, CT, SX, agama, telepon, noktp, NPWP, PTKP_ST, ALL_IN, BS_SLR
+          DT_ENTRY, DT_RSG, DT_PROB, DT_BRT, PLC_BRT, ADRR, CT, SX, agama, telepon, noktp, NPWP, PTKP_ST,
+          ACC_NO, SPSI_NO, No_Reg, Status_Pekerjaan, ALL_IN, FLAG_OT, BS_SLR
         ) VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
         ) ON CONFLICT (EMP_CD) DO UPDATE SET
-          EMP_NM = EXCLUDED.EMP_NM, SEC_CD = EXCLUDED.SEC_CD, JOB_CD = EXCLUDED.JOB_CD, Act_NonAct = EXCLUDED.Act_NonAct`,
+          EMP_NM = EXCLUDED.EMP_NM, SEC_CD = EXCLUDED.SEC_CD, JOB_CD = EXCLUDED.JOB_CD, Act_NonAct = EXCLUDED.Act_NonAct,
+          ACC_NO = EXCLUDED.ACC_NO, SPSI_NO = EXCLUDED.SPSI_NO, No_Reg = EXCLUDED.No_Reg, Status_Pekerjaan = EXCLUDED.Status_Pekerjaan`,
         [
           e.EMP_CD, e.EMP_NM, e.DEP_CD, e.SEC_CD, e.JOB_CD, e.DIV_CD, e.JNS_KRY, e.Act_NonAct,
-          e.DT_ENTRY, e.DT_RSG, e.DT_BRT, e.PLC_BRT, e.ADRR, e.CT, e.SX, e.agama, e.telepon, e.noktp, e.NPWP, e.PTKP_ST, e.ALL_IN, e.BS_SLR
+          e.DT_ENTRY, e.DT_RSG, e.DT_PROB, e.DT_BRT, e.PLC_BRT, e.ADRR, e.CT, e.SX, e.agama, e.telepon, e.noktp, e.NPWP, e.PTKP_ST,
+          e.ACC_NO, e.SPSI_NO, e.No_Reg, e.Status_Pekerjaan, e.ALL_IN, e.FLAG_OT, e.BS_SLR
         ]
       );
     }

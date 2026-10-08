@@ -70,12 +70,15 @@ async function exportSql() {
   const chunkSizeEmp = 50;
   for (let i = 0; i < data.employees.length; i += chunkSizeEmp) {
     const chunk = data.employees.slice(i, i + chunkSizeEmp);
-    stream.write('INSERT INTO EMP_TABLE (EMP_CD, EMP_NM, DEP_CD, SEC_CD, JOB_CD, DIV_CD, JNS_KRY, Act_NonAct, DT_ENTRY, DT_RSG, DT_BRT, PLC_BRT, ADRR, CT, SX, agama, telepon, noktp, NPWP, PTKP_ST, ALL_IN, BS_SLR) VALUES\n');
-    const rowsSql = chunk.map((e, idx) => {
+    stream.write('INSERT INTO EMP_TABLE (EMP_CD, EMP_NM, DEP_CD, SEC_CD, JOB_CD, DIV_CD, JNS_KRY, Act_NonAct, DT_ENTRY, DT_RSG, DT_PROB, DT_BRT, PLC_BRT, ADRR, CT, SX, agama, telepon, noktp, NPWP, PTKP_ST, ACC_NO, SPSI_NO, No_Reg, Status_Pekerjaan, ALL_IN, FLAG_OT, BS_SLR) VALUES\n');
+    const rowsSql = chunk.map((e) => {
       const rsgVal = e.DT_RSG ? `'${e.DT_RSG}'` : 'NULL';
+      const probVal = e.DT_PROB ? `'${e.DT_PROB}'` : 'NULL';
       const adrrEsc = e.ADRR.replace(/'/g, "''");
       const nameEsc = e.EMP_NM.replace(/'/g, "''");
-      return `  ('${e.EMP_CD}', '${nameEsc}', '${e.DEP_CD}', '${e.SEC_CD}', '${e.JOB_CD}', '${e.DIV_CD}', '${e.JNS_KRY}', ${e.Act_NonAct ? 'TRUE' : 'FALSE'}, '${e.DT_ENTRY}', ${rsgVal}, '${e.DT_BRT}', '${e.PLC_BRT}', '${adrrEsc}', '${e.CT}', '${e.SX}', '${e.agama}', '${e.telepon}', '${e.noktp}', '${e.NPWP}', '${e.PTKP_ST}', '${e.ALL_IN}', ${e.BS_SLR})`;
+      const spsiEsc = e.SPSI_NO.replace(/'/g, "''");
+      const statusPekerjaanEsc = e.Status_Pekerjaan.replace(/'/g, "''");
+      return `  ('${e.EMP_CD}', '${nameEsc}', '${e.DEP_CD}', '${e.SEC_CD}', '${e.JOB_CD}', '${e.DIV_CD}', '${e.JNS_KRY}', ${e.Act_NonAct ? 'TRUE' : 'FALSE'}, '${e.DT_ENTRY}', ${rsgVal}, ${probVal}, '${e.DT_BRT}', '${e.PLC_BRT}', '${adrrEsc}', '${e.CT}', '${e.SX}', '${e.agama}', '${e.telepon}', '${e.noktp}', '${e.NPWP}', '${e.PTKP_ST}', '${e.ACC_NO}', '${spsiEsc}', '${e.No_Reg}', '${statusPekerjaanEsc}', '${e.ALL_IN}', '${e.FLAG_OT}', ${e.BS_SLR})`;
     });
     stream.write(rowsSql.join(',\n') + '\nON CONFLICT (EMP_CD) DO NOTHING;\n\n');
   }
