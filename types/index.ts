@@ -1,4 +1,4 @@
-// TypeScript types untuk seluruh aplikasi HRIS TMNB
+// TypeScript types untuk seluruh aplikasi HRIS
 
 export interface Karyawan {
   EMP_CD: string;

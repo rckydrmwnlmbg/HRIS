@@ -128,7 +128,7 @@ const translations = {
     profilPengguna: 'Informasi Profil Pengguna',
 
     // Auth
-    loginTitle: 'HRIS TMNB',
+    loginTitle: 'HRIS',
     loginSubtitle: 'Sistem Manajemen Sumber Daya Manusia Terintegrasi',
     username: 'Username',
     password: 'Password',
@@ -273,7 +273,7 @@ const translations = {
     temaDarkMode: 'Dark Mode Theme',
     profilPengguna: 'User Profile Details',
 
-    loginTitle: 'HRIS TMNB',
+    loginTitle: 'HRIS',
     loginSubtitle: 'Integrated Human Resource Management System',
     username: 'Username',
     password: 'Password',

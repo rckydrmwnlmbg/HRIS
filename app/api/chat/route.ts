@@ -47,7 +47,7 @@ TR_SPL_PLAN(DATE_TRANS date, LINE_ID varchar(20), JOB_DESC varchar(50), JAM_17_O
 `;
 
 const APP_KNOWLEDGE = `
-PENGETAHUAN LENGKAP SISTEM HRIS TMNB (PT TP Trading Jakarta):
+PENGETAHUAN LENGKAP SISTEM HRIS (PT TP Trading Jakarta):
 
 1. ATURAN KRUSIAL STATUS KARYAWAN AKTIF:
 - Total baris di EMP_TABLE ada 9.285 karyawan (termasuk riwayat lama).
@@ -113,8 +113,8 @@ PENGETAHUAN LENGKAP SISTEM HRIS TMNB (PT TP Trading Jakarta):
 - Cuti Haid: RTRIM(a.REASON) = '17' (1-2 hari)
 - Shift Security: Memiliki kode spesifik (1=07:00-16:00, 2S=11:30-20:30, 3S=15:00-24:00, 4S=23:00-08:00). Shift malam dihitung lintas tanggal sebagai satu hari kerja valid. Pada hari normal, kerja=8 jam dan OT=0. Pada hari libur (non-weekend), kerja=0 dan OT = total durasi aktual dikurangi 1 jam istirahat. Untuk akhir pekan (Sabtu/Minggu), Security dihitung sebagai hari KERJA NORMAL, bukan libur.
 - PENTING UNTUK ABSENSI: Jika WORK_IN atau WORK_OUT memiliki tahun 2153, timestamp tersebut dianggap rusak (invalid) dan tidak boleh dihitung durasi atau jam kerjanya. Pasangan absen terbalik yang durasinya pendek juga dianggap invalid (anomali mesin). Koreksi manual oleh user menjadi sumber kebenaran.
-5. STANDAR FORMAT LAPORAN & EKSPOR EXCEL PERUSAHAAN (PT TMNB):
-- Format resmi: Judul Utama 'PT. TMNB — LAPORAN DATA HRIS' (14pt Bold), Subtitle tanggal dan total baris, Header abu-abu formal FFD9D9D9 (10pt Bold), border tipis keliling, dan font Calibri.
+5. STANDAR FORMAT LAPORAN & EKSPOR EXCEL PERUSAHAAN:
+- Format resmi: Judul Utama 'LAPORAN DATA HRIS' (14pt Bold), Subtitle tanggal dan total baris, Header abu-abu formal FFD9D9D9 (10pt Bold), border tipis keliling, dan font Calibri.
 - Tombol Unduh Laporan Lengkap Excel di UI akan secara otomatis mengunduh seluruh baris data dalam format standar resmi ini.
 `;
 
@@ -458,7 +458,7 @@ function validateInput(message: string): string | null {
 
   for (const pattern of INJECTION_PATTERNS) {
     if (pattern.test(message)) {
-      return 'Saya hanya membantu query dan analisis data HRIS TMNB.';
+      return 'Saya hanya membantu query dan analisis data HRIS.';
     }
   }
 
@@ -635,7 +635,7 @@ function synthesizeRowsResponse(userPrompt: string, sql: string, rows: any[] | n
       const formattedVal = typeof val === 'number' ? val.toLocaleString('id-ID') : val;
 
       if (/total.*aktif|jumlah.*aktif|karyawan.*aktif/i.test(p)) {
-        return `Saat ini terdapat total **${formattedVal} karyawan aktif** di sistem HRIS PT TMNB.`;
+        return `Saat ini terdapat total **${formattedVal} karyawan aktif** di sistem HRIS.`;
       }
       if (/hadir|masuk|kehadiran/i.test(p)) {
         return `Tercatat **${formattedVal} karyawan** hadir untuk periode yang diminta.`;
@@ -797,7 +797,7 @@ function buildSystemPrompt(
     ? assistantData.notes.slice(0, 10).map(n => `- ${n.content}`).join('\n')
     : 'Belum ada catatan.';
 
-  return `Kamu adalah Viditii, asisten AI HRIS untuk PT TMNB.
+  return `Kamu adalah Viditii, asisten AI HRIS.
 
 DAFTAR PENGINGAT (REMINDERS) USER SAAT INI:
 ${remindersText}
@@ -906,7 +906,7 @@ CONTOH KASUS:
 Contoh 1 - Jumlah Karyawan Aktif:
 User: "Berapa total karyawan aktif?"
 Jawaban:
-Saat ini terdapat total 1.966 karyawan aktif di PT TMNB (176 karyawan kategori ALL IN dan 1.790 karyawan kategori Harian). Anda dapat melihat rincian per bagian di menu /dashboard atau /karyawan.
+Saat ini terdapat total 1.966 karyawan aktif di sistem HRIS (176 karyawan kategori ALL IN dan 1.790 karyawan kategori Harian). Anda dapat melihat rincian per bagian di menu /dashboard atau /karyawan.
 ${SQL_FENCE}
 SELECT COUNT(*) AS TOTAL_AKTIF
 FROM EMP_TABLE e
@@ -1319,7 +1319,7 @@ WHERE RTRIM(e.EMP_CD) = '${nikMatch[1]}'`;
         const t5 = typeof r.TUNJANGAN_LEMBUR_ALLIN === 'number' ? `Rp ${Math.round(r.TUNJANGAN_LEMBUR_ALLIN).toLocaleString('id-ID')}` : (typeof r.T5 === 'number' ? `Rp ${Math.round(r.T5).toLocaleString('id-ID')}` : 'Rp 0');
         const totalGaji = typeof r.TOTAL_ESTIMASI_GAJI === 'number' ? `Rp ${Math.round(r.TOTAL_ESTIMASI_GAJI).toLocaleString('id-ID')}` : '-';
 
-        cleanText = `Berdasarkan data resmi di sistem HRIS PT TMNB, berikut informasi profil dan rincian gaji untuk karyawan dengan **NIK: ${searchedNik}** (**${nama}**):\n\n` +
+        cleanText = `Berdasarkan data resmi di sistem HRIS, berikut informasi profil dan rincian gaji untuk karyawan dengan **NIK: ${searchedNik}** (**${nama}**):\n\n` +
           `- **Nama Karyawan:** ${nama}\n` +
           `- **NIK:** ${searchedNik}\n` +
           `- **Bagian:** ${bagian}\n` +

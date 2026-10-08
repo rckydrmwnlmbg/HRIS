@@ -104,7 +104,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
             <Shield size={20} />
           </div>
           <div>
-            <div className={styles.brandName}>HRIS TMNB</div>
+            <div className={styles.brandName}>HRIS</div>
             <div className={styles.brandSub}>{lang === 'id' ? 'Manajemen SDM Terintegrasi' : 'Integrated HR Management'}</div>
           </div>
         </div>

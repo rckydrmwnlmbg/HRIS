@@ -1,16 +1,113 @@
-const isLocal = process.env.DB_SERVER === 'localhost' || process.env.DB_SERVER === '.\\SQLEXPRESS';
-let sql: any;
-if (process.env.NODE_ENV === 'development') {
-  try {
-    sql = require('mssql/msnodesqlv8');
-  } catch {
-    sql = require('mssql');
+import { Pool } from 'pg';
+
+const isPostgres = !!(
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL ||
+  process.env.SUPABASE_DB_URL ||
+  process.env.DB_TYPE === 'postgres'
+);
+
+// -----------------------------------------------------------------------------
+// POSTGRESQL / SUPABASE ENGINE
+// -----------------------------------------------------------------------------
+let pgPool: Pool | null = null;
+
+function getPgPool(): Pool {
+  if (!pgPool) {
+    const connectionString =
+      process.env.DATABASE_URL ||
+      process.env.POSTGRES_URL ||
+      process.env.SUPABASE_DB_URL;
+
+    console.log('Connecting to PostgreSQL / Supabase...');
+    pgPool = new Pool({
+      connectionString,
+      ssl: connectionString?.includes('localhost') ? false : { rejectUnauthorized: false },
+      max: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+
+    pgPool.on('error', (err) => {
+      console.error('PostgreSQL Pool Error:', err);
+      pgPool = null;
+    });
   }
-} else {
-  // In production / Vercel, we use pure tedious driver which avoids all native module compilation issues.
-  sql = require('mssql');
+  return pgPool;
 }
 
+function normalizeForPostgres(sqlString: string, params?: Record<string, any>): { text: string; values: any[] } {
+  let text = sqlString;
+  const values: any[] = [];
+
+  // 1. Hapus T-SQL table hints
+  text = text.replace(/WITH\s*\(\s*(NOLOCK|HOLDLOCK)\s*\)/gi, '');
+
+  // 2. Mapping @param ke $1, $2, ...
+  if (params && Object.keys(params).length > 0) {
+    const keys = Object.keys(params).sort((a, b) => b.length - a.length);
+    keys.forEach((key) => {
+      const regex = new RegExp(`@${key}\\b`, 'g');
+      if (regex.test(text)) {
+        values.push(params[key]);
+        const idx = values.length;
+        text = text.replace(regex, `$${idx}`);
+      }
+    });
+  }
+
+  // 3. Konversi format fungsi CONVERT T-SQL ke PostgreSQL
+  text = text.replace(/CONVERT\s*\(\s*varchar\s*\(\s*10\s*\)\s*,\s*([^,]+?)\s*,\s*120\s*\)/gi, "TO_CHAR($1, 'YYYY-MM-DD')");
+  text = text.replace(/CONVERT\s*\(\s*varchar\s*\(\s*19\s*\)\s*,\s*([^,]+?)\s*,\s*120\s*\)/gi, "TO_CHAR($1, 'YYYY-MM-DD HH24:MI:SS')");
+  text = text.replace(/CONVERT\s*\(\s*varchar\s*\(\s*8\s*\)\s*,\s*([^,]+?)\s*,\s*108\s*\)/gi, "TO_CHAR($1, 'HH24:MI:SS')");
+  text = text.replace(/CONVERT\s*\(\s*varchar\s*\(\s*5\s*\)\s*,\s*([^,]+?)\s*,\s*108\s*\)/gi, "TO_CHAR($1, 'HH24:MI')");
+  text = text.replace(/CONVERT\s*\(\s*date\s*,\s*([^)]+?)\s*\)/gi, 'CAST($1 AS date)');
+  text = text.replace(/CONVERT\s*\(\s*varchar\s*\(\s*(\d+)\s*\)\s*,\s*([^)]+?)\s*\)/gi, 'CAST($2 AS varchar($1))');
+
+  // 4. Ubah SELECT TOP n menjadi LIMIT n
+  const topMatch = text.match(/^\s*SELECT\s+TOP\s+(\d+)\s+/i);
+  if (topMatch) {
+    const limitNum = topMatch[1];
+    text = text.replace(/^\s*SELECT\s+TOP\s+\d+\s+/i, 'SELECT ');
+    if (!/LIMIT\s+\d+/i.test(text)) {
+      text = `${text} LIMIT ${limitNum}`;
+    }
+  }
+
+  // 5. Hapus Collation SQL Server jika ada
+  text = text.replace(/COLLATE\s+Latin1_General_CI_AS/gi, '');
+
+  return { text, values };
+}
+
+function normalizeRows<T>(rows: any[]): T[] {
+  if (!rows || !Array.isArray(rows)) return [] as T[];
+  return rows.map((row) => {
+    if (!row || typeof row !== 'object') return row;
+    const obj: any = {};
+    for (const [key, value] of Object.entries(row)) {
+      obj[key] = value;
+      obj[key.toUpperCase()] = value;
+    }
+    return obj;
+  }) as T[];
+}
+
+// -----------------------------------------------------------------------------
+// MSSQL (SQL SERVER) ENGINE (FALLBACK JIKA MENGGUNAKAN MSSQL)
+// -----------------------------------------------------------------------------
+let sql: any;
+if (!isPostgres) {
+  if (process.env.NODE_ENV === 'development') {
+    try {
+      sql = require('mssql/msnodesqlv8');
+    } catch {
+      sql = require('mssql');
+    }
+  } else {
+    sql = require('mssql');
+  }
+}
 
 let serverHost = process.env.DB_SERVER || 'localhost';
 let instanceName = undefined;
@@ -22,7 +119,7 @@ if (serverHost.includes('\\')) {
 }
 
 if (serverHost === '.' || serverHost === '(local)' || serverHost === 'localhost') {
-  serverHost = 'localhost'; // tedious requires 'localhost' instead of '.'
+  serverHost = 'localhost';
 }
 
 const appName = (process.env.DB_APP_NAME || 'Payroll Management Support').replace(/^["']|["']$/g, '');
@@ -35,7 +132,7 @@ const sqlConfig: any = {
   pool: {
     max: 10,
     min: 0,
-    idleTimeoutMillis: 30000
+    idleTimeoutMillis: 30000,
   },
   connectionTimeout: 30000,
   requestTimeout: 120000,
@@ -45,40 +142,21 @@ const sqlConfig: any = {
     trustServerCertificate: true,
     appName: appName,
     workstationId: workstationId,
-    connectTimeout: 30000
-  }
+    connectTimeout: 30000,
+  },
 };
 
 if (instanceName) {
   sqlConfig.options.instanceName = instanceName;
 }
 
-// Tedious requires user and password for SQL Server Auth
 sqlConfig.user = process.env.DB_USER;
 sqlConfig.password = process.env.DB_PASS;
 
-/**
- * Driver msnodesqlv8 (dipakai saat development) berjalan di atas ODBC, dan ODBC WAJIB
- * diberi nama driver secara eksplisit. Konfigurasi objek `server`/`instanceName` saja
- * tidak cukup -- hasilnya error:
- *   [Microsoft][ODBC Driver Manager] Data source name not found and no default driver specified
- *
- * Karena itu untuk development kita bangun connectionString ODBC sendiri. Nama driver
- * bisa diatur lewat DB_ODBC_DRIVER di .env.local; defaultnya ODBC Driver 18.
- *
- * Produksi tetap memakai konfigurasi objek di atas (driver tedious murni), tidak berubah.
- */
-if (process.env.NODE_ENV === 'development') {
+if (!isPostgres && process.env.NODE_ENV === 'development') {
   const odbcDriver = process.env.DB_ODBC_DRIVER || 'ODBC Driver 18 for SQL Server';
-
-  // Nama server untuk ODBC memakai format 'HOST\INSTANCE'.
   const odbcServer = instanceName ? `${serverHost}\\${instanceName}` : serverHost;
-
   let cs = `Driver={${odbcDriver}};Server=${odbcServer};Database=${process.env.DB_NAME};APP=${appName};WSID=${workstationId};`;
-
-  // DB_TRUSTED=1 memaksa Windows Auth. Dipakai di laptop, karena login SQL 'sa'
-  // milik server kantor tidak berlaku di SQLEXPRESS lokal (error 18456 Login failed).
-  // Kalau DB_USER tidak diisi, Windows Auth juga otomatis dipakai.
   const useWindowsAuth = process.env.DB_TRUSTED === '1' || !process.env.DB_USER;
 
   if (useWindowsAuth) {
@@ -87,7 +165,6 @@ if (process.env.NODE_ENV === 'development') {
     cs += `Uid=${process.env.DB_USER};Pwd=${process.env.DB_PASS};`;
   }
 
-  // ODBC Driver 18 default-nya Encrypt=yes dan akan menolak sertifikat self-signed.
   if (odbcDriver.includes('18')) {
     cs += 'Encrypt=no;TrustServerCertificate=yes;';
   }
@@ -95,23 +172,38 @@ if (process.env.NODE_ENV === 'development') {
   sqlConfig.connectionString = cs;
 }
 
-
-let poolPromise: Promise<any> | null = null;
+let mssqlPoolPromise: Promise<any> | null = null;
 
 export async function getDbConnection() {
   if (process.env.DATA_MODE !== 'live') {
     throw new Error('Database connection is only available in live mode');
   }
 
-  if (!poolPromise) {
+  if (isPostgres) {
+    const pool = getPgPool();
+    return {
+      request: () => {
+        return {
+          input: () => {},
+          query: async (q: string) => {
+            const { text, values } = normalizeForPostgres(q);
+            const res = await pool.query(text, values);
+            return { recordset: normalizeRows(res.rows) };
+          },
+        };
+      },
+    };
+  }
+
+  if (!mssqlPoolPromise) {
     console.log('Connecting to SQL Server at', sqlConfig.server, '(Fresh Pool Init)');
     const pool = new sql.ConnectionPool(sqlConfig);
     pool.on('error', (err: any) => {
       console.error('SQL Server pool error:', err?.message || err);
-      poolPromise = null;
+      mssqlPoolPromise = null;
     });
 
-    poolPromise = pool
+    mssqlPoolPromise = pool
       .connect()
       .then((p: any) => {
         console.log('Connected to SQL Server successfully');
@@ -119,15 +211,22 @@ export async function getDbConnection() {
       })
       .catch((err: any) => {
         console.error('Database Connection Failed! Bad Config: ', err);
-        poolPromise = null;
+        mssqlPoolPromise = null;
         throw err;
       });
   }
-  return poolPromise;
+  return mssqlPoolPromise;
 }
 
 export async function query<T>(queryString: string, params?: Record<string, any>): Promise<T[]> {
   try {
+    if (isPostgres) {
+      const pool = getPgPool();
+      const { text, values } = normalizeForPostgres(queryString, params);
+      const res = await pool.query(text, values);
+      return normalizeRows<T>(res.rows);
+    }
+
     const pool = await getDbConnection();
     const request = pool.request();
 
@@ -140,44 +239,49 @@ export async function query<T>(queryString: string, params?: Record<string, any>
     const result = await request.query(queryString);
     return result.recordset as T[];
   } catch (err: any) {
-    if (err?.code === 'ECONNRESET' || err?.code === 'EPIPE' || err?.code === 'ETIMEDOUT' || err?.code === 'EINVALIDSTATE' || err?.name === 'ConnectionError') {
-      poolPromise = null;
+    if (
+      err?.code === 'ECONNRESET' ||
+      err?.code === 'EPIPE' ||
+      err?.code === 'ETIMEDOUT' ||
+      err?.code === 'EINVALIDSTATE' ||
+      err?.name === 'ConnectionError'
+    ) {
+      mssqlPoolPromise = null;
+      pgPool = null;
     }
     throw err;
   }
 }
 
-/**
- * Menjalankan beberapa statement dalam SATU transaksi (BEGIN TRAN / COMMIT).
- *
- * Kenapa perlu: `query()` di atas menjalankan tiap statement berdiri sendiri.
- * Kalau proses multi-langkah gagal di tengah (misal tblCUTI sudah masuk tapi
- * tbldetcuti belum), data tertinggal setengah jadi tanpa cara otomatis
- * membatalkannya. Helper ini rollback semuanya kalau ada yang gagal.
- *
- * Dipakai BERSAMA `query()`, bukan menggantikannya, supaya endpoint lain
- * yang sudah stabil tidak terpengaruh.
- *
- * Contoh:
- *   await withTransaction(async (tx) => {
- *     await tx('INSERT INTO ... VALUES (@a)', { a: 1 });
- *     await tx('UPDATE ... WHERE x = @b', { b: 2 });
- *   });
- *
- * Callback menerima fungsi `tx(sqlString, params)` yang selalu memakai
- * parameterized input, sehingga tidak ada interpolasi string ke SQL.
- */
 export async function withTransaction<T>(
   fn: (tx: <R>(sqlString: string, params?: Record<string, any>) => Promise<R[]>) => Promise<T>
 ): Promise<T> {
+  if (isPostgres) {
+    const pool = getPgPool();
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const tx = async <R>(sqlString: string, params?: Record<string, any>): Promise<R[]> => {
+        const { text, values } = normalizeForPostgres(sqlString, params);
+        const res = await client.query(text, values);
+        return normalizeRows<R>(res.rows);
+      };
+      const output = await fn(tx);
+      await client.query('COMMIT');
+      return output;
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   const pool = await getDbConnection();
   const transaction = new sql.Transaction(pool);
-
   await transaction.begin();
 
-  // Penanda supaya tidak mencoba rollback dua kali kalau commit sendiri yang gagal.
   let committed = false;
-
   const tx = async <R>(sqlString: string, params?: Record<string, any>): Promise<R[]> => {
     const request = new sql.Request(transaction);
     if (params) {
@@ -196,14 +300,12 @@ export async function withTransaction<T>(
     return output;
   } catch (err: any) {
     if (err?.code === 'ECONNRESET' || err?.code === 'EPIPE' || err?.code === 'ETIMEDOUT') {
-      poolPromise = null;
+      mssqlPoolPromise = null;
     }
     if (!committed) {
       try {
         await transaction.rollback();
       } catch (rollbackErr) {
-        // Rollback bisa gagal kalau koneksi sudah putus. Error aslinya lebih
-        // penting untuk dilaporkan, jadi kegagalan rollback hanya dicatat.
         console.error('Rollback gagal:', rollbackErr);
       }
     }

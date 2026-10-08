@@ -29,7 +29,7 @@ export default function MobileHeader({ onMenuClick }: MobileHeaderProps) {
             <Shield size={16} />
           </div>
           <div className={styles.brandText}>
-            HRIS <span className={styles.brandHighlight}>TMNB</span>
+            HRIS
           </div>
         </Link>
       </div>

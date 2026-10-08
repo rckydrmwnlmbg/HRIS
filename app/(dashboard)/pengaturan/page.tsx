@@ -92,7 +92,7 @@ export default function PengaturanPage() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {[
-              { label: lang === 'id' ? 'Nama Aplikasi' : 'Application Name', value: 'HRIS TMNB' },
+              { label: lang === 'id' ? 'Nama Aplikasi' : 'Application Name', value: 'HRIS' },
               { label: lang === 'id' ? 'Versi' : 'Version', value: '2.0.0' },
               { label: lang === 'id' ? 'Teknologi' : 'Framework', value: 'Next.js 14' },
               { label: lang === 'id' ? 'Penyimpanan Data' : 'Data Storage', value: 'Microsoft SQL Server' },
