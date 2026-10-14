@@ -1,4 +1,10 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HRIS (Human Resource Information System)
+
+Aplikasi manajemen HRIS & Presensi berbasis Next.js dengan dukungan multi-database (PostgreSQL / Supabase & Microsoft SQL Server).
+
+## Panduan Cepat & Data Dummy
+- **Panduan Penggunaan Data Dummy Supabase**: Lihat [`docs/PANDUAN_DATA_DUMMY.md`](docs/PANDUAN_DATA_DUMMY.md) untuk setup 500 karyawan & 79.000 transaksi presensi.
+- **Konfigurasi Environment**: Salin template `.env.example` ke `.env.local` dan tentukan string koneksi database Anda.
 
 ## Getting Started
 
